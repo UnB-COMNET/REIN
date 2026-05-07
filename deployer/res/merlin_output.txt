@@ -1,0 +1,23 @@
+#################################################
+#		MERLIN SERVER			#
+#################################################
+Version: 1.5.1
+Build: ffb9feb58c5464177eaa042a04378aa3e976fed6
+Merlin Server does not take any command line arguments
+Visit the Merlin wiki for additional information: https://merlin-c2.readthedocs.io/en/latest/
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent
+Merlin Agent

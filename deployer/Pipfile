@@ -1,0 +1,21 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[scripts]
+serve = "gunicorn -w 4 -b 0.0.0.0:8000 app:app"
+
+[packages]
+flask = "*"
+future = "*"
+ply = "*"
+anytree = "*"
+gunicorn = "*"
+dnspython = "*"
+flask-cors = "*"
+lumi-deployer = {editable = true, path = "."}
+
+[dev-packages]
+pylint = "*"
+pylint-venv = "*"

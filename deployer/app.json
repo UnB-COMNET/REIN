@@ -1,0 +1,7 @@
+{
+  "name": "Lumi Deployer",
+  "description": "Intent deployer for Lumi Dialogflow chatbot.",
+  "image": "heroku/python",
+  "repository": "https://github.com/lumi-chatbot/deployer",
+  "keywords": ["python", "restapi"]
+}
