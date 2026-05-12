@@ -45,7 +45,7 @@ class Onos(DeployTarget):
     # Class variable for controller identification.
     controller = "ONOS"
 
-    def __init__(self, base_url, ip, credentials=(os.getenv("ONOSUSER"), os.getenv("ONOSPASS")), is_main=False):
+    def __init__(self, base_url, ip, credentials=(os.getenv("ONOSUSER", "onos"), os.getenv("ONOSPASS", "rocks")), is_main=False):
         super().__init__()
         self.base_url = base_url  # ONOS IP and port
         self.ip = ip

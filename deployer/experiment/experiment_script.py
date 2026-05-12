@@ -3,7 +3,7 @@ import time
 import urllib
 import os
 
-credentials = (os.getenv("ONOSUSER"), os.getenv("ONOSPASS"))
+credentials = (os.getenv("ONOSUSER", "onos"), os.getenv("ONOSPASS", "rocks"))
 base_url = "http://127.0.0.1:8181/onos/v1"
 
 def make_request(method: str, path: str, data={}, headers={}):
