@@ -1,0 +1,26 @@
+services:
+  deployer:
+    image: rein_deployer
+    build:
+      context: ./deployer
+      dockerfile: Dockerfile
+    container_name: deployer
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    env_file:
+      - ./deployer/.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  supervisor:
+    image: rein_supervisor
+    build:
+      context: ./supervisor
+      dockerfile: Dockerfile
+    container_name: supervisor
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
