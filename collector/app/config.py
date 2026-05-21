@@ -9,6 +9,4 @@ ONOS_KARAF = os.environ.get(
 )
 
 COLLECTOR_INTERVAL = float(os.environ.get("COLLECTOR_INTERVAL", "5"))
-THROUGHPUT_WINDOW = int(os.environ.get("THROUGHPUT_WINDOW", "5"))
-THROUGHPUT_PORT = int(os.environ.get("THROUGHPUT_PORT", "3"))
-SERVER_UF = os.environ.get("SERVER_UF", "")
+STATS_WINDOW = int(os.environ.get("STATS_WINDOW", "5"))

@@ -13,87 +13,112 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TopologyState:
-    estados: list = field(default_factory=list)
-    device_map: dict = field(default_factory=dict)
-    rtt_matrix: list = field(default_factory=list)
+class DeviceInfo:
+    id: str
+    type: str
+    available: bool
+    annotations: dict = field(default_factory=dict)
 
 
-def _mgmt_ip_to_container(mgmt_ip: str) -> Optional[str]:
-    try:
-        out = subprocess.check_output(
-            "docker inspect --format '{{.Name}} {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' $(docker ps -q)",
-            shell=True, stderr=subprocess.DEVNULL,
-        ).decode()
-        for line in out.strip().splitlines():
-            parts = line.strip().split()
-            name = parts[0].lstrip("/")
-            if mgmt_ip in parts[1:]:
-                return name
-    except Exception:
-        pass
-    return None
+@dataclass
+class LinkInfo:
+    src_device: str
+    src_port: int
+    dst_device: str
+    dst_port: int
+    state: str
+    type: str
+    latency_ms: Optional[float] = None
 
 
-def _discover_device_map() -> dict:
-    auth = (config.ONOS_USER, config.ONOS_PASS)
+def _onos_auth():
+    return (config.ONOS_USER, config.ONOS_PASS)
+
+
+def fetch_devices() -> dict[str, DeviceInfo]:
     metrics.increment("msgs_onos_to_observer")
-    resp = _req.get(f"{config.ONOS_BASE_URL}/onos/v1/devices", auth=auth, timeout=5)
+    resp = _req.get(f"{config.ONOS_BASE_URL}/onos/v1/devices", auth=_onos_auth(), timeout=5)
     resp.raise_for_status()
-    device_map = {}
+    devices = {}
     for dev in resp.json().get("devices", []):
-        mgmt_ip = dev.get("annotations", {}).get("managementAddress", "")
-        container = _mgmt_ip_to_container(mgmt_ip)
-        if not container:
-            continue
-        try:
-            desc = subprocess.check_output(
-                f"docker exec {container} ovs-vsctl get bridge {container} other-config:dp-desc",
-                shell=True, stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            if desc:
-                device_map[desc] = dev["id"]
-        except Exception:
-            pass
-    return device_map
+        dev_id = dev["id"]
+        devices[dev_id] = DeviceInfo(
+            id=dev_id,
+            type=dev.get("type", "UNKNOWN"),
+            available=dev.get("available", False),
+            annotations=dev.get("annotations", {}),
+        )
+    logger.debug("Fetched %d devices", len(devices))
+    return devices
 
 
-def get_dynamic_latencies() -> TopologyState:
-    device_map = _discover_device_map()
-    if not device_map:
+def fetch_links() -> list[LinkInfo]:
+    metrics.increment("msgs_onos_to_observer")
+    resp = _req.get(f"{config.ONOS_BASE_URL}/onos/v1/links", auth=_onos_auth(), timeout=5)
+    resp.raise_for_status()
+    links = []
+    for lnk in resp.json().get("links", []):
+        src = lnk.get("src", {})
+        dst = lnk.get("dst", {})
+        link = LinkInfo(
+            src_device=src.get("device", ""),
+            src_port=int(src.get("port", 0)),
+            dst_device=dst.get("device", ""),
+            dst_port=int(dst.get("port", 0)),
+            state=lnk.get("state", "UNKNOWN"),
+            type=lnk.get("type", "UNKNOWN"),
+        )
+        latency_str = lnk.get("annotations", {}).get("latency")
+        if latency_str is not None:
+            try:
+                link.latency_ms = float(latency_str)
+            except ValueError:
+                pass
+        links.append(link)
+    active = [l for l in links if l.state == "ACTIVE"]
+    logger.debug("Fetched %d links (%d active)", len(links), len(active))
+    return active
+
+
+def fetch_link_latencies_cli(active_links: list[LinkInfo]) -> dict[tuple[str, str], float]:
+    metrics.increment("msgs_onos_to_observer")
+    try:
+        output = subprocess.check_output(
+            f"{config.ONOS_KARAF} 'link-latencies'", shell=True, stderr=subprocess.PIPE,
+        ).decode()
+    except subprocess.CalledProcessError as e:
+        logger.error("link-latencies CLI failed (rc=%d): %s", e.returncode, e.stderr.decode(errors="replace") if e.stderr else "")
+        return {}
+    except Exception as e:
+        logger.error("link-latencies CLI unexpected error: %s", e)
+        return {}
+
+    active_set = {(l.src_device, l.dst_device) for l in active_links}
+    latencies: dict[tuple[str, str], float] = {}
+    pattern = r"src=(of:[a-f0-9]+)/\d+, dst=(of:[a-f0-9]+)/\d+.*--- (\d+)ms"
+    for m in re.finditer(pattern, output):
+        src_dpid, dst_dpid = m.group(1), m.group(2)
+        if (src_dpid, dst_dpid) in active_set:
+            latencies[(src_dpid, dst_dpid)] = float(m.group(3))
+    logger.debug("CLI latencies resolved for %d links", len(latencies))
+    return latencies
+
+
+def build_topology() -> tuple[dict[str, DeviceInfo], list[LinkInfo]]:
+    devices = fetch_devices()
+    if not devices:
         raise RuntimeError("[Collector] ONOS returned no devices — topology unavailable")
 
-    estados = list(device_map.keys())
-    rtt_matrix = [[0.0 for _ in estados] for _ in estados]
+    links = fetch_links()
+    cli_latencies = fetch_link_latencies_cli(links)
 
-    try:
-        metrics.increment("msgs_onos_to_observer", 2)
-        output_lat = subprocess.check_output(
-            f"{config.ONOS_KARAF} 'link-latencies'", shell=True, stderr=subprocess.STDOUT,
-        ).decode()
-        output_links = subprocess.check_output(
-            f"{config.ONOS_KARAF} 'links'", shell=True, stderr=subprocess.STDOUT,
-        ).decode()
+    for link in links:
+        if link.latency_ms is not None:
+            continue
+        key = (link.src_device, link.dst_device)
+        if key in cli_latencies:
+            link.latency_ms = cli_latencies[key]
 
-        active_links = set()
-        for line in output_links.splitlines():
-            if "state=ACTIVE" in line:
-                m = re.search(r"src=(of:[a-f0-9]+)/\d+, dst=(of:[a-f0-9]+)/\d+", line)
-                if m:
-                    active_links.add((m.group(1), m.group(2)))
-
-        rev_map = {v: k for k, v in device_map.items()}
-        pattern = r"src=(of:[a-f0-9]+)/\d+, dst=(of:[a-f0-9]+)/\d+.*--- (\d+)ms"
-        for m in re.finditer(pattern, output_lat):
-            src_dpid, dst_dpid = m.group(1), m.group(2)
-            if (src_dpid, dst_dpid) not in active_links:
-                continue
-            src_st = rev_map.get(src_dpid)
-            dst_st = rev_map.get(dst_dpid)
-            if src_st and dst_st:
-                rtt_matrix[estados.index(src_st)][estados.index(dst_st)] = float(m.group(3))
-
-    except Exception as e:
-        logger.error("Failed to read link latencies: %s", e)
-
-    return TopologyState(estados=estados, device_map=device_map, rtt_matrix=rtt_matrix)
+    resolved = sum(1 for l in links if l.latency_ms is not None)
+    logger.info("Topology: %d devices, %d active links (%d with latency)", len(devices), len(links), resolved)
+    return devices, links
