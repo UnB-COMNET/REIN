@@ -36,7 +36,7 @@ def _onos_auth():
 
 
 def fetch_devices() -> dict[str, DeviceInfo]:
-    metrics.increment("msgs_onos_to_observer")
+    metrics.increment("msgs_onos_to_collector")
     resp = _req.get(f"{config.ONOS_BASE_URL}/onos/v1/devices", auth=_onos_auth(), timeout=5)
     resp.raise_for_status()
     devices = {}
@@ -53,7 +53,7 @@ def fetch_devices() -> dict[str, DeviceInfo]:
 
 
 def fetch_links() -> list[LinkInfo]:
-    metrics.increment("msgs_onos_to_observer")
+    metrics.increment("msgs_onos_to_collector")
     resp = _req.get(f"{config.ONOS_BASE_URL}/onos/v1/links", auth=_onos_auth(), timeout=5)
     resp.raise_for_status()
     links = []
@@ -81,7 +81,7 @@ def fetch_links() -> list[LinkInfo]:
 
 
 def fetch_link_latencies_cli(active_links: list[LinkInfo]) -> dict[tuple[str, str], float]:
-    metrics.increment("msgs_onos_to_observer")
+    metrics.increment("msgs_onos_to_collector")
     try:
         output = subprocess.check_output(
             f"{config.ONOS_KARAF} 'link-latencies'", shell=True, stderr=subprocess.PIPE,

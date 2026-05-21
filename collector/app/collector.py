@@ -1,13 +1,14 @@
 import json
 import logging
 import signal
-import sys
 import time
+from dataclasses import asdict
 
 from collector import config
 from collector import metrics
 from collector import onos_discovery
-from collector.throughput import ThroughputMeasurer
+from collector.onos_discovery import DeviceInfo, LinkInfo
+from collector.port_stats import ThroughputTracker, fetch_port_stats, PortStats, PortThroughput
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,29 @@ def _shutdown(signum, frame):
     global _running
     logger.info("Received signal %d — shutting down", signum)
     _running = False
+
+
+def _log_devices(devices: dict[str, DeviceInfo]):
+    out = {did: asdict(d) for did, d in devices.items()}
+    logger.info("devices  %s", json.dumps(out, indent=None))
+
+
+def _log_links(links: list[LinkInfo]):
+    out = [asdict(l) for l in links]
+    logger.info("links  %s", json.dumps(out, indent=None))
+
+
+def _log_port_stats(stats: dict[str, list[PortStats]]):
+    out = {did: [asdict(s) for s in ports] for did, ports in stats.items()}
+    logger.info("port_stats  %s", json.dumps(out, indent=None))
+
+
+def _log_throughput(throughput: dict[str, dict[int, PortThroughput]]):
+    out = {
+        did: {str(port): asdict(t) for port, t in ports.items()}
+        for did, ports in throughput.items()
+    }
+    logger.info("throughput  %s", json.dumps(out, indent=None))
 
 
 def main():
@@ -32,41 +56,44 @@ def main():
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    throughput_measurer = ThroughputMeasurer()
+    tracker = ThroughputTracker()
     cycle = 0
 
-    logger.info(
-        "Collector started  interval=%.1fs  server_uf=%s",
-        config.COLLECTOR_INTERVAL, config.SERVER_UF or "(not set)",
-    )
+    logger.info("Collector started  interval=%.1fs", config.COLLECTOR_INTERVAL)
 
     while _running:
         cycle += 1
         logger.info("--- cycle %d ---", cycle)
 
         try:
-            topo = onos_discovery.get_dynamic_latencies()
-            logger.info(
-                "topology  estados=%s  device_map=%s  rtt_matrix=%s",
-                json.dumps(topo.estados),
-                json.dumps(topo.device_map),
-                json.dumps(topo.rtt_matrix),
-            )
+            devices, links = onos_discovery.build_topology()
+            _log_devices(devices)
+            _log_links(links)
         except Exception as e:
             logger.error("Topology collection failed: %s", e)
+            time.sleep(config.COLLECTOR_INTERVAL)
+            continue
+
+        device_ids = list(devices.keys())
 
         try:
-            if config.SERVER_UF and config.SERVER_UF in topo.device_map:
-                device_id = topo.device_map[config.SERVER_UF]
-                bps = throughput_measurer.measure(device_id)
-                mbps = bps / 1e6
-                logger.info("throughput  bps=%.2f  mbps=%.2f  window=%d", bps, mbps, len(throughput_measurer._samples))
-            elif config.SERVER_UF:
-                logger.warning("server_uf '%s' not in device_map — skipping throughput", config.SERVER_UF)
-            else:
-                logger.debug("SERVER_UF not configured — skipping throughput")
+            stats = fetch_port_stats(device_ids)
+            _log_port_stats(stats)
         except Exception as e:
-            logger.error("Throughput collection failed: %s", e)
+            logger.error("Port stats collection failed: %s", e)
+            stats = {}
+
+        try:
+            throughput: dict[str, dict[int, PortThroughput]] = {}
+            for did, port_list in stats.items():
+                for ps in port_list:
+                    t = tracker.update(did, ps)
+                    if t.window_size >= 2:
+                        throughput.setdefault(did, {})[ps.port] = t
+            if throughput:
+                _log_throughput(throughput)
+        except Exception as e:
+            logger.error("Throughput computation failed: %s", e)
 
         try:
             snap = metrics.snapshot()

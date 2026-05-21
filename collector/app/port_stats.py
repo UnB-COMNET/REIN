@@ -95,7 +95,7 @@ def fetch_port_stats(device_ids: list[str]) -> dict[str, list[PortStats]]:
 
     for device_id in device_ids:
         try:
-            metrics.increment("msgs_onos_to_observer")
+            metrics.increment("msgs_onos_to_collector")
             url = f"{config.ONOS_BASE_URL}/statistics/ports/{device_id}"
             resp = requests.get(url, auth=auth, timeout=5)
             resp.raise_for_status()
