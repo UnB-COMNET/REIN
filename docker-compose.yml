@@ -24,3 +24,15 @@ services:
     tty: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  collector:
+    image: rein_collector
+    build:
+      context: ./collector
+      dockerfile: Dockerfile
+    container_name: collector
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
