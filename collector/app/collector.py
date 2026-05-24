@@ -8,6 +8,7 @@ from collector import config
 from collector import metrics
 from collector import onos_discovery
 from collector.onos_discovery import DeviceInfo, LinkInfo
+from collector.otel import setup_telemetry, Telemetry
 from collector.port_stats import ThroughputTracker, fetch_port_stats, PortStats, PortThroughput
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,9 @@ def main():
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
+    telemetry = setup_telemetry()
     tracker = ThroughputTracker()
+    prev_onos_requests = 0
     cycle = 0
 
     logger.info("Collector started  interval=%.1fs", config.COLLECTOR_INTERVAL)
@@ -69,6 +72,8 @@ def main():
             devices, links = onos_discovery.build_topology()
             _log_devices(devices)
             _log_links(links)
+            for link in links:
+                telemetry.record_link_latency(link)
         except Exception as e:
             logger.error("Topology collection failed: %s", e)
             time.sleep(config.COLLECTOR_INTERVAL)
@@ -79,6 +84,9 @@ def main():
         try:
             stats = fetch_port_stats(device_ids)
             _log_port_stats(stats)
+            for did, port_list in stats.items():
+                for ps in port_list:
+                    telemetry.record_port_counters(did, ps)
         except Exception as e:
             logger.error("Port stats collection failed: %s", e)
             stats = {}
@@ -90,6 +98,7 @@ def main():
                     t = tracker.update(did, ps)
                     if t.window_size >= 2:
                         throughput.setdefault(did, {})[ps.port] = t
+                        telemetry.record_port_throughput(did, ps.port, t)
             if throughput:
                 _log_throughput(throughput)
         except Exception as e:
@@ -98,11 +107,16 @@ def main():
         try:
             snap = metrics.snapshot()
             logger.info("metrics  %s", json.dumps(snap))
+            current_onos_requests = snap.get("msgs_onos_to_collector", 0)
+            delta = current_onos_requests - prev_onos_requests
+            telemetry.record_onos_requests(delta)
+            prev_onos_requests = current_onos_requests
         except Exception as e:
             logger.error("Metrics snapshot failed: %s", e)
 
         time.sleep(config.COLLECTOR_INTERVAL)
 
+    telemetry.shutdown()
     logger.info("Collector stopped after %d cycles", cycle)
 
 

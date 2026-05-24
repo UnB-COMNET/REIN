@@ -10,3 +10,6 @@ ONOS_KARAF = os.environ.get(
 
 COLLECTOR_INTERVAL = float(os.environ.get("COLLECTOR_INTERVAL", "5"))
 STATS_WINDOW = int(os.environ.get("STATS_WINDOW", "5"))
+
+OTEL_EXPORTER_OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+OTEL_EXPORT_INTERVAL = float(os.environ.get("OTEL_EXPORT_INTERVAL", "5"))
