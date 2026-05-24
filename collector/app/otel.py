@@ -2,7 +2,10 @@ import logging
 
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.metrics.export import (
+    MetricExportResult,
+    PeriodicExportingMetricReader,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
@@ -11,6 +14,44 @@ from collector.onos_discovery import LinkInfo
 from collector.port_stats import PortStats, PortThroughput
 
 logger = logging.getLogger(__name__)
+
+
+class _ResilientOTLPExporter:
+    def __init__(self, inner: OTLPMetricExporter):
+        self._inner = inner
+        self._endpoint_ok = True
+        logging.getLogger("opentelemetry.exporter.otlp.proto.grpc.exporter").setLevel(
+            logging.CRITICAL
+        )
+
+    def export(self, metrics_data, timeout_millis=10_000, **kwargs):
+        result = self._inner.export(metrics_data, timeout_millis=timeout_millis, **kwargs)
+        if result is MetricExportResult.FAILURE:
+            if self._endpoint_ok:
+                logger.warning(
+                    "OTLP export endpoint unreachable — metrics will be dropped until it recovers  endpoint=%s",
+                    config.OTEL_EXPORTER_OTLP_ENDPOINT,
+                )
+                self._endpoint_ok = False
+        else:
+            if not self._endpoint_ok:
+                logger.info("OTLP export endpoint recovered  endpoint=%s", config.OTEL_EXPORTER_OTLP_ENDPOINT)
+                self._endpoint_ok = True
+        return result
+
+    def force_flush(self, timeout_millis=10_000):
+        return self._inner.force_flush(timeout_millis=timeout_millis)
+
+    def shutdown(self, timeout_millis=30_000, **kwargs):
+        return self._inner.shutdown(timeout_millis=timeout_millis, **kwargs)
+
+    @property
+    def preferred_temporality(self):
+        return self._inner.preferred_temporality
+
+    @property
+    def preferred_aggregation(self):
+        return self._inner.preferred_aggregation
 
 
 class Telemetry:
@@ -122,9 +163,11 @@ def setup_telemetry() -> Telemetry:
         "service.version": "1.0.0",
     })
 
-    exporter = OTLPMetricExporter(
-        endpoint=config.OTEL_EXPORTER_OTLP_ENDPOINT,
-        insecure=True,
+    exporter = _ResilientOTLPExporter(
+        OTLPMetricExporter(
+            endpoint=config.OTEL_EXPORTER_OTLP_ENDPOINT,
+            insecure=True,
+        )
     )
     reader = PeriodicExportingMetricReader(
         exporter,
