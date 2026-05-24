@@ -46,12 +46,12 @@ class _ResilientOTLPExporter:
         return self._inner.shutdown(timeout_millis=timeout_millis, **kwargs)
 
     @property
-    def preferred_temporality(self):
-        return self._inner.preferred_temporality
+    def _preferred_temporality(self):
+        return self._inner._preferred_temporality
 
     @property
-    def preferred_aggregation(self):
-        return self._inner.preferred_aggregation
+    def _preferred_aggregation(self):
+        return self._inner._preferred_aggregation
 
 
 class Telemetry:

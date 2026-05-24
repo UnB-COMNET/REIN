@@ -41,6 +41,7 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-collector
     network_mode: "host"
+    command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
 
