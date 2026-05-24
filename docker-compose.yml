@@ -36,3 +36,17 @@ services:
     tty: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    network_mode: "host"
+    volumes:
+      - ./collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    network_mode: "host"
+    volumes:
+      - ./collector/prometheus.yml:/etc/prometheus/prometheus.yml:ro
