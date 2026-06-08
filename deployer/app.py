@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import json
+import logging
 import os
 import time
 import traceback
@@ -16,6 +17,15 @@ from classes.onos import Onos
 from classes.topology import Topology
 
 install_aliases()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+from otel_logging import setup_otel_logging
+_otel_log_provider = setup_otel_logging()
 
 # Flask app should start in global layout
 app = Flask(__name__)
