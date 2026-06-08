@@ -17,25 +17,25 @@ REIN was developed to operate on top of the ONOS (Open Network Operating System)
 Before running REIN, make sure you have the following installed:
 
 - Docker
-- Docker Compose
+- Docker Compose v2
 
 ## Running REIN
 
-### First-time setup (build and start)
+### First-time setup
 
 ```bash
-docker-compose up --build
+docker compose build
 ````
 
-This command builds all required images and starts the entire environment.
+This command builds all required images.
 
-### Starting the environment later
+### Starting the environment
 
 ```bash
 docker compose up
 ```
 
-### Running in detached mode
+### Running in detached mode (recommended)
 
 ```bash
 docker compose up -d
@@ -50,7 +50,7 @@ docker compose down
 ### Rebuilding containers after changes
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 ## Additional Notes
