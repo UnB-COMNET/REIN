@@ -9,6 +9,7 @@ from collector import metrics
 from collector import onos_discovery
 from collector.onos_discovery import DeviceInfo, LinkInfo
 from collector.otel import setup_telemetry, Telemetry
+from collector.flow_stats import FlowInfo, fetch_flows
 from collector.port_stats import ThroughputTracker, fetch_port_stats, PortStats, PortThroughput
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,11 @@ def _log_throughput(throughput: dict[str, dict[int, PortThroughput]]):
         for did, ports in throughput.items()
     }
     logger.info("throughput  %s", json.dumps(out, indent=None))
+
+
+def _log_flows(flows: dict[str, list[FlowInfo]]):
+    out = {did: [asdict(f) for f in flist] for did, flist in flows.items()}
+    logger.info("flows  %s", json.dumps(out, indent=None))
 
 
 def main():
@@ -103,6 +109,15 @@ def main():
                 _log_throughput(throughput)
         except Exception as e:
             logger.error("Throughput computation failed: %s", e)
+
+        try:
+            flows = fetch_flows(device_ids)
+            _log_flows(flows)
+            for did, flow_list in flows.items():
+                for f in flow_list:
+                    telemetry.record_flow_counters(did, f)
+        except Exception as e:
+            logger.error("Flow collection failed: %s", e)
 
         try:
             snap = metrics.snapshot()

@@ -10,6 +10,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
 from collector import config
+from collector.flow_stats import FlowInfo
 from collector.onos_discovery import LinkInfo
 from collector.port_stats import PortStats, PortThroughput
 
@@ -58,6 +59,7 @@ class Telemetry:
     def __init__(self, meter: metrics.Meter, meter_provider: MeterProvider):
         self._meter_provider = meter_provider
         self._prev_counters: dict[tuple[str, int], PortStats] = {}
+        self._prev_flow_counters: dict[tuple[str, str], tuple[int, int]] = {}
 
         self.link_latency = meter.create_gauge(
             "sdn.link.latency",
@@ -92,6 +94,16 @@ class Telemetry:
         self.onos_requests = meter.create_counter(
             "sdn.onos.requests",
             description="Number of API/CLI requests made to the ONOS controller",
+            unit="1",
+        )
+        self.flow_bytes = meter.create_counter(
+            "sdn.flow.bytes",
+            description="Cumulative bytes matched by a flow rule",
+            unit="By",
+        )
+        self.flow_packets = meter.create_counter(
+            "sdn.flow.packets",
+            description="Cumulative packets matched by a flow rule",
             unit="1",
         )
 
@@ -148,6 +160,29 @@ class Telemetry:
                 self.port_errors.add(d_tx_err, attributes={**base, "direction": "tx"})
 
         self._prev_counters[key] = stats
+
+    def record_flow_counters(self, device_id: str, flow: FlowInfo):
+        key = (device_id, flow.flow_id)
+        prev = self._prev_flow_counters.get(key)
+
+        if prev is not None:
+            attrs = {
+                "device_id": device_id,
+                "flow_id": flow.flow_id,
+                "app_id": flow.app_id,
+                "table_id": flow.table_id,
+                "priority": flow.priority,
+                "output_port": flow.output_port or 0,
+            }
+
+            d_bytes = flow.bytes - prev[1]
+            d_packets = flow.packets - prev[0]
+            if d_bytes >= 0:
+                self.flow_bytes.add(d_bytes, attributes=attrs)
+            if d_packets >= 0:
+                self.flow_packets.add(d_packets, attributes=attrs)
+
+        self._prev_flow_counters[key] = (flow.packets, flow.bytes)
 
     def record_onos_requests(self, delta: int):
         if delta > 0:
