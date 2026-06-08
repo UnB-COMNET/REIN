@@ -16,6 +16,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+from app.otel_logging import setup_otel_logging
+_otel_log_provider = setup_otel_logging()
+
 app = Flask(__name__)
 CORS(app)
 

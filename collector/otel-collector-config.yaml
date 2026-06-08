@@ -15,3 +15,6 @@ service:
     metrics:
       receivers: [otlp]
       exporters: [prometheus, debug]
+    logs:
+      receivers: [otlp]
+      exporters: [debug]
