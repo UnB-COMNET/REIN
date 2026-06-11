@@ -71,10 +71,17 @@ tr:hover td{background:#1a1a3e}
 <div class="section">
 <h2>Metrics</h2>
 <div class="refresh-info" id="metrics-refresh"></div>
-<h2 style="font-size:0.95em">Gauge Metrics</h2>
+<h2 style="font-size:0.95em">Link Latency</h2>
 <div class="table-wrap">
-<table id="gauge-table">
-<thead><tr><th>Metric</th><th>Value</th><th>Last Update</th></tr></thead>
+<table id="latency-table">
+<thead><tr><th>src_device</th><th>src_port</th><th>dst_device</th><th>dst_port</th><th>latency_ms</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+<h2 style="font-size:0.95em">Port Throughput</h2>
+<div class="table-wrap">
+<table id="throughput-table">
+<thead><tr><th>device_id</th><th>port</th><th>direction</th><th>bps</th></tr></thead>
 <tbody></tbody>
 </table>
 </div>
@@ -104,12 +111,12 @@ tr:hover td{background:#1a1a3e}
 
 <script>
 const EXAMPLES = [
-  {label: "Latest gauge metrics", sql: "SELECT metric_name, argMax(value, TimeUnix) as latest_value FROM otel.otel_metrics_gauge GROUP BY metric_name"},
-  {label: "Recent logs", sql: "SELECT Timestamp, severity_text, service_name, Body FROM otel.otel_logs ORDER BY Timestamp DESC LIMIT 20"},
-  {label: "Error logs", sql: "SELECT * FROM otel.otel_logs WHERE severity_text = 'ERROR' ORDER BY TimeUnix DESC LIMIT 20"},
+  {label: "Latest gauge metrics", sql: "SELECT MetricName, argMax(Value, TimeUnix) as latest_value FROM otel.otel_metrics_gauge GROUP BY MetricName"},
+  {label: "Recent logs", sql: "SELECT Timestamp, SeverityText, ServiceName, Body FROM otel.otel_logs ORDER BY Timestamp DESC LIMIT 20"},
+  {label: "Error logs", sql: "SELECT * FROM otel.otel_logs WHERE SeverityText = 'ERROR' ORDER BY Timestamp DESC LIMIT 20"},
   {label: "Intent events", sql: "SELECT Timestamp, Body, LogAttributes['event_type'] as event, LogAttributes['intent'] as intent, LogAttributes['deploy_status'] as status FROM otel.otel_logs WHERE LogAttributes['event_type'] LIKE 'intent_%' ORDER BY Timestamp DESC LIMIT 20"},
-  {label: "Service last log", sql: "SELECT service_name, max(TimeUnix) as last_log FROM otel.otel_logs GROUP BY service_name"},
-  {label: "Flow metrics total", sql: "SELECT metric_name, sum(value) as total FROM otel.otel_metrics_sum WHERE metric_name LIKE 'sdn.flow%' GROUP BY metric_name"},
+  {label: "Service last log", sql: "SELECT ServiceName, max(Timestamp) as last_log FROM otel.otel_logs GROUP BY ServiceName"},
+  {label: "Flow metrics total", sql: "SELECT MetricName, sum(Value) as total FROM otel.otel_metrics_sum WHERE MetricName LIKE 'sdn.flow%' GROUP BY MetricName"},
 ];
 
 function initExamples() {
@@ -161,7 +168,8 @@ async function fetchMetrics() {
   try {
     const r = await fetch("/api/metrics");
     const data = await r.json();
-    renderTable("gauge-table", data.gauge);
+    renderTable("latency-table", data.link_latency);
+    renderTable("throughput-table", data.port_throughput);
     renderTable("sum-table", data.sum);
     document.getElementById("metrics-refresh").textContent = "Updated: " + new Date().toLocaleTimeString();
   } catch(e) { console.error("metrics", e); }

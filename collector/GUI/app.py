@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import requests
@@ -6,18 +7,26 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
+log = logging.getLogger("gui")
+logging.basicConfig(level=logging.INFO)
+
 CH_URL = os.environ.get("CLICKHOUSE_URL", "http://localhost:8123")
 DEPLOYER_URL = os.environ.get("DEPLOYER_URL", "http://localhost:5000")
 CH_DB = "otel"
 
 
+_EPOCH_ZERO = "1970-01-01"
+
+
 def _ch_query(sql):
+    fmt_sql = sql.rstrip().rstrip(";") + " FORMAT JSON"
     r = requests.post(
         f"{CH_URL}/",
-        params={"database": CH_DB, "query": sql},
-        headers={"Accept": "application/json"},
+        params={"database": CH_DB, "query": fmt_sql},
         timeout=10,
     )
+    if not r.ok:
+        log.error("ClickHouse query failed status=%s body=%s", r.status_code, r.text[:200])
     r.raise_for_status()
     return r.json().get("data", [])
 
@@ -34,12 +43,12 @@ def api_health():
     for svc in services:
         try:
             rows = _ch_query(
-                f"SELECT max(TimeUnix) as last_ts, "
-                f"countIf(severity_text='ERROR') as err_count, "
-                f"countIf(severity_text='WARN') as warn_count "
+                f"SELECT max(Timestamp) as last_ts, "
+                f"countIf(SeverityText='ERROR') as err_count, "
+                f"countIf(SeverityText='WARN') as warn_count "
                 f"FROM otel_logs "
-                f"WHERE service_name = '{svc}' "
-                f"AND TimeUnix >= now() - INTERVAL 60 SECOND"
+                f"WHERE ServiceName = '{svc}' "
+                f"AND Timestamp >= now() - INTERVAL 60 SECOND"
             )
             if not rows:
                 health[svc] = {"status": "OFFLINE", "last_ts": None}
@@ -48,7 +57,7 @@ def api_health():
             last_ts = row.get("last_ts")
             err_count = int(row.get("err_count", 0))
             warn_count = int(row.get("warn_count", 0))
-            if not last_ts:
+            if not last_ts or last_ts.startswith(_EPOCH_ZERO):
                 health[svc] = {"status": "OFFLINE", "last_ts": None}
             elif err_count > 0:
                 health[svc] = {"status": "UNHEALTHY", "last_ts": last_ts}
@@ -56,34 +65,54 @@ def api_health():
                 health[svc] = {"status": "DEGRADED", "last_ts": last_ts}
             else:
                 health[svc] = {"status": "HEALTHY", "last_ts": last_ts}
-        except Exception:
+        except Exception as e:
+            log.error("Health check failed for %s: %s", svc, e)
             health[svc] = {"status": "OFFLINE", "last_ts": None}
     return jsonify(health)
 
 
 @app.route("/api/metrics")
 def api_metrics():
-    result = {"gauge": [], "sum": []}
+    result = {"link_latency": [], "port_throughput": [], "sum": []}
     try:
-        result["gauge"] = _ch_query(
-            "SELECT metric_name, argMax(value, TimeUnix) as latest_value, "
+        result["link_latency"] = _ch_query(
+            "SELECT Attributes['src_device'] as src_device, "
+            "Attributes['src_port'] as src_port, "
+            "Attributes['dst_device'] as dst_device, "
+            "Attributes['dst_port'] as dst_port, "
+            "argMax(Value, TimeUnix) as latency_ms, "
             "max(TimeUnix) as last_ts "
             "FROM otel_metrics_gauge "
-            "GROUP BY metric_name "
-            "ORDER BY metric_name"
+            "WHERE MetricName = 'sdn.link.latency' "
+            "GROUP BY src_device, src_port, dst_device, dst_port "
+            "ORDER BY src_device, dst_device"
         )
-    except Exception:
-        pass
+    except Exception as e:
+        log.error("Link latency query failed: %s", e)
+    try:
+        result["port_throughput"] = _ch_query(
+            "SELECT Attributes['device_id'] as device_id, "
+            "Attributes['port'] as port, "
+            "Attributes['direction'] as direction, "
+            "argMax(Value, TimeUnix) as bps, "
+            "max(TimeUnix) as last_ts "
+            "FROM otel_metrics_gauge "
+            "WHERE MetricName = 'sdn.port.throughput' "
+            "GROUP BY device_id, port, direction "
+            "ORDER BY device_id, port, direction"
+        )
+    except Exception as e:
+        log.error("Port throughput query failed: %s", e)
     try:
         result["sum"] = _ch_query(
-            "SELECT metric_name, sum(value) as total_value, "
+            "SELECT MetricName, sum(Value) as total_value, "
             "max(TimeUnix) as last_ts "
             "FROM otel_metrics_sum "
-            "GROUP BY metric_name "
-            "ORDER BY metric_name"
+            "GROUP BY MetricName "
+            "ORDER BY MetricName"
         )
-    except Exception:
-        pass
+    except Exception as e:
+        log.error("Sum metrics query failed: %s", e)
     return jsonify(result)
 
 
@@ -134,6 +163,7 @@ def api_query():
         rows = _ch_query(sql)
         return jsonify(rows)
     except Exception as e:
+        log.error("SQL query failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
