@@ -48,6 +48,21 @@ services:
     volumes:
       - ./collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
 
+  gui:
+    image: rein_gui
+    build:
+      context: ./collector/GUI
+      dockerfile: Dockerfile
+    container_name: gui
+    network_mode: "host"
+    environment:
+      - CLICKHOUSE_URL=http://localhost:8123
+      - DEPLOYER_URL=http://localhost:5000
+      - GUI_PORT=8080
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
   clickhouse:
     image: clickhouse/clickhouse-server:24.8.6
     container_name: clickhouse

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REIN Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:'Courier New',monospace;padding:20px}
+h1{text-align:center;color:#00d4ff;margin-bottom:20px;font-size:1.6em}
+h2{color:#00d4ff;margin:20px 0 10px;font-size:1.1em;border-bottom:1px solid #333;padding-bottom:5px}
+.section{background:#16213e;border-radius:8px;padding:15px;margin-bottom:20px}
+.health-grid{display:flex;gap:15px;flex-wrap:wrap}
+.health-card{flex:1;min-width:180px;padding:12px;border-radius:6px;text-align:center}
+.health-card.HEALTHY{background:#1b4332;border:1px solid #2d6a4f}
+.health-card.DEGRADED{background:#5c4a00;border:1px solid #8b6914}
+.health-card.UNHEALTHY{background:#6b1a1a;border:1px solid #a83232}
+.health-card.OFFLINE{background:#2a2a2a;border:1px solid #555}
+.health-card .name{font-size:1em;font-weight:bold;margin-bottom:4px}
+.health-card .status{font-size:0.85em;text-transform:uppercase}
+.health-card .ts{font-size:0.75em;color:#888;margin-top:4px}
+.deploy-row{display:flex;gap:10px;margin-bottom:10px}
+.deploy-row input{flex:1;padding:8px;background:#0f0f23;border:1px solid #444;color:#e0e0e0;border-radius:4px;font-family:inherit}
+.deploy-row button{padding:8px 20px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-family:inherit}
+.deploy-row button:hover{background:#00a8cc}
+#deploy-result{margin-top:8px;padding:8px;border-radius:4px;display:none;font-size:0.85em;white-space:pre-wrap;max-height:200px;overflow:auto}
+#deploy-result.ok{background:#1b4332;border:1px solid #2d6a4f}
+#deploy-result.err{background:#6b1a1a;border:1px solid #a83232}
+table{width:100%;border-collapse:collapse;font-size:0.8em;margin-top:8px}
+th{background:#0f0f23;color:#00d4ff;padding:6px 8px;text-align:left;position:sticky;top:0}
+td{padding:5px 8px;border-bottom:1px solid #222}
+tr:hover td{background:#1a1a3e}
+.status-ok{color:#4caf50}
+.status-err{color:#f44336}
+.query-area{display:flex;gap:10px;margin-bottom:10px}
+.query-area textarea{flex:1;padding:8px;background:#0f0f23;border:1px solid #444;color:#e0e0e0;border-radius:4px;font-family:inherit;min-height:60px;resize:vertical}
+.query-area button{padding:8px 20px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:4px;cursor:pointer;font-weight:bold;align-self:flex-start;font-family:inherit}
+.query-area button:hover{background:#00a8cc}
+.examples{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.examples button{padding:4px 10px;background:#2a2a4a;border:1px solid #444;color:#aaa;border-radius:3px;cursor:pointer;font-size:0.75em;font-family:inherit}
+.examples button:hover{background:#3a3a5a;color:#e0e0e0}
+.table-wrap{max-height:300px;overflow:auto}
+.refresh-info{text-align:right;font-size:0.75em;color:#666;margin-bottom:5px}
+</style>
+</head>
+<body>
+<h1>REIN Dashboard</h1>
+
+<div class="section">
+<h2>Component Health</h2>
+<div class="refresh-info" id="health-refresh"></div>
+<div class="health-grid" id="health-grid"></div>
+</div>
+
+<div class="section">
+<h2>Intent Deploy</h2>
+<div class="deploy-row">
+<input type="text" id="intent-input" placeholder="define intent stnIntent: from endpoint('192.168.0.2') add service('cdn-qoe')">
+<button onclick="deployIntent()">Deploy</button>
+</div>
+<div id="deploy-result"></div>
+<h2>Intent History</h2>
+<div class="table-wrap">
+<table id="intent-table">
+<thead><tr><th>Time</th><th>Event</th><th>Intent</th><th>Status</th><th>Extra</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+<div class="section">
+<h2>Metrics</h2>
+<div class="refresh-info" id="metrics-refresh"></div>
+<h2 style="font-size:0.95em">Gauge Metrics</h2>
+<div class="table-wrap">
+<table id="gauge-table">
+<thead><tr><th>Metric</th><th>Value</th><th>Last Update</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+<h2 style="font-size:0.95em">Sum Metrics</h2>
+<div class="table-wrap">
+<table id="sum-table">
+<thead><tr><th>Metric</th><th>Total</th><th>Last Update</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+<div class="section">
+<h2>SQL Query</h2>
+<div class="examples" id="query-examples"></div>
+<div class="query-area">
+<textarea id="sql-input" placeholder="SELECT * FROM otel.otel_logs LIMIT 10"></textarea>
+<button onclick="runQuery()">Run</button>
+</div>
+<div class="table-wrap">
+<table id="query-table">
+<thead><tr></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+<script>
+const EXAMPLES = [
+  {label: "Latest gauge metrics", sql: "SELECT metric_name, argMax(value, TimeUnix) as latest_value FROM otel.otel_metrics_gauge GROUP BY metric_name"},
+  {label: "Recent logs", sql: "SELECT Timestamp, severity_text, service_name, Body FROM otel.otel_logs ORDER BY Timestamp DESC LIMIT 20"},
+  {label: "Error logs", sql: "SELECT * FROM otel.otel_logs WHERE severity_text = 'ERROR' ORDER BY TimeUnix DESC LIMIT 20"},
+  {label: "Intent events", sql: "SELECT Timestamp, Body, LogAttributes['event_type'] as event, LogAttributes['intent'] as intent, LogAttributes['deploy_status'] as status FROM otel.otel_logs WHERE LogAttributes['event_type'] LIKE 'intent_%' ORDER BY Timestamp DESC LIMIT 20"},
+  {label: "Service last log", sql: "SELECT service_name, max(TimeUnix) as last_log FROM otel.otel_logs GROUP BY service_name"},
+  {label: "Flow metrics total", sql: "SELECT metric_name, sum(value) as total FROM otel.otel_metrics_sum WHERE metric_name LIKE 'sdn.flow%' GROUP BY metric_name"},
+];
+
+function initExamples() {
+  const el = document.getElementById("query-examples");
+  EXAMPLES.forEach((ex, i) => {
+    const btn = document.createElement("button");
+    btn.textContent = ex.label;
+    btn.onclick = () => { document.getElementById("sql-input").value = ex.sql; };
+    el.appendChild(btn);
+  });
+}
+
+function esc(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function renderTable(tableId, rows) {
+  const table = document.getElementById(tableId);
+  if (!rows || rows.length === 0) {
+    table.querySelector("thead tr").innerHTML = "";
+    table.querySelector("tbody").innerHTML = '<tr><td colspan="99" style="text-align:center;color:#666">No data</td></tr>';
+    return;
+  }
+  const keys = Object.keys(rows[0]);
+  table.querySelector("thead tr").innerHTML = keys.map(k => `<th>${esc(k)}</th>`).join("");
+  table.querySelector("tbody").innerHTML = rows.map(r =>
+    "<tr>" + keys.map(k => `<td>${esc(r[k])}</td>`).join("") + "</tr>"
+  ).join("");
+}
+
+async function fetchHealth() {
+  try {
+    const r = await fetch("/api/health");
+    const data = await r.json();
+    const grid = document.getElementById("health-grid");
+    grid.innerHTML = "";
+    for (const [name, info] of Object.entries(data)) {
+      const card = document.createElement("div");
+      card.className = "health-card " + (info.status || "OFFLINE");
+      card.innerHTML = `<div class="name">${esc(name)}</div><div class="status">${esc(info.status)}</div><div class="ts">${info.last_ts ? esc(info.last_ts) : "—"}</div>`;
+      grid.appendChild(card);
+    }
+    document.getElementById("health-refresh").textContent = "Updated: " + new Date().toLocaleTimeString();
+  } catch(e) { console.error("health", e); }
+}
+
+async function fetchMetrics() {
+  try {
+    const r = await fetch("/api/metrics");
+    const data = await r.json();
+    renderTable("gauge-table", data.gauge);
+    renderTable("sum-table", data.sum);
+    document.getElementById("metrics-refresh").textContent = "Updated: " + new Date().toLocaleTimeString();
+  } catch(e) { console.error("metrics", e); }
+}
+
+async function fetchIntents() {
+  try {
+    const r = await fetch("/api/intents");
+    const rows = await r.json();
+    if (rows.error) { return; }
+    const table = document.getElementById("intent-table");
+    if (!rows || rows.length === 0) {
+      table.querySelector("tbody").innerHTML = '<tr><td colspan="99" style="text-align:center;color:#666">No intent events</td></tr>';
+      return;
+    }
+    table.querySelector("tbody").innerHTML = rows.map(r => {
+      const status = r.deploy_status || "";
+      const statusCls = status === "200" ? "status-ok" : (status ? "status-err" : "");
+      let extra = "";
+      if (r.recalculate_time_s) extra = `time=${r.recalculate_time_s}s`;
+      if (r.intent_count !== null && r.intent_count !== undefined && r.intent_count !== "") extra = `count=${r.intent_count}`;
+      return `<tr><td>${esc(r.Timestamp)}</td><td>${esc(r.event_type)}</td><td>${esc(r.intent)}</td><td class="${statusCls}">${esc(status)}</td><td>${esc(extra)}</td></tr>`;
+    }).join("");
+  } catch(e) { console.error("intents", e); }
+}
+
+async function deployIntent() {
+  const input = document.getElementById("intent-input");
+  const result = document.getElementById("deploy-result");
+  const text = input.value.trim();
+  if (!text) return;
+  result.style.display = "block";
+  result.className = "";
+  result.textContent = "Deploying...";
+  try {
+    const r = await fetch("/api/deploy", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({intent: text})
+    });
+    const data = await r.json();
+    result.className = r.ok ? "ok" : "err";
+    result.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    result.className = "err";
+    result.textContent = "Error: " + e.message;
+  }
+}
+
+async function runQuery() {
+  const sql = document.getElementById("sql-input").value.trim();
+  if (!sql) return;
+  try {
+    const r = await fetch("/api/query", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({sql: sql})
+    });
+    const data = await r.json();
+    if (data.error) {
+      document.getElementById("query-table").querySelector("tbody").innerHTML = `<tr><td colspan="99" style="color:#f44336">${esc(data.error)}</td></tr>`;
+      return;
+    }
+    renderTable("query-table", data);
+  } catch(e) {
+    document.getElementById("query-table").querySelector("tbody").innerHTML = `<tr><td colspan="99" style="color:#f44336">Error: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function fetchAll() {
+  fetchHealth();
+  fetchMetrics();
+  fetchIntents();
+}
+
+initExamples();
+fetchAll();
+setInterval(fetchAll, 5000);
+</script>
+</body>
+</html>
