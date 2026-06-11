@@ -27,6 +27,8 @@ logging.basicConfig(
 from otel_logging import setup_otel_logging
 _otel_log_provider = setup_otel_logging()
 
+log = logging.getLogger("deployer.intent")
+
 # Flask app should start in global layout
 app = Flask(__name__)
 CORS(app)
@@ -54,6 +56,7 @@ def deploy():
     req = request.get_json(silent=True, force=True)
     _last_intent_req = req
 
+    intent_str = req.get("intent", "") if req else ""
     print("Request: {}".format(json.dumps(req, indent=4)))
     res = topo.notify(req)  # Notify observers
 
@@ -69,6 +72,16 @@ def deploy():
     print("DICIONARIO DEPOIS")
     print(topo.installed_intents)
 
+    log.info(
+        "Intent deployed",
+        extra={
+            "event_type": "intent_deploy",
+            "intent": intent_str,
+            "deploy_status": res.get("status", 500),
+            "controller_count": len(res.get("controller_responses", {})),
+        },
+    )
+
     return r
 
 
@@ -83,10 +96,21 @@ def recalculate():
     print("Recalculating last intent: {}".format(json.dumps(_last_intent_req, indent=4)))
     t_start = time.time()
     res = topo.notify(_last_intent_req)
-    _metrics.set_value("total_recalculate_time_s", time.time() - t_start)
+    elapsed = time.time() - t_start
+    _metrics.set_value("total_recalculate_time_s", elapsed)
 
     r = make_response(res, res["status"])
     r.headers["Content-Type"] = "application/json"
+
+    log.info(
+        "Intent recalculated",
+        extra={
+            "event_type": "intent_recalculate",
+            "intent": _last_intent_req.get("intent", "") if _last_intent_req else "",
+            "deploy_status": res.get("status", 500),
+            "recalculate_time_s": round(elapsed, 4),
+        },
+    )
 
     return r
 
@@ -116,6 +140,14 @@ def delete_all():
     print(controller_responses)
     for controller_response in controller_responses:
         onos.revoke_policies(controller_response["output"]["responses"])
+
+    log.info(
+        "All intents deleted",
+        extra={
+            "event_type": "intent_delete_all",
+            "intent_count": len(topo.installed_intents),
+        },
+    )
 
     return {"message": "Deleted all installed flow rules!"}, 200
 
