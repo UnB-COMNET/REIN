@@ -27,12 +27,10 @@ COUNTER_FIELDS = {
     "in-fcs-errors": "packets_rx_fcs_errors",
 }
 
-# Rate leaf → direction.  Rate paths are bytes/s or packets/s
+# Rate leaf → direction.  Only octets (bytes/s) map to throughput (bits/s)
 RATE_DIRECTIONS = {
     "in-octets": "received",
     "out-octets": "sent",
-    "in-pkts": "received",
-    "out-pkts": "sent",
 }
 
 # Latency leaf → stat label
