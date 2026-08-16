@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
@@ -10,6 +11,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
 from collector import config
+from collector.gnmi_translator import wraparound_delta
 from collector.flow_stats import FlowInfo
 from collector.onos_discovery import LinkInfo
 from collector.port_stats import PortStats, PortThroughput
@@ -60,6 +62,8 @@ class Telemetry:
         self._meter_provider = meter_provider
         self._prev_counters: dict[tuple[str, int], PortStats] = {}
         self._prev_flow_counters: dict[tuple[str, str], tuple[int, int]] = {}
+        self._counter_lock = threading.Lock()
+        self._prev_gnmi_counters: dict[tuple[str, int, str], int] = {}
 
         self.link_latency = meter.create_gauge(
             "sdn.link.latency",
@@ -187,6 +191,59 @@ class Telemetry:
     def record_onos_requests(self, delta: int):
         if delta > 0:
             self.onos_requests.add(delta)
+
+    # -- gNMI streaming sources ----------------------------------------------
+    # Per-leaf counter field -> (instrument attr, direction)
+    _FIELD_TO_COUNTER = {
+        "bytes_received": ("port_bytes", "received"),
+        "bytes_sent": ("port_bytes", "sent"),
+        "packets_received": ("port_packets", "received"),
+        "packets_sent": ("port_packets", "sent"),
+        "packets_rx_dropped": ("port_drops", "rx"),
+        "packets_tx_dropped": ("port_drops", "tx"),
+        "packets_rx_errors": ("port_errors", "rx"),
+        "packets_tx_errors": ("port_errors", "tx"),
+        "packets_rx_fcs_errors": ("port_errors", "rx"),
+    }
+
+    def record_gnmi_counter(self, device_id: str, port: int, field: str, value: int):
+        """Record a single gNMI counter leaf as a wraparound-aware delta"""
+        mapping = self._FIELD_TO_COUNTER.get(field)
+        if mapping is None:
+            return
+        instrument_attr, direction = mapping
+        key = (device_id, port, field)
+        with self._counter_lock:
+            prev = self._prev_gnmi_counters.get(key)
+            self._prev_gnmi_counters[key] = value
+        if prev is not None:
+            delta = wraparound_delta(value, prev)
+            if delta > 0:
+                instrument = getattr(self, instrument_attr)
+                instrument.add(
+                    delta,
+                    attributes={"device_id": device_id, "port": port, "direction": direction},
+                )
+
+    def record_gnmi_throughput(self, device_id: str, port: int, direction: str, bps: float):
+        """Set the throughput gauge directly from a gNMI rate path (bits/s)"""
+        self.port_throughput.set(
+            bps,
+            attributes={"device_id": device_id, "port": port, "direction": direction},
+        )
+
+    def record_gnmi_latency(self, device_id: str, target_ip: str, rtt_ms: float):
+        """Set the link latency gauge from a gNMI RTT sample (milliseconds)"""
+        self.link_latency.set(
+            rtt_ms,
+            attributes={
+                "src_device": device_id,
+                "src_port": 0,
+                "dst_device": target_ip,
+                "dst_port": 0,
+                "link_type": "gnmi-rtt",
+            },
+        )
 
     def shutdown(self):
         self._meter_provider.shutdown()
