@@ -1,0 +1,64 @@
+// REIN SDN Observability - ClickHouse Database Schema
+// Database: otel
+// Generated from OTel Collector ClickHouse exporter (contrib v0.152.1)
+// ClickHouse version: 24.8.6
+
+Project "REIN SDN Observability" {
+  note: "ClickHouse 24.8.6 | MergeTree engine | 7-day TTL | OTel Collector create_schema: true | HTTP API port 8123 (FORMAT JSON required) | Native TCP port 9000"
+}
+
+Table "otel_logs" {
+  "Timestamp" datetime [note: "DateTime64(9). Log event timestamp. Partition key: toDate(Timestamp)."]
+  "TraceId" varchar [note: "String. OTel trace ID (hex, 32 chars). Bloom filter index."]
+  "SpanId" varchar [note: "String. OTel span ID (hex, 16 chars)."]
+  "TraceFlags" integer [note: "UInt8. W3C trace flags. Bit 0 = sampled."]
+  "SeverityText" varchar [note: "LowCardinality(String). Severity: INFO, WARN, ERROR."]
+  "SeverityNumber" integer [note: "UInt8. Numeric severity (INFO=9, WARN=13, ERROR=17)."]
+  "ServiceName" varchar [note: "LowCardinality(String). Emitting service: deployer, supervisor. Order key."]
+  "Body" varchar [note: "String. Log message text. Token bloom filter index on lower(Body)."]
+  "ResourceAttributes" varchar [note: "Map(LowCardinality(String), String). Keys: service.name, service.version, telemetry.sdk.language, telemetry.sdk.name, telemetry.sdk.version."]
+  "ScopeName" varchar [note: "String. Instrumentation scope (logger name)."]
+  "ScopeAttributes" varchar [note: "Map(LowCardinality(String), String). Scope attributes."]
+  "LogAttributes" varchar [note: "Map(LowCardinality(String), String). Per-log attributes. Standard keys: code.file.path, code.function.name, code.line.number. Intent deploy keys: event_type=intent_deploy, intent, deploy_status, controller_count. Intent recalculate keys: event_type=intent_recalculate, intent, deploy_status, recalculate_time_s. Intent delete keys: event_type=intent_delete_all, intent_count."]
+
+  note: "ENGINE: MergeTree | PARTITION BY toDate(Timestamp) | ORDER BY (toStartOf5min(Timestamp), ServiceName, Timestamp) | TTL 7 days | Indexes: bloom_filter on TraceId, mapKeys/Values of ResourceAttributes/ScopeAttributes/LogAttributes, tokenbf_v1 on lower(Body)"
+}
+
+Table "otel_metrics_gauge" {
+  "ResourceAttributes" varchar [note: "Map(LowCardinality(String), String). Same keys as otel_logs.ResourceAttributes."]
+  "ScopeName" varchar [note: "String. Instrumentation scope name."]
+  "ScopeAttributes" varchar [note: "Map(LowCardinality(String), String). Scope attributes."]
+  "ServiceName" varchar [note: "LowCardinality(String). Always 'collector'."]
+  "MetricName" varchar [note: "String. Values: sdn.link.latency (RTT latency, unit ms; gNMI rtt-ns when streaming enabled), sdn.port.throughput (throughput, unit bps; gNMI rate paths when streaming enabled)."]
+  "MetricDescription" varchar [note: "String. Human-readable description."]
+  "MetricUnit" varchar [note: "String. 'ms' or 'bps'."]
+  "Attributes" varchar [note: "Map(LowCardinality(String), String). sdn.link.latency keys: src_device, src_port, dst_device, dst_port, link_type (gnmi-rtt when sourced from gNMI). sdn.port.throughput keys: device_id, port, direction (sent/received)."]
+  "StartTimeUnix" datetime [note: "DateTime64(9). Gauge start timestamp."]
+  "TimeUnix" datetime [note: "DateTime64(9). Data point timestamp. Partition key: toDate(TimeUnix)."]
+  "Value" float [note: "Float64. Gauge value. Latency in ms, throughput in bps."]
+
+  note: "ENGINE: MergeTree | PARTITION BY toDate(TimeUnix) | ORDER BY (ServiceName, MetricName, Attributes, TimeUnix) | TTL 7 days | Indexes: bloom_filter on mapKeys/Values of ResourceAttributes/ScopeAttributes/Attributes"
+}
+
+Table "otel_metrics_sum" {
+  "ResourceAttributes" varchar [note: "Map(LowCardinality(String), String). Same as otel_metrics_gauge.ResourceAttributes."]
+  "ScopeName" varchar [note: "String."]
+  "ScopeAttributes" varchar [note: "Map(LowCardinality(String), String)."]
+  "ServiceName" varchar [note: "LowCardinality(String). Always 'collector'."]
+  "MetricName" varchar [note: "String. Values: sdn.flow.bytes (By), sdn.flow.packets (1), sdn.onos.requests (1), sdn.port.bytes (By), sdn.port.packets (1), sdn.port.drops (1), sdn.port.errors (1). sdn.port.* sourced from gNMI OpenConfig counters when streaming enabled; sdn.flow.* always from ONOS REST."]
+  "MetricDescription" varchar [note: "String. Human-readable description."]
+  "MetricUnit" varchar [note: "String. 'By' for bytes, '1' for dimensionless."]
+  "Attributes" varchar [note: "Map(LowCardinality(String), String). sdn.flow.* keys: device_id, flow_id, app_id, table_id, priority, output_port. sdn.port.* keys: device_id, port, direction (sent/received). sdn.onos.requests: no attributes."]
+  "StartTimeUnix" datetime [note: "DateTime64(9). Counter start timestamp."]
+  "TimeUnix" datetime [note: "DateTime64(9). Data point timestamp. Partition key: toDate(TimeUnix)."]
+  "Value" float [note: "Float64. Delta counter value since last export."]
+  "AggregationTemporality" integer [note: "Int32. 1=DELTA, 2=CUMULATIVE. REIN uses DELTA."]
+  "IsMonotonic" boolean [note: "Bool. true for counters that only increase."]
+
+  note: "ENGINE: MergeTree | PARTITION BY toDate(TimeUnix) | ORDER BY (ServiceName, MetricName, Attributes, TimeUnix) | TTL 7 days | Indexes: bloom_filter on mapKeys/Values of ResourceAttributes/ScopeAttributes/Attributes"
+}
+
+// Cross-table relationships:
+// - ServiceName is a shared dimension across all three tables
+// - Attributes['device_id'] in metrics correlates with ResourceAttributes['service.name']='collector' in logs
+// - LogAttributes['intent'] in otel_logs correlates with flow rule changes in otel_metrics_sum
