@@ -7,6 +7,34 @@
 
 ---
 
+## gNMI Streaming Telemetry
+
+The collector uses a **hybrid architecture**:
+
+- **gNMI `Subscribe` STREAM** (port 9339 per switch) delivers port counters, throughput (rate paths), and latency (RTT). These populate `sdn.port.*` counters, `sdn.port.throughput`, and `sdn.link.latency`
+- **ONOS REST** (polled every `COLLECTOR_INTERVAL` seconds) provides device discovery, link topology, and flow stats (`sdn.flow.*`). ONOS is also the fallback when gNMI is disabled
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `GNMI_STREAM_ENABLED` | `true` | Kill-switch; set `false` to fall back to ONOS-only polling |
+| `GNMI_PORT` | `9339` | gNMI server port on each switch |
+| `GNMI_SAMPLE_INTERVAL_NS` | `5000000000` | Sample interval in nanoseconds (5s) |
+| `GNMI_SKIP_VERIFY` | `true` | Skip TLS cert verification (self-signed adapter cert) |
+| `GNMI_HOST_MAP` | (empty) | JSON dict overriding device_id → host, e.g. `{"of:0000...":"10.0.0.1"}` |
+| `GNMI_SUBNET` | (empty) | Fallback: derive host from DPID last octet + this prefix |
+| `GNMI_IFACE_PREFIX` | `eth` | Interface-name convention when ONOS `portName` annotation is absent |
+| `GNMI_TLS_CERT` / `GNMI_TLS_KEY` / `GNMI_TLS_CA` | (empty) | Optional TLS cert paths |
+
+### Verifying gNMI Streams
+
+Collector logs show `gNMI stream started for <device> -> <host>:9339` when a stream opens and `gNMI initial sync received for <device>` on the first dump. If streams are not starting, set `GNMI_HOST_MAP` explicitly and check that the OVS gNMI adapter is running on port 9339
+
+When `GNMI_STREAM_ENABLED=false`, the collector polls ONOS REST for port stats and computes throughput locally (the original behavior). Karaf CLI `link-latencies` is also only used in this fallback mode
+
+---
+
 ## 1. Connection
 
 ### HTTP API (recommended for applications)
@@ -158,6 +186,7 @@ RTT latency of an active SDN link.
 | **Unit** | `ms` (milliseconds) |
 | **Description** | RTT latency of an active SDN link |
 | **Service** | `collector` |
+| **Source** | gNMI `rtt-ns` (ns → ms) when streaming enabled; ONOS Karaf CLI or link annotation otherwise |
 
 **Attributes:**
 
@@ -167,7 +196,9 @@ RTT latency of an active SDN link.
 | `src_port` | String | Source port number | `"1"` |
 | `dst_device` | String | Destination switch DPID | `"of:0000000000000002"` |
 | `dst_port` | String | Destination port number | `"1"` |
-| `link_type` | String | Link type | `"DIRECT"` |
+| `link_type` | String | Link type | `"DIRECT"`, `"gnmi-rtt"` |
+
+> When sourced from gNMI, `link_type` is `"gnmi-rtt"`, `dst_device` is the target IP, and `src_port`/`dst_port` are `0` (link-endpoint refinement is post-MVP)
 
 ---
 
@@ -180,6 +211,7 @@ Moving-average throughput on a device port (5-sample sliding window).
 | **Unit** | `bps` (bits per second) |
 | **Description** | Moving-average throughput on a device port |
 | **Service** | `collector` |
+| **Source** | gNMI rate paths (bytes/s × 8) when streaming enabled; local sliding-window computation otherwise |
 
 **Attributes:**
 
@@ -247,6 +279,7 @@ Cumulative bytes transferred on a device port.
 |---|---|
 | **Unit** | `By` (bytes) |
 | **Description** | Cumulative bytes transferred on a device port |
+| **Source** | gNMI OpenConfig counters (uint64, wraparound-aware delta) when streaming enabled; ONOS REST port statistics otherwise |
 
 **Attributes:**
 
