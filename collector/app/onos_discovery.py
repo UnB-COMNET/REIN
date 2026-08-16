@@ -110,7 +110,11 @@ def build_topology() -> tuple[dict[str, DeviceInfo], list[LinkInfo]]:
         raise RuntimeError("[Collector] ONOS returned no devices — topology unavailable")
 
     links = fetch_links()
-    cli_latencies = fetch_link_latencies_cli(links)
+
+    # Karaf CLI latency is replaced by gNMI latency streams when streaming is on
+    cli_latencies = {}
+    if not config.GNMI_STREAM_ENABLED:
+        cli_latencies = fetch_link_latencies_cli(links)
 
     for link in links:
         if link.latency_ms is not None:

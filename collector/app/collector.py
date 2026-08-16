@@ -11,6 +11,8 @@ from collector.onos_discovery import DeviceInfo, LinkInfo
 from collector.otel import setup_telemetry, Telemetry
 from collector.flow_stats import FlowInfo, fetch_flows
 from collector.port_stats import ThroughputTracker, fetch_port_stats, PortStats, PortThroughput
+from collector.port_map import PortMapCache, fetch_port_map
+from collector.gnmi_manager import GnmiStreamManager
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +67,13 @@ def main():
 
     telemetry = setup_telemetry()
     tracker = ThroughputTracker()
+    port_map_cache = PortMapCache()
+    manager = GnmiStreamManager(telemetry, port_map_cache)
     prev_onos_requests = 0
     cycle = 0
 
-    logger.info("Collector started  interval=%.1fs", config.COLLECTOR_INTERVAL)
+    logger.info("Collector started  interval=%.1fs  gnmi_stream=%s",
+                config.COLLECTOR_INTERVAL, config.GNMI_STREAM_ENABLED)
 
     while _running:
         cycle += 1
@@ -87,28 +92,35 @@ def main():
 
         device_ids = list(devices.keys())
 
-        try:
-            stats = fetch_port_stats(device_ids)
-            _log_port_stats(stats)
-            for did, port_list in stats.items():
-                for ps in port_list:
-                    telemetry.record_port_counters(did, ps)
-        except Exception as e:
-            logger.error("Port stats collection failed: %s", e)
-            stats = {}
+        if config.GNMI_STREAM_ENABLED:
+            # Refresh interface-name -> port-number maps, then reconcile streams
+            for did in device_ids:
+                port_map_cache.update(did, fetch_port_map(did))
+            manager.reconcile(devices)
+        else:
+            # ONOS fallback: poll port stats + compute throughput locally
+            try:
+                stats = fetch_port_stats(device_ids)
+                _log_port_stats(stats)
+                for did, port_list in stats.items():
+                    for ps in port_list:
+                        telemetry.record_port_counters(did, ps)
+            except Exception as e:
+                logger.error("Port stats collection failed: %s", e)
+                stats = {}
 
-        try:
-            throughput: dict[str, dict[int, PortThroughput]] = {}
-            for did, port_list in stats.items():
-                for ps in port_list:
-                    t = tracker.update(did, ps)
-                    if t.window_size >= 2:
-                        throughput.setdefault(did, {})[ps.port] = t
-                        telemetry.record_port_throughput(did, ps.port, t)
-            if throughput:
-                _log_throughput(throughput)
-        except Exception as e:
-            logger.error("Throughput computation failed: %s", e)
+            try:
+                throughput: dict[str, dict[int, PortThroughput]] = {}
+                for did, port_list in stats.items():
+                    for ps in port_list:
+                        t = tracker.update(did, ps)
+                        if t.window_size >= 2:
+                            throughput.setdefault(did, {})[ps.port] = t
+                            telemetry.record_port_throughput(did, ps.port, t)
+                if throughput:
+                    _log_throughput(throughput)
+            except Exception as e:
+                logger.error("Throughput computation failed: %s", e)
 
         try:
             flows = fetch_flows(device_ids)
@@ -131,6 +143,7 @@ def main():
 
         time.sleep(config.COLLECTOR_INTERVAL)
 
+    manager.stop_all()
     telemetry.shutdown()
     logger.info("Collector stopped after %d cycles", cycle)
 
