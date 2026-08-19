@@ -80,11 +80,12 @@ def api_metrics():
             "Attributes['src_port'] as src_port, "
             "Attributes['dst_device'] as dst_device, "
             "Attributes['dst_port'] as dst_port, "
+            "Attributes['link_type'] as link_type, "
             "argMax(Value, TimeUnix) as latency_ms, "
             "max(TimeUnix) as last_ts "
             "FROM otel_metrics_gauge "
             "WHERE MetricName = 'sdn.link.latency' "
-            "GROUP BY src_device, src_port, dst_device, dst_port "
+            "GROUP BY src_device, src_port, dst_device, dst_port, link_type "
             "ORDER BY src_device, dst_device"
         )
     except Exception as e:
