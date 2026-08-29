@@ -67,6 +67,29 @@ When `GNMI_STREAM_ENABLED=false`, the collector polls ONOS REST for port stats a
 
 ---
 
+## Kafka Durable Buffer
+
+Metrics flow through a **Kafka topic** (`otel-metrics`) before reaching ClickHouse, providing durable buffering: if ClickHouse or the otel-collector is down, Kafka retains the data and the consumer drains it when they recover
+
+```
+collector → Kafka (OTLP protobuf) → otel-collector (kafkametrics receiver) → ClickHouse
+```
+
+Logs from the deployer still go directly via OTLP/gRPC (not through Kafka)
+
+### Kafka Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KAFKA_ENABLED` | `true` | Kill-switch; set `false` to send metrics via OTLP/gRPC directly (bypass Kafka) |
+| `KAFKA_BROKERS` | `localhost:9092` | Kafka broker address |
+| `KAFKA_TOPIC` | `otel-metrics` | Kafka topic for OTLP metrics |
+| `KAFKA_CLIENT_ID` | `collector` | Kafka producer client ID |
+
+When `KAFKA_ENABLED=false`, the collector exports via OTLP/gRPC to the otel-collector on `OTEL_EXPORTER_OTLP_ENDPOINT` (the otel-collector config must then use `otlp` receiver for the metrics pipeline instead of `kafkametrics`)
+
+---
+
 ## 1. Connection
 
 ### HTTP API (recommended for applications)
