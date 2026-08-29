@@ -12,6 +12,7 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 
 from collector import config
 from collector.gnmi_translator import wraparound_delta
+from collector.kafka_exporter import KafkaMetricExporter, _ResilientKafkaExporter
 from collector.flow_stats import FlowInfo
 from collector.onos_discovery import LinkInfo
 from collector.port_stats import PortStats, PortThroughput
@@ -255,12 +256,24 @@ def setup_telemetry() -> Telemetry:
         "service.version": "1.0.0",
     })
 
-    exporter = _ResilientOTLPExporter(
-        OTLPMetricExporter(
-            endpoint=config.OTEL_EXPORTER_OTLP_ENDPOINT,
-            insecure=True,
+    if config.KAFKA_ENABLED:
+        exporter = _ResilientKafkaExporter(KafkaMetricExporter())
+        logger.info(
+            "OTel initialized  kafka=%s topic=%s  export_interval=%.1fs",
+            config.KAFKA_BROKERS, config.KAFKA_TOPIC, config.OTEL_EXPORT_INTERVAL,
         )
-    )
+    else:
+        exporter = _ResilientOTLPExporter(
+            OTLPMetricExporter(
+                endpoint=config.OTEL_EXPORTER_OTLP_ENDPOINT,
+                insecure=True,
+            )
+        )
+        logger.info(
+            "OTel initialized  endpoint=%s  export_interval=%.1fs",
+            config.OTEL_EXPORTER_OTLP_ENDPOINT, config.OTEL_EXPORT_INTERVAL,
+        )
+
     reader = PeriodicExportingMetricReader(
         exporter,
         export_interval_millis=int(config.OTEL_EXPORT_INTERVAL * 1000),
@@ -268,8 +281,4 @@ def setup_telemetry() -> Telemetry:
     provider = MeterProvider(metric_readers=[reader], resource=resource)
     meter = provider.get_meter("collector", "1.0.0")
 
-    logger.info(
-        "OTel initialized  endpoint=%s  export_interval=%.1fs",
-        config.OTEL_EXPORTER_OTLP_ENDPOINT, config.OTEL_EXPORT_INTERVAL,
-    )
     return Telemetry(meter, provider)
