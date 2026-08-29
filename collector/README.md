@@ -7,6 +7,38 @@
 
 ---
 
+## ⚠ Before You Start — Check Your Infrastructure
+
+The collector defaults to **gNMI streaming** (`GNMI_STREAM_ENABLED=true`). This means port counters, throughput, and latency are collected from gNMI servers on port 9339, **not** from ONOS. If your switches don't have working gNMI adapters, **these metrics will be empty** and the ClickHouse tables `otel_metrics_gauge` / `otel_metrics_sum` will have no port/throughput/latency data.
+
+**Check whether your infrastructure has gNMI:**
+
+```bash
+# Is the gNMI adapter listening on port 9339 on each switch?
+docker exec <switch> ss -tlnp | grep 9339
+
+# Any adapter errors?
+docker logs <switch> 2>&1 | grep -i error
+```
+
+**If your switches do NOT have gNMI adapters**, set this environment variable on the collector service to fall back to ONOS polling (port stats and throughput from ONOS REST, latency from Karaf CLI):
+
+```
+GNMI_STREAM_ENABLED=false
+```
+
+You can set it in `docker-compose.yml` under the `collector` service:
+
+```yaml
+collector:
+  environment:
+    - GNMI_STREAM_ENABLED=false
+```
+
+> **Note:** `otel_logs` is empty until an intent is deployed — it only records intent lifecycle events (`intent_deploy`, `intent_recalculate`, `intent_delete_all`). This is expected, not a malfunction
+
+---
+
 ## gNMI Streaming Telemetry
 
 The collector uses a **hybrid architecture**:
