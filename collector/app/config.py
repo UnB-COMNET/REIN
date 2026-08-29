@@ -27,3 +27,10 @@ GNMI_IFACE_PREFIX = os.environ.get("GNMI_IFACE_PREFIX", "eth")
 GNMI_TLS_CERT = os.environ.get("GNMI_TLS_CERT", "")
 GNMI_TLS_KEY = os.environ.get("GNMI_TLS_KEY", "")
 GNMI_TLS_CA = os.environ.get("GNMI_TLS_CA", "")
+
+# --- Kafka buffer ----------------------------------------------------
+# Kill-switch: when False, metrics go via OTLP/gRPC directly to the otel-collector
+KAFKA_ENABLED = os.environ.get("KAFKA_ENABLED", "true").lower() in ("1", "true", "yes")
+KAFKA_BROKERS = os.environ.get("KAFKA_BROKERS", "localhost:9092")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "otel-metrics")
+KAFKA_CLIENT_ID = os.environ.get("KAFKA_CLIENT_ID", "collector")

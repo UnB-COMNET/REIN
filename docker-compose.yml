@@ -34,6 +34,9 @@ services:
     network_mode: "host"
     stdin_open: true
     tty: true
+    depends_on:
+      kafka:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -44,6 +47,8 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     depends_on:
       clickhouse:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     volumes:
       - ./collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
@@ -78,6 +83,25 @@ services:
       test: ["CMD", "clickhouse-client", "-q", "SELECT 1"]
       interval: 3s
       timeout: 2s
+      retries: 10
+
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    network_mode: "host"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@localhost:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 5s
       retries: 10
 
 volumes:
