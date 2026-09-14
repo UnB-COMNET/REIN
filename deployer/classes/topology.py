@@ -34,7 +34,10 @@ class Topology():
             if response.get("status", 500) > 299:
                 responses["status"] = response.get("status", 500)
             controller_ip = response.pop("controller_ip", "unknown-controller")
-            responses["controller_responses"][controller_ip] = response  
+            server_ip = response.pop("server_ip", None)
+            if server_ip:
+                responses["server_ip"] = server_ip
+            responses["controller_responses"][controller_ip] = response
         return responses
 
 

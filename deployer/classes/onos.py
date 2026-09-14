@@ -15,6 +15,9 @@ from classes.dsu import DisjointSetUnion
 from services import cdn_qoe, cdn_qoe_installer
 import metrics as _metrics
 
+# Set by app.py from the --verbose CLI flag; gates raw debug dumps below.
+VERBOSE = os.environ.get("DEPLOYER_VERBOSE") == "1"
+
 # Temp mappings
 GROUP_MAP = {
     "professors": ("192.168.0.0/24", "172.17.0.2"),
@@ -38,6 +41,14 @@ MIDDLEBOX_MAP = {
     "quarantine": "192.168.1.4"
 }
 
+# Tracks each client's currently-installed CDN server IP. A recalculation
+# needs to remove_old_flows() for the OLD assignment before installing flows
+# for the new one -- without this, remove_old_flows() gets called with the
+# just-computed NEW target instead, searches for (and finds nothing to
+# delete for) a flow that doesn't exist yet, and the real old flow -- which
+# is isPermanent -- is never removed and stays live forever.
+_CLIENT_SERVER_ASSIGNMENTS = {}
+
 
 extract_value = re.compile(r"'(.*?)'")
 
@@ -45,7 +56,7 @@ class Onos(DeployTarget):
     # Class variable for controller identification.
     controller = "ONOS"
 
-    def __init__(self, base_url, ip, credentials=(os.getenv("ONOSUSER", "onos"), os.getenv("ONOSPASS", "rocks")), is_main=False):
+    def __init__(self, base_url, ip, credentials=(os.getenv("ONOSUSER"), os.getenv("ONOSPASS")), is_main=False):
         super().__init__()
         self.base_url = base_url  # ONOS IP and port
         self.ip = ip
@@ -89,7 +100,8 @@ class Onos(DeployTarget):
                         targets.append(GROUP_MAP[target["value"]])
         
         # Controller verification
-        print(targets)
+        if VERBOSE:
+            print(targets)
         compile_intent = False
         for i, target in enumerate(targets):
             if isinstance(target, tuple):  # Target is a subnetwork
@@ -123,6 +135,7 @@ class Onos(DeployTarget):
         gen_req = []  # List to save generated requests to the ONOS API
         responses = []  # List to track api responses
         api_count = 0
+        selected_server_ip = None
 
         # Meter request body template
         meter_body = {
@@ -274,14 +287,15 @@ class Onos(DeployTarget):
 
                     client_ip = srcip_list[0].split("/")[0]
 
-                    tx_by_server_uf = {
-                        "ES": 500.0 
-                    }
-
                     try:
+                        cdn_qoe.get_dynamic_latencies()
                         source_uf = cdn_qoe.IP_TO_ESTADO_CLIENTE.get(client_ip)
                         if not source_uf:
-                            raise ValueError(f"Cliente {client_ip} não mapeado no cdn_qoe.py!")
+                            raise ValueError(f"Cliente {client_ip} não encontrado na topologia descoberta!")
+
+                        tx_by_server_uf = {uf: 500.0 for uf in set(cdn_qoe.IP_TO_ESTADO_SERVIDOR.values())}
+                        if not tx_by_server_uf:
+                            raise ValueError("Nenhum servidor descoberto na topologia!")
 
                         target_ufs = list(tx_by_server_uf.keys())
                         tx_values = list(tx_by_server_uf.values())
@@ -300,7 +314,6 @@ class Onos(DeployTarget):
                             raise ValueError("O Solver não encontrou nenhum caminho possível! A matriz de latências pode estar vazia.")
 
                         best_server_uf = cdn_qoe.ESTADOS[best_target_idx]
-                        print(f" [CDN-QoE] Optimization complete. Best server at: {best_server_uf} (QoE index: {best_qoe:.5f})")
 
                         server_ip = None
                         for ip, uf in cdn_qoe.IP_TO_ESTADO_SERVIDOR.items():
@@ -311,52 +324,51 @@ class Onos(DeployTarget):
                         if not server_ip:
                             raise ValueError(f"Não encontrei o IP do servidor para o estado {best_server_uf}!")
 
-                        active_path = getattr(self, "_cdn_qoe_active_path", None)
-                        if best_path != active_path:
-                            print(f" [CDN-QoE] New path differs from active path - removing old flow rules...")
-                            _t_deploy = time.time()
-                            t0 = time.time()
-                            cdn_qoe_installer.remove_old_flows(self, client_ip, server_ip, cdn_qoe.DEVICE_MAP)
-                            print(f" [TIMER] remove_old_flows: {time.time()-t0:.3f}s")
+                        selected_server_ip = server_ip
+                        old_server_ip = _CLIENT_SERVER_ASSIGNMENTS.get(client_ip)
 
-                            print(f" [CDN-QoE] Installing flows: Client ({client_ip}) <-> Server ({server_ip})...")
-                            t0 = time.time()
-                            flow_resps = cdn_qoe_installer.install_bidirectional_custom_path(
-                                onos=self,
-                                netgraph=netgraph,
-                                client_ip=client_ip,
-                                server_ip=server_ip,
-                                path_indices=best_path,
-                                estados=cdn_qoe.ESTADOS,
-                                device_map=cdn_qoe.DEVICE_MAP
-                            )
-                            print(f" [TIMER] install_bidirectional: {time.time()-t0:.3f}s")
-                            _metrics.set_value("deploy_time_s", time.time() - _t_deploy)
+                        print(f" [CDN-QoE] Removing old flow rules...")
+                        _t_deploy = time.time()
+                        t0 = time.time()
+                        cdn_qoe_installer.remove_old_flows(self, client_ip, old_server_ip, cdn_qoe.DEVICE_MAP)
+                        print(f" [TIMER] remove_old_flows: {time.time()-t0:.3f}s")
 
-                            responses.extend(flow_resps)
-                            self._cdn_qoe_active_path = best_path
-                            print(" [CDN-QoE] Flows successfully installed on ONOS!")
-                        else:
-                            print(f" [CDN-QoE] Path unchanged - skipping flow rule removal and installation.")
-                            _metrics.set_value("deploy_time_s", 0.0)
+                        print(f" [CDN-QoE] Installing flows: Client ({client_ip}) <-> Server ({server_ip})...")
+                        t0 = time.time()
+                        flow_resps = cdn_qoe_installer.install_bidirectional_custom_path(
+                            onos=self,
+                            netgraph=netgraph,
+                            client_ip=client_ip,
+                            server_ip=server_ip,
+                            path_indices=best_path,
+                            estados=cdn_qoe.ESTADOS,
+                            device_map=cdn_qoe.DEVICE_MAP
+                        )
+                        print(f" [TIMER] install_bidirectional: {time.time()-t0:.3f}s")
+                        _metrics.set_value("deploy_time_s", time.time() - _t_deploy)
+
+                        responses.extend(flow_resps)
+                        _CLIENT_SERVER_ASSIGNMENTS[client_ip] = server_ip
+                        print(" [CDN-QoE] Flows successfully installed on ONOS!")
 
 
                         # Notify supervisor of the deployed path (send ESTADOS so supervisor
                         # resolves path indices in the same order the deployer used)
                         try:
+                            _metrics.increment("msgs_deployer_to_observer")
                             requests.post(
                                 "http://127.0.0.1:5151/supervise",
                                 json={
+                                    "client_ip":       client_ip,
                                     "path":            best_path,
                                     "estados":         cdn_qoe.ESTADOS,
                                     "source_uf":       source_uf,
-                                    "target_ufs":      target_ufs,
-                                    "tx":              tx_values,
-                                    "access_delay_ms": 10.0,
+                                    "target_ufs":      [best_server_uf],
+                                    "tx":              [500.0],
+                                    "access_delay_ms": 0.0,
                                 },
                                 timeout=3,
                             )
-                            _metrics.increment("msgs_deployer_to_observer")
                             print(" [CDN-QoE] Supervisor notified of deployed path.")
                         except Exception:
                             print(" [CDN-QoE] Could not reach supervisor - skipping notification.")
@@ -373,15 +385,18 @@ class Onos(DeployTarget):
                         print(" [LLM] Starting routing via qwen3.6...")
 
                         client_ip = srcip_list[0].split("/")[0]
-                        source_uf = cdn_qoe.IP_TO_ESTADO_CLIENTE.get(client_ip)
-                        if not source_uf:
-                            raise ValueError(f"Client {client_ip} not mapped in cdn_qoe.IP_TO_ESTADO_CLIENTE")
-
-                        tx_by_server_uf = {"ES": 500.0}
 
                         t0 = time.time()
-                        cdn_qoe.get_dynamic_latencies()  # populates globals: ESTADOS, RTT_MATRIX, ADJ_MATRIX
+                        cdn_qoe.get_dynamic_latencies()  # populates ESTADOS, RTT_MATRIX, ADJ_MATRIX, IP_TO_ESTADO_*
                         print(f" [TIMER] get_dynamic_latencies: {time.time()-t0:.3f}s")
+
+                        source_uf = cdn_qoe.IP_TO_ESTADO_CLIENTE.get(client_ip)
+                        if not source_uf:
+                            raise ValueError(f"Client {client_ip} não encontrado na topologia descoberta!")
+
+                        tx_by_server_uf = {uf: 500.0 for uf in set(cdn_qoe.IP_TO_ESTADO_SERVIDOR.values())}
+                        if not tx_by_server_uf:
+                            raise ValueError("Nenhum servidor descoberto na topologia!")
 
                         print("\n" + "="*20)
                         print(cdn_qoe.RTT_MATRIX)
@@ -442,11 +457,12 @@ class Onos(DeployTarget):
 
                 Output:
                 """
+                        OLLAMA_URL = os.getenv("OLLAMA_URL")
 
                         print(f" [LLM] Calculating best path from {source_uf} to {target_ufs_str}...")
                         t0 = time.time()
                         response = requests.post(
-                            "http://localhost:11434/api/chat",
+                            OLLAMA_URL + "/api/chat",
                             json={
                                 "model": "qwen3.6",
                                 "messages": [{"role": "user", "content": prompt}],
@@ -477,54 +493,53 @@ class Onos(DeployTarget):
                         if not server_ip:
                             raise ValueError(f"No IP found for server UF={chosen_uf}")
 
+                        selected_server_ip = server_ip
+                        old_server_ip = _CLIENT_SERVER_ASSIGNMENTS.get(client_ip)
+
                         try:
                             path_indices_list = [cdn_qoe.ESTADOS.index(name) for name in path_names]
                             path_indices = list(zip(path_indices_list[:-1], path_indices_list[1:]))
 
                             print(f" [LLM] Path converted to index pairs: {path_indices}")
 
-                            active_path = getattr(self, "_llm_active_path", None)
-                            if path_indices != active_path:
-                                print(f" [LLM] New path detected - removing stale flow rules...")
-                                _t_deploy = time.time()
-                                t0 = time.time()
-                                cdn_qoe_installer.remove_old_flows(self, client_ip, server_ip, cdn_qoe.DEVICE_MAP)
-                                print(f" [TIMER] remove_old_flows: {time.time()-t0:.3f}s")
+                            print(f" [LLM] Removing stale flow rules...")
+                            _t_deploy = time.time()
+                            t0 = time.time()
+                            cdn_qoe_installer.remove_old_flows(self, client_ip, old_server_ip, cdn_qoe.DEVICE_MAP)
+                            print(f" [TIMER] remove_old_flows: {time.time()-t0:.3f}s")
 
-                                print(f" [LLM] Installing flows: {client_ip} <-> {server_ip} via {path_names}...")
-                                t0 = time.time()
-                                flow_resps = cdn_qoe_installer.install_bidirectional_custom_path(
-                                    onos=self,
-                                    netgraph=netgraph,
-                                    client_ip=client_ip,
-                                    server_ip=server_ip,
-                                    path_indices=path_indices,
-                                    estados=cdn_qoe.ESTADOS,
-                                    device_map=cdn_qoe.DEVICE_MAP
-                                )
-                                print(f" [TIMER] install_bidirectional: {time.time()-t0:.3f}s")
-                                _metrics.set_value("deploy_time_s", time.time() - _t_deploy)
-                                responses.extend(flow_resps)
-                                self._llm_active_path = path_indices
-                                print(" [LLM] Flows successfully installed on ONOS!")
-                            else:
-                                print(f" [LLM] Path unchanged - skipping flow reinstallation.")
-                                _metrics.set_value("deploy_time_s", 0.0)
+                            print(f" [LLM] Installing flows: {client_ip} <-> {server_ip} via {path_names}...")
+                            t0 = time.time()
+                            flow_resps = cdn_qoe_installer.install_bidirectional_custom_path(
+                                onos=self,
+                                netgraph=netgraph,
+                                client_ip=client_ip,
+                                server_ip=server_ip,
+                                path_indices=path_indices,
+                                estados=cdn_qoe.ESTADOS,
+                                device_map=cdn_qoe.DEVICE_MAP
+                            )
+                            print(f" [TIMER] install_bidirectional: {time.time()-t0:.3f}s")
+                            _metrics.set_value("deploy_time_s", time.time() - _t_deploy)
+                            responses.extend(flow_resps)
+                            _CLIENT_SERVER_ASSIGNMENTS[client_ip] = server_ip
+                            print(" [LLM] Flows successfully installed on ONOS!")
 
                             try:
+                                _metrics.increment("msgs_deployer_to_observer")
                                 requests.post(
                                     "http://127.0.0.1:5151/supervise",
                                     json={
+                                        "client_ip":       client_ip,
                                         "path":            path_indices,
                                         "estados":         cdn_qoe.ESTADOS,
                                         "source_uf":       source_uf,
                                         "target_ufs":      [chosen_uf],
                                         "tx":              [tx_by_server_uf[chosen_uf]],
-                                        "access_delay_ms": 10.0,
+                                        "access_delay_ms": 0.0,
                                     },
                                     timeout=3,
                                 )
-                                _metrics.increment("msgs_deployer_to_observer")
                                 print(" [LLM] Supervisor notified of deployed path.")
                             except Exception:
                                 print(" [LLM] Could not reach supervisor - skipping notification.")
@@ -665,11 +680,12 @@ class Onos(DeployTarget):
                 'details': e.args
             }
                     
-        print("RESPONSES")
-        print(responses)
-        print(f"API REQUEST RATE = {api_count}")
+        if VERBOSE:
+            print("RESPONSES")
+            print(responses)
+            print(f"API REQUEST RATE = {api_count}")
         # Craft response details field
-        return {
+        ret = {
             'status': 200,
             'type': 'nile',
             'controller_ip': self.ip,
@@ -678,6 +694,9 @@ class Onos(DeployTarget):
                 'responses': responses
             }
         }
+        if selected_server_ip:
+            ret['server_ip'] = selected_server_ip
+        return ret
         # result = re.search(r"'(.*?)'", input_string) Extract text between (' and ')
         # result.group(1)    
 
