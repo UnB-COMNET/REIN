@@ -19,6 +19,9 @@ Before running REIN, make sure you have the following installed:
 - Docker
 - Docker Compose v2
 
+On a fresh Ubuntu host, `sudo ./dependencies.sh` installs both (pinned
+versions, official Docker repository).
+
 ## Running REIN
 
 ### First-time setup
