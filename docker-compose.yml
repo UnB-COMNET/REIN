@@ -1,6 +1,8 @@
 services:
   deployer:
-    image: rein_deployer
+    # nome sem prefixo "rein_": os runners do LFT sobem este container com
+    # `docker run --name=deployer deployer` (por nome de imagem), não via compose
+    image: deployer
     build:
       context: ./deployer
       dockerfile: Dockerfile
@@ -14,7 +16,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   supervisor:
-    image: rein_supervisor
+    # mesmo motivo do deployer acima
+    image: supervisor
     build:
       context: ./supervisor
       dockerfile: Dockerfile
