@@ -24,7 +24,8 @@ sudo ./dependencies.sh
 ```
 
 `dependencies.sh` does everything, in order, and is idempotent (safe to
-rerun):
+rerun). The full output also goes to `dependencies.log` (overwritten on
+every run):
 
 1. Installs Docker CE + Compose plugin (pinned versions, official Docker
    repository) and adds you to the `docker` group.
