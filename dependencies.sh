@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# dependencies.sh — instala o único pré-requisito de sistema da REIN:
-# Docker + Docker Compose v2 (repositório oficial da Docker).
+# dependencies.sh — único script de instalação da REIN. Um comando, do zero
+# a pronto para subir: Docker + Compose v2 (repositório oficial da Docker),
+# o arquivo deployer/.env e o build de todas as imagens via docker compose.
 #
 # Uso (a partir da raiz deste repositório, já clonado):
 #   chmod +x dependencies.sh
@@ -17,6 +18,8 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "Rode como root (sudo ./dependencies.sh)" >&2
     exit 1
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Validado em 2026-08-29 (mesma VM de experimentos do grupo, ver
 # infra/setup.sh do projeto PIBIC).
@@ -64,4 +67,20 @@ if ! getent group docker >/dev/null; then groupadd docker; fi
 usermod -aG "docker" "${SUDO_USER:-$USER}"
 log "Usuário '${SUDO_USER:-$USER}' adicionado ao grupo 'docker' — precisa de novo login (ou 'newgrp docker') para rodar 'docker' sem sudo."
 
-log "Pronto. Próximo passo: docker compose build"
+cd "$SCRIPT_DIR"
+
+env_file="deployer/.env"
+if [ ! -f "$env_file" ]; then
+    log "Criando $env_file"
+    cat > "$env_file" <<'EOF'
+ONOSUSER=onos
+ONOSPASS=rocks
+EOF
+fi
+
+log "Buildando as imagens via docker compose (deployer, supervisor, collector, gui)"
+docker compose build deployer supervisor collector gui
+
+log "Pronto. Imagens buildadas (deployer, supervisor, collector, gui)."
+log "Depois que o ONOS do LFT estiver de pé, suba com 'docker compose up -d'"
+log "ou deixe o runner do LFT subir deployer/supervisor sozinho (--auto-start)."
