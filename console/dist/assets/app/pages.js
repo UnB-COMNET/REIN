@@ -23,7 +23,9 @@
     marks.push({ ts: now - 360000, label: 's0–s1 degradado', tone: 'warn' }, { ts: now - 358000, label: 'Desvio', tone: 'warn' }, { ts: now - 300000, label: 'Rota por s2', tone: '' });
   })();
 
+  R.monitor = { series, marks, observer };
   function sample() {
+    if (R.api?.online) { R.api.sample(series, observer, flowId); return; }
     const r = M.routes[flowId] || Object.values(M.routes)[0];
     const rate = r ? Math.min(R.pathRate(r.path), 1000) : 0;
     const lat = r && !R.pathBroken(r.path) ? R.pathDelay(r.path.slice(1, -1).length ? r.path : []) * 2 : 0;
