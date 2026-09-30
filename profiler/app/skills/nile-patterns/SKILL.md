@@ -4,7 +4,7 @@ description: Shape of a Nile intent and its clauses, in the canonical form the d
 ---
 Nile intent shape (one line, every value in single quotes):
 define intent <name>: <scope> <action> [start <time> end <time>]
-- scope: from <target> to <target> | for <target> | from endpoint('<client ip>')
+- scope: from <target> to <target> | for <target>
 - target: endpoint('<ip or name>') | group('<name>') | service('<name>') | traffic('<name>')
 - action, several items joined by ", ":
   set|unset bandwidth('max'|'min', '<number>', '<unit>'), quota('upload'|'download', '<number>', '<unit>')
