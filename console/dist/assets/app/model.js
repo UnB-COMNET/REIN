@@ -156,6 +156,7 @@
   // The supervisor notices drift, the deployer installs the new path: routes lag behind best paths
   let reconcileTimers = [];
   function reconcile() {
+    if (R.api?.online) return; // the real supervisor and deployer reroute; api.js follows their events
     reconcileTimers.forEach(clearTimeout);
     reconcileTimers = [];
     Object.entries(M.routes).forEach(([id, r]) => {
