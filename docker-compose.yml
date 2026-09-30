@@ -30,3 +30,19 @@ services:
     tty: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  profiler:
+    image: rein_profiler
+    build:
+      context: ./profiler
+    container_name: profiler
+    network_mode: "host"
+    environment:
+      - MODELS_CONFIG=/config/models.yaml
+      - PROFILER_DB=/state/profiler.sqlite
+    volumes:
+      - ./llm/models.yaml:/config/models.yaml:ro
+      - profiler-state:/state
+
+volumes:
+  profiler-state:
