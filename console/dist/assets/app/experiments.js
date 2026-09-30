@@ -125,7 +125,7 @@
     return P;
   }
   const blankPlan = () => normPlan({ name: `plano-${pad(new Date().getDate())}${pad(new Date().getMonth() + 1)}-${pad(customs.length + 1)}`, win: 60, mode: 'cdn-qoe', auto: true, snapshots: Array.from({ length: 6 }, (_, i) => (i % 2 ? Object.fromEntries(M.links.slice(0, 1).map(l => [l.id, 'warn'])) : {})) });
-  const planSpec = P => ({ name: P.name, runner: 'plano do console', mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'ping_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], py: planPy(P) });
+  const planSpec = P => ({ name: P.name, runner: 'plano do console', mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'dash_all.csv', 'ping_all.csv'], py: planPy(P) });
 
   // Shortest switch path that avoids the links a snapshot takes down
   function swPath(a, b, st = {}) {
@@ -161,41 +161,43 @@
   const evNile = (e, ip) => R.serviceNile(e.svc === 'block' ? 'acl' : e.svc, { ip: ip || '192.168.0.x', mbps: e.mbps || 10, action: 'block', proto: e.proto || 'udp' }, 'e1');
   const evText = e => (e.kind === 'intent' ? `${SVCS.find(s => s[0] === e.svc)?.[1] || e.svc} para ${e.host}` : e.kind === 'capture' ? `tcpdump em ${e.iface} por ${e.dur} s` : `${e.host} pausado por ${e.dur} s`);
   function evCmds(P, e, dir = `results/iperf/${P.name}`) {
-    if (e.kind === 'intent') return [`# ${evNile(e, hostOf(P, e.host)?.ip)}`, `# vai ao deployer pela aprovação: POST /api/profiler/profile/<id>/resume`];
+    if (e.kind === 'intent') return [`# ${evNile(e, hostOf(P, e.host)?.ip)}`, `# vai ao deployer: POST ${DEPLOY}`];
     if (e.kind === 'capture') return [`sudo ip netns exec ${ifaceMap(P).get(e.iface) || '<switch>'} timeout ${e.dur} tcpdump -i ${e.iface} -nn -U -s 0 -w ${dir}/pcap/${e.iface}-${e.at}.pcap`];
     return [`sudo docker pause ${e.host}`, `sleep ${e.dur}`, `sudo docker unpause ${e.host}`];
   }
-  // The plan as a Python module, in the spirit of the LFT configs
+  // The plan as an LFT timeline (lft timeline run): a Python module of constants, like the LFT configs
+  const DEPLOY = 'http://127.0.0.1:5000/deploy';
   function planPy(P) {
     const q = s => JSON.stringify(String(s)), py = b => (b ? 'True' : 'False');
     return [
-      `# ${P.name}: plano de experimento do REIN Console`,
-      '# Topologia: a atual do console (Topologia > Exportar .py), mais os HOSTS abaixo.',
-      '# Tempos em segundos, contados do fim da estabilização.',
+      `# ${P.name}: plano de experimento do REIN Console, uma timeline do LFT (lft timeline run)`,
+      '# Roda sobre o testbed atual, mais os HOSTS abaixo. Tempos em segundos, contados do fim do aquecimento.',
       '',
-      `RUN_NAME = ${q(P.name)}`,
-      `MODE = ${q(P.mode)}`,
-      `SNAPSHOT_S = ${P.win}`,
-      `AUTO_START = ${py(P.auto)}`,
+      `NAME = ${q(P.name)}`,
       `RESULTS = ${q(`results/iperf/${P.name}`)}`,
+      `WINDOW_S = ${P.win}`,
+      'WARMUP_S = 30',
       `DEGRADE = {"rate": ${P.degrade.rate}, "delay": ${P.degrade.delay}, "loss": ${P.degrade.loss}}  # HARD_DEGRADE do LFT: rate 0.1, delay 10`,
+      `AUTO_START = ${py(P.auto)}  # o console sobe deployer e supervisor antes do aquecimento e os para no fim`,
+      `MODE = ${q(P.mode)}`,
       '',
-      '# (nome, switch, papel, imagem, ip)',
+      '# (nome, switch, imagem, ip, servidor)',
       'HOSTS = [',
-      ...P.hosts.map(h => `    (${q(h.id)}, ${q(h.sw)}, ${q(h.role === 'Servidor' ? 'server' : 'client')}, ${q(h.image)}, ${q(h.ip)}),`),
+      ...P.hosts.map(h => `    (${q(h.id)}, ${q(h.sw)}, ${q(h.image)}, ${q(h.ip)}, ${py(h.role === 'Servidor')}),`),
       ']',
       '',
       'FLOWS = [',
-      ...P.flows.map(f => `    {"tool": ${q(f.tool)}, "client": ${q(f.client)}, "server": ${q(f.server)}, "start": ${f.start}, "duration": ${f.dur}${f.tool === 'iperf3' ? `, "rate_mbit": ${f.rate}, "proto": ${q(f.proto)}, "reverse": ${py(f.reverse)}, "port": ${f.port}` : ''}${f.tool === 'ping' ? `, "interval": ${f.interval || 1}` : ''}},`),
+      ...P.flows.map(f => `    {"tool": ${q(f.tool)}, "client": ${q(f.client)}, "server": ${q(f.server)}, "start": ${f.start}, "duration": ${f.dur}${f.tool === 'iperf3' ? `, "rate": ${f.rate}, "proto": ${q(f.proto)}, "reverse": ${py(f.reverse)}, "port": ${f.port}` : ''}${f.tool === 'ping' ? `, "interval": ${f.interval || 1}` : ''}},`),
       ']',
       '',
-      '# estado dos links em cada snapshot; link ausente = normal',
-      'SNAPSHOTS = [',
-      ...P.snapshots.map((s, i) => `    {${Object.entries(s).map(([id, st]) => `${q(id)}: ${q(st === 'down' ? 'take down' : 'degrade')}`).join(', ')}},  # ${i + 1}: ${clock(i * P.win)}`),
+      '# estado dos links em cada janela; link ausente = normal',
+      'WINDOWS = [',
+      ...P.snapshots.map((s, i) => `    {${Object.entries(s).map(([id, st]) => `${q(id)}: ${q(st === 'down' ? 'down' : 'degrade')}`).join(', ')}},  # ${i + 1}: ${clock(i * P.win)}`),
       ']',
       '',
+      '# intents vão ao deployer como chamadas HTTP',
       'EVENTS = [',
-      ...P.events.map(e => `    {"at": ${e.at}, "kind": ${q(e.kind)}${e.kind === 'intent' ? `, "host": ${q(e.host)}, "nile": ${q(evNile(e, hostOf(P, e.host)?.ip))}` : e.kind === 'capture' ? `, "iface": ${q(e.iface)}, "duration": ${e.dur}` : `, "host": ${q(e.host)}, "duration": ${e.dur}`}},`),
+      ...P.events.map(e => `    {"at": ${e.at}, ${e.kind === 'intent' ? `"kind": "http", "url": ${q(DEPLOY)}, "json": {"intent": ${q(evNile(e, hostOf(P, e.host)?.ip))}}` : e.kind === 'capture' ? `"kind": "capture", "iface": ${q(e.iface)}, "duration": ${e.dur}` : `"kind": "pause", "host": ${q(e.host)}, "duration": ${e.dur}`}},`),
       ']',
       '',
     ].join('\n');
@@ -450,7 +452,7 @@
       if (!c || !s) { out.push({ t: `${name}: escolha o cliente e o servidor`, sel: `flow:${f.id}`, bad: true }); return; }
       const cut = P.snapshots.map((st, i) => (f.start < (i + 1) * P.win && f.start + f.dur > i * P.win && !flowRoute(P, f, st) ? i + 1 : 0)).filter(Boolean);
       if (cut.length) out.push({ t: `${name} fica sem caminho no snapshot ${cut.join(', ')}`, sel: `flow:${f.id}` });
-      if (f.tool === 'dash' && !/dash-video|nginx/.test(s.image)) out.push({ t: `DASH pede um servidor rein-dash-video; ${s.id} usa ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
+      if (f.tool === 'dash' && !/dash-video|nginx/.test(s.image)) out.push({ t: `DASH pede um servidor lft-dash-video; ${s.id} usa ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
       if (f.tool === 'dash' && !/dash-client|pydash/.test(c.image)) out.push({ t: `dash-client não existe em ${c.image} (${c.id})`, sel: c.base ? `base:${c.id}` : `host:${c.id}` });
       if (f.tool === 'iperf3' && P.flows.some(g => g !== f && g.tool === 'iperf3' && g.server === f.server && g.port === f.port && g.start < f.start + f.dur && f.start < g.start + g.dur && P.flows.indexOf(g) < P.flows.indexOf(f))) out.push({ t: `porta ${f.port} já em uso em ${f.server} nesse intervalo`, sel: `flow:${f.id}`, bad: true });
     });
@@ -573,15 +575,16 @@
   }
 
   // ---------------------------------------------------------------- run: phases, windows, events.log
+  // A runner builds its topology first; a plan (an LFT timeline) runs on the current testbed
   function phasesFor(r) {
-    const n = M.nodes.length, h0 = r.hosts?.[0];
+    const n = M.nodes.length, h0 = r.hosts?.[0], build = !r.flows;
     return [
-      ['Limpando containers anteriores', 'docker rm -f $(docker ps -aq --filter label=lft=1)', 3],
-      ['Subindo o ONOS 2.5.0', 'docker run -d --name c1 -p 8181:8181 -p 8101:8101 -p 6653:6653 onosproject/onos:2.5.0', 9],
-      ['Ativando apps e o link-quality (.oar)', 'onos-app 172.17.0.2 install! assets/onos_apps/link-quality.oar', 5],
-      [`Criando a topologia: ${R.switches().length} switches, ${R.hosts().length} hosts`, `lft topology create --path ${r.config || `${r.name}.py`}`, Math.min(14, 4 + n)],
+      build ? ['Limpando containers anteriores', 'docker rm -f $(docker ps -aq --filter label=lft=1)', 3] : null,
+      build ? ['Subindo o ONOS 2.5.0', 'docker run -d --name c1 -p 8181:8181 -p 8101:8101 -p 6653:6653 onosproject/onos:2.5.0', 9] : null,
+      build ? ['Ativando apps e o link-quality (.oar)', 'onos-app 172.17.0.2 install! assets/onos_apps/link-quality.oar', 5] : null,
+      build ? [`Criando a topologia: ${R.switches().length} switches, ${R.hosts().length} hosts`, `lft topology create --path ${r.config || `${r.name}.py`}`, Math.min(14, 4 + n)] : null,
       h0 ? [`Hosts do plano: ${r.hosts.map(h => h.id).join(', ')}`, `${hostCmds(h0)[0]} … ovs-vsctl add-port ${h0.sw} ${h0.sw}${h0.id}`, 2 + r.hosts.length * 2, makeHosts] : null,
-      ['Descoberta LLDP e hosts (ARP)', `curl -s ${R.env.onos.rest}/links | jq '.links | length'`, 5],
+      build ? ['Descoberta LLDP e hosts (ARP)', `curl -s ${R.env.onos.rest}/links | jq '.links | length'`, 5] : null,
       r.auto ? ['Subindo deployer e supervisor', 'docker compose -f ../REIN/docker-compose.yml up -d --build', 7] : null,
       ['Estabilização', 'sleep 30', 6],
     ].filter(Boolean);
