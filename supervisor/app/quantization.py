@@ -1,14 +1,14 @@
 from typing import Dict, Tuple
 
-P9_LABELS: Dict[int, str] = {
+P9_LABELS = {
      0: "Normal",
      1: "Slightly > Normal",  2: "Slightly High",  3: "High",  4: "Very High",
     -1: "Slightly < Normal", -2: "Slightly Low",  -3: "Low",  -4: "Very Low",
 }
 
-P3_LABELS: Dict[int, str] = {1: "Normal", 0: "Warning", -1: "Critical"}
+P3_LABELS = {1: "Normal", 0: "Warning", -1: "Critical"}
 
-POLICIES: Dict[str, dict] = {
+POLICIES = {
     "RTT_ms": {
         "target": (0.0, 50.0),
         "above_steps": [70.0, 90.0, 110.0],
@@ -24,14 +24,23 @@ POLICIES: Dict[str, dict] = {
 }
 
 
-# Brief: Walks the step thresholds in one direction, incrementing the deviation level for each crossed boundary
-def _walk_steps(value: float, boundary: float, steps: list, direction: int) -> int:
-    level = direction
-    for threshold in steps:
-        if (value > threshold) if direction == 1 else (value < threshold):
-            level += direction
-        else:
+# Brief: Value a KPI must drop below for P9 to reach -3, which is where p9_to_p3
+# turns Critical and a recalculation is requested. Reported alongside a Warning
+# so "how close did it get" is visible, instead of only "it was not Critical".
+def critical_below(kpi_name: str) -> float:
+    steps = POLICIES[kpi_name]["below_steps"]
+    return steps[1] if len(steps) > 1 else float("-inf")
+
+
+# Brief: Walks the step thresholds outward from the target band, incrementing the
+# deviation level for each crossed boundary
+def _walk_steps(value: float, steps: list, direction: int) -> int:
+    level = direction # direction = +1 for above, -1 for below
+    for threshold in steps: # ex: steps = [70.0, 90.0, 110.0] for RTT_ms above the target band
+        crossed = value > threshold if direction == 1 else value < threshold
+        if not crossed:
             break
+        level += direction
     return max(-4, min(4, level))
 
 
@@ -44,12 +53,12 @@ def quantize_9ary(kpi_name: str, value: float) -> Tuple[int, str]:
         return 0, P9_LABELS[0]
 
     if value > high:
-        level = _walk_steps(value, high, policy["above_steps"], +1)
+        level = _walk_steps(value, policy["above_steps"], +1)
         return level, P9_LABELS[level]
 
     if not policy["below_steps"]:
         return 0, P9_LABELS[0]
-    level = _walk_steps(value, low, policy["below_steps"], -1)
+    level = _walk_steps(value, policy["below_steps"], -1)
     return level, P9_LABELS[level]
 
 
@@ -80,14 +89,12 @@ class KpiResult:
         )
 
 
-# Brief: Quantizes all KPIs and returns the overall P3 health (Kleene min) plus per-KPI details
-def evaluate_service_health(
-    kpis: Dict[str, float],
-) -> Tuple[int, Dict[str, KpiResult]]:
+# Brief: Quantizes all KPIs and returns the overall P3 health and per-KPI details
+def evaluate_service_health(kpis: Dict[str, float]) -> Tuple[int, Dict[str, KpiResult]]:
     details: Dict[str, KpiResult] = {}
     p3_values = []
 
-    for name, value in kpis.items():
+    for name, value in kpis.items(): # ex: kpis = {"RTT_ms": 43.8, "Vazao_Mbps": 24.84}
         p9, p9_label = quantize_9ary(name, value)
         p3, p3_label = p9_to_p3(p9)
         details[name] = KpiResult(value, p9, p9_label, p3, p3_label)
