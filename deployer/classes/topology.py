@@ -37,17 +37,23 @@ class Topology():
             server_ip = response.pop("server_ip", None)
             if server_ip:
                 responses["server_ip"] = server_ip
+            path = response.pop("path", None)
+            if path:
+                responses["path"] = path
             responses["controller_responses"][controller_ip] = response
         return responses
 
 
+    # Brief: Runs before every (re)deploy: re-reads hosts/devices and adds cluster nodes only once
     def make_network_graph(self) -> None:
-        for controller in self.controllers:
+        for controller in list(self.controllers):
             if controller.controller == "ONOS" and controller.is_main:
                 cluster_nodes = controller.cluster_nodes()  # Get cluster nodes objects to add to the controllers list.
                 controller.map_topology(self.nodes)
+                known = {c.ip for c in self.controllers}
                 for node in cluster_nodes:
-                    self.add_controller(node)
+                    if node.ip not in known:
+                        self.add_controller(node)
 
 
     # Adds the intent to the installed intents dictionary ["Nile Intent"] = controller_responses
