@@ -43,16 +43,16 @@
 
   // ------------------------------------------------------------ network model
   const IMAGES = [
-    ['rein-dash-video', 'Servidor DASH, conteúdo gerado com ffmpeg'],
-    ['rein-dash-client', 'Cliente DASH, player dash.js'],
+    ['lft-dash-video', 'Servidor DASH, conteúdo gerado com ffmpeg'],
+    ['lft-dash-client', 'Cliente DASH, player dash.js'],
     ['pydash', 'Cliente DASH, algoritmo ABR em Python'],
     ['networkstatic/iperf3', 'Servidor ou cliente iperf3'],
     ['nginx:alpine', 'Servidor HTTP'],
     ['ubuntu:22.04', 'Imagem base'],
   ];
   R.IMAGES = IMAGES;
-  const DASH_CLIENTS = new Set(['rein-dash-client', 'pydash']);
-  const DASH_SERVERS = new Set(['rein-dash-video']);
+  const DASH_CLIENTS = new Set(['lft-dash-client', 'pydash']);
+  const DASH_SERVERS = new Set(['lft-dash-video']);
 
   const M = R.model = {
     name: 'diamond',
@@ -97,8 +97,8 @@
       { id: 's1', kind: 'switch', pop: 'PoP-MG', uf: 'MG', dpid: 'of:0000000000000002', x: 410, y: -125 },
       { id: 's2', kind: 'switch', pop: 'PoP-RJ', uf: 'RJ', dpid: 'of:0000000000000003', x: 455, y: 150 },
       { id: 's3', kind: 'switch', pop: 'PoP-SP', uf: 'SP', dpid: 'of:0000000000000004', x: 670, y: 20 },
-      { id: 'ds0', kind: 'host', role: 'Servidor', ip: '192.168.0.1', sw: 's0', image: 'rein-dash-video', x: 30, y: 70 },
-      { id: 'cl0', kind: 'host', role: 'Cliente', ip: '192.168.0.2', sw: 's3', image: 'rein-dash-client', x: 840, y: -15 },
+      { id: 'ds0', kind: 'host', role: 'Servidor', ip: '192.168.0.1', sw: 's0', image: 'lft-dash-video', x: 30, y: 70 },
+      { id: 'cl0', kind: 'host', role: 'Cliente', ip: '192.168.0.2', sw: 's3', image: 'lft-dash-client', x: 840, y: -15 },
     ];
     const mk = (a, b, rate, delay = 10) => ({ id: linkId(a, b), a, b, base: { rate, delay, jitter: 1, loss: 0 }, now: { rate, delay, jitter: 1, loss: 0, down: false } });
     // QoS tiers from the diamond experiment: MG-ES 35 Mbit (4K), RJ-ES 5 Mbit (1080p)
@@ -189,7 +189,7 @@
     reconcile();
   };
 
-  // Rendition ladder of the rein-dash-video server, Mb/s
+  // Rendition ladder of the lft-dash-video server, Mb/s
   R.ladder = [['2160p', 16], ['1440p', 9], ['1080p', 4.5], ['720p', 2.5], ['480p', 1.2], ['360p', 0.7], ['240p', 0.3]];
   R.routeOf = clientId => Object.entries(M.routes).find(([, r]) => r.client === clientId);
   R.qoe = clientId => {
@@ -715,8 +715,8 @@
     } else {
       const servers = pops.reduce((s, p) => s + (+p[2] || 0), 0);
       let ds = 0, cl = 0;
-      pops.forEach((p, i) => { for (let k = 0; k < (+p[2] || 0); k++, ds++) hosts.push({ id: `ds${ds}`, kind: 'host', role: 'Servidor', sw: `s${i}`, ip: `192.168.0.${ds + 1}`, image: 'rein-dash-video', x: 0, y: 0 }); });
-      pops.forEach((p, i) => { for (let k = 0; k < (+p[1] || 0); k++, cl++) hosts.push({ id: `cl${cl}`, kind: 'host', role: 'Cliente', sw: `s${i}`, ip: `192.168.0.${servers + cl + 1}`, image: 'rein-dash-client', x: 0, y: 0 }); });
+      pops.forEach((p, i) => { for (let k = 0; k < (+p[2] || 0); k++, ds++) hosts.push({ id: `ds${ds}`, kind: 'host', role: 'Servidor', sw: `s${i}`, ip: `192.168.0.${ds + 1}`, image: 'lft-dash-video', x: 0, y: 0 }); });
+      pops.forEach((p, i) => { for (let k = 0; k < (+p[1] || 0); k++, cl++) hosts.push({ id: `cl${cl}`, kind: 'host', role: 'Cliente', sw: `s${i}`, ip: `192.168.0.${servers + cl + 1}`, image: 'lft-dash-client', x: 0, y: 0 }); });
     }
     (Array.isArray(env.DOWN_LINKS) ? env.DOWN_LINKS : []).forEach(id => { const l = links.find(x => x.id === id); if (l) l.now.down = true; });
 

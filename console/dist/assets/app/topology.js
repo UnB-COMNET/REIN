@@ -740,7 +740,7 @@
     f.sw.value = n?.sw || sw || R.switches().at(-1)?.id;
     f.ip.value = n?.ip || R.nextIp();
     const known = [...f.image.options].some(o => o.value === n?.image);
-    f.image.value = n ? (known ? n.image : '__other') : (role === 'Servidor' ? 'rein-dash-video' : 'rein-dash-client');
+    f.image.value = n ? (known ? n.image : '__other') : (role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client');
     f.custom.value = known ? '' : (n?.image || '');
     $('[data-custom-image]').hidden = f.image.value !== '__other';
     hint(); paintHostCli();
@@ -754,7 +754,7 @@
     if (b) {
       $$('[data-role]', form).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       form.elements.role.value = b.dataset.role;
-      if (!form.dataset.edit) { form.elements.name.value = R.nextName(b.dataset.role); form.elements.image.value = b.dataset.role === 'Servidor' ? 'rein-dash-video' : 'rein-dash-client'; hint(); }
+      if (!form.dataset.edit) { form.elements.name.value = R.nextName(b.dataset.role); form.elements.image.value = b.dataset.role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client'; hint(); }
       paintHostCli();
     }
     if (e.target.closest('[data-host-remove]')) { const id = form.dataset.edit; sheet.close(); R.job({ title: `Removendo ${id}`, nodes: [id], steps: [[`Parando o container ${id}`, `sudo docker rm -f ${id}`, 700]] }).then(() => R.removeHost(id)); }

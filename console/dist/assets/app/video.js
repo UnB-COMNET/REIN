@@ -1,6 +1,6 @@
 /* Simulated DASH playback for clients whose image plays video. The frame is rendered at the
    current rendition's resolution, so a drop from 2160p to 720p is visible as softness; a stall
-   freezes the frame. The label is burned in, like the rein-dash-video server does. Replace with
+   freezes the frame. The label is burned in, like the lft-dash-video server does. Replace with
    dash.js pointing at /video/<client>/manifest.mpd. */
 (() => {
   'use strict';

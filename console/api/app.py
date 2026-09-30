@@ -1,9 +1,10 @@
 # Brief: REIN console API (Flask, 127.0.0.1:4180). Serves the console (../dist) and /api, a thin layer
 # over the LFT CLI: it validates each request, runs `sudo lft ... --json` (argv, never a shell), streams
-# the command's progress as a job (Server-Sent Events) and returns the JSON lft prints. The REIN
-# services keep their own HTTP APIs and are proxied under /api/profiler, /api/deployer and
-# /api/supervisor. Nothing here keeps testbed state: lft does (/var/lib/lft).
-#   GET  /api/testbed[?sync=1] /api/status /api/testbed/export.py /api/ifaces[?node=] /api/stats /api/images
+# the command's progress as a job (Server-Sent Events) and returns the JSON lft prints, in the console's
+# model (ui_state). The REIN services keep their own HTTP APIs and are proxied under /api/profiler,
+# /api/deployer and /api/supervisor. The testbed state is LFT's (/var/lib/lft); the console keeps only
+# where its nodes are drawn (~/.rein-console/layout.json).
+#   GET  /api/testbed[?sync=1] /api/testbed/export.py /api/ifaces[?node=] /api/stats
 #   POST /api/testbed/import (body: topology .py)                                    -> {job}
 #   POST /api/testbed/switches {id?, uf, links: [{to, rate, delay, jitter, loss}]}     -> {job}
 #   POST /api/testbed/switches/<id>/stop|start   DELETE /api/testbed/switches/<id>    -> {job}
@@ -13,11 +14,12 @@
 #   GET  /api/jobs/<id>   GET /api/jobs/<id>/events (SSE: step, stdout, status)
 #   GET|POST /api/capture   DELETE /api/capture/<id>
 #   GET|POST /api/traffic   DELETE /api/traffic/<id>   GET /api/traffic/<id>/logs (SSE)
-#   GET  /api/experiments   POST /api/experiments/<runner>/run   POST /api/experiments/plan (body: plan .py)
+#   GET  /api/experiments   POST /api/experiments/<runner>/run   POST /api/experiments/plan (body: timeline .py)
 #   GET  /api/runs   GET /api/runs/<id>/events (SSE)   POST /api/runs/<id>/stop   GET /api/results/<path>
 #   GET  /api/rein/logs/<service>
 #   *    /api/profiler/<path>  /api/deployer/<path>  /api/supervisor/<path>
 
+import ast
 import ipaddress
 import itertools
 import json
@@ -34,12 +36,14 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory,
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
 HOME = Path(os.environ.get("CONSOLE_HOME", Path.home() / ".rein-console"))   # imported topologies, plans, run logs
-LFT = [*([] if os.geteuid() == 0 else ["sudo", "-n"]), os.environ.get("LFT_BIN", "/usr/local/bin/lft")]
+REIN = Path(__file__).resolve().parents[2]
+SUDO = [] if os.geteuid() == 0 else ["sudo", "-n"]
+LFT = [*SUDO, os.environ.get("LFT_BIN", "/usr/local/bin/lft")]
 SERVICES = {"profiler": os.environ.get("PROFILER_URL", "http://127.0.0.1:5300"),
             "deployer": os.environ.get("DEPLOYER_URL", "http://127.0.0.1:5000"),
             "supervisor": os.environ.get("SUPERVISOR_URL", "http://127.0.0.1:5151")}
-# Images hosts may run: the ones the LFT and REIN build locally, plus CONSOLE_IMAGES (comma separated)
-IMAGES = ["rein-dash-video", "rein-dash-client", "lft-iperf", "neubot/dash", "neubot/dash-client",
+# Images hosts may run: the ones LFT builds locally, plus CONSOLE_IMAGES (comma separated)
+IMAGES = ["lft-dash-video", "lft-dash-client", "lft-iperf", "neubot/dash", "neubot/dash-client",
           *filter(None, os.environ.get("CONSOLE_IMAGES", "").split(","))]
 RUNNERS = ("diamond", "rnp", "dash", "dash-load")
 
@@ -112,6 +116,8 @@ class Job:
                     result = json.loads(out[0] or "null")
                 except ValueError:
                     result = None
+                if isinstance(result, dict) and "state" in result:
+                    result["state"] = ui_state(result["state"])
                 if proc.returncode:
                     error = (result or {}).get("error") or f"lft {' '.join(args)} exited with {proc.returncode}"
                     break
@@ -208,22 +214,57 @@ def shaping(b: dict) -> list:
 
 # ---------------------------------------------------------------- testbed
 
+LAYOUT = HOME / "layout.json"   # where the console draws each node: {id: {x, y}}
+
+
+def layout() -> dict:
+    return json.loads(LAYOUT.read_text()) if LAYOUT.exists() else {}
+
+
+# Brief: LFT's testbed state in the console's model: a switch's UF and PoP come from its dp-desc, hosts
+# get the console's role names (a ds<n> host LFT did not label serves), nodes get their saved position
+# and the controller becomes onos.ip
+def ui_state(state: dict) -> dict:
+    where = layout()
+    nodes = []
+    for n in state["nodes"]:
+        if n["kind"] == "switch":
+            n = {**n, "uf": n["desc"], "pop": f"PoP-{n['desc']}" if n["desc"] else None}
+        else:
+            server = n["role"] == "server" or (n["role"] is None and n["id"].startswith("ds"))
+            n = {**n, "role": "Servidor" if server else "Cliente"}
+        nodes.append({**n, **where.get(n["id"], {})})
+    controller = state.get("controller") or ""
+    return {**state, "nodes": nodes, "onos": {"ip": controller.split(":")[1] if controller.count(":") == 2 else None}}
+
+
+def lft_state() -> dict:
+    code, data, err = lft("testbed", "show")
+    if data is None:
+        abort(502, (err or "lft failed").strip()[-500:])
+    return data
+
+
 @app.route("/api/testbed")
 def testbed():
-    return lft_json("testbed", "sync" if request.args.get("sync") else "show")
+    code, data, err = lft("testbed", "sync" if request.args.get("sync") else "show")
+    if data is None:
+        abort(502, (err or "lft failed").strip()[-500:])
+    return jsonify(ui_state(data))
 
 
-@app.route("/api/status")
-def status():
-    return lft_json("testbed", "status")
-
-
+# Brief: The testbed as a topology file (lft topology export), plus the console's LAYOUT
 @app.route("/api/testbed/export.py")
 def export_py():
-    code, data, err = lft("topology", "export")
-    return Response((data or {}).get("py", ""), mimetype="text/x-python") if code == 0 else abort(502, err)
+    out = subprocess.run([*LFT, "topology", "export"], capture_output=True, text=True, timeout=60)
+    if out.returncode:
+        abort(502, out.stderr[-500:])
+    where = {k: (round(v["x"]), round(v["y"])) for k, v in layout().items()}
+    return Response(out.stdout + (f"LAYOUT = {where!r}\n" if where else ""), mimetype="text/x-python")
 
 
+# Brief: Builds a topology file (POPS, CONFIG, HOSTS...) as the new testbed; its LAYOUT, which LFT
+# ignores, becomes the console's layout
 @app.route("/api/testbed/import", methods=["POST"])
 def import_py():
     text = request.get_data(as_text=True)
@@ -232,21 +273,29 @@ def import_py():
     path = HOME / "imports" / f"{stem}_topology.py"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+    where = {}
+    for statement in ast.parse(text).body:
+        if isinstance(statement, ast.Assign) and [t.id for t in statement.targets if isinstance(t, ast.Name)] == ["LAYOUT"]:
+            where = {k: {"x": v[0], "y": v[1]} for k, v in ast.literal_eval(statement.value).items()}
+    LAYOUT.write_text(json.dumps(where))
     return job(f"Importing {stem}", ["topology", "create", "--path", str(path), "--detach", "--disable-fwd"])
 
 
+# Brief: A new switch: the next free s<n> unless given, with datapath n+1 and its UF as dp-desc (how
+# the deployer finds the PoP)
 @app.route("/api/testbed/switches", methods=["POST"])
 def add_switch():
     b = body()
-    args = ["switch", "add", *([name(b["id"], SWITCH, "switch")] if b.get("id") else [])]
+    used = {n["id"] for n in lft_state()["nodes"]}
+    sid = name(b.get("id") or next(f"s{i}" for i in range(1000) if f"s{i}" not in used), SWITCH, "switch")
     uf = str(b.get("uf", "")).upper()
     need(re.fullmatch(r"[A-Z]{2}", uf), "uf must be two letters")
-    args += ["--uf", uf]
+    args = ["switch", "add", sid, "--desc", uf, "--dpid", f"{int(sid[1:]) + 1:016x}"]
     for l in b.get("links") or []:
         opts = [f"{k}={number(l[k], 0, 10000, k)}{'mbit' if k == 'rate' else 'ms' if k in ('delay', 'jitter') else ''}"
                 for k in ("rate", "delay", "jitter", "loss") if l.get(k) not in (None, "")]
         args += ["--link", ":".join([name(l.get("to"), SWITCH, "switch"), ",".join(opts)]).rstrip(":")]
-    return job(f"Creating switch {b.get('id') or uf}", args)
+    return job(f"Creating switch {sid}", args)
 
 
 @app.route("/api/testbed/switches/<sid>/<action>", methods=["POST"])
@@ -274,14 +323,19 @@ def put_link(lid):
     return job(f"Link {lid}", *calls)
 
 
+# Brief: A new host: a ds<n> server (runs its image) or a cl<n> client, the next free name and address
+# unless given
 @app.route("/api/testbed/hosts", methods=["POST"])
 def add_host():
     b = body()
-    args = ["host", "add", *([name(b["id"])] if b.get("id") else []), "--switch", name(b.get("sw"), SWITCH, "switch"),
-            "--image", image(b.get("image")), *(["--ip", ip(b["ip"])] if b.get("ip") else [])]
-    if b.get("role") == "Servidor":
-        args.append("--server")
-    return job(f"Creating {b.get('id') or 'host'}", args)
+    current = lft_state()
+    server = b.get("role") == "Servidor"
+    prefix, used = ("ds" if server else "cl"), {n["id"] for n in current["nodes"]}
+    taken = {n.get("ip") for n in current["nodes"]}
+    hid = name(b.get("id") or next(f"{prefix}{i}" for i in range(1000) if f"{prefix}{i}" not in used))
+    hip = ip(b.get("ip") or next(str(a) for a in SUBNET.hosts() if str(a) not in taken and a != SUBNET[-2]))
+    args = ["host", "add", hid, "--switch", name(b.get("sw"), SWITCH, "switch"), "--ip", hip, "--image", image(b.get("image"))]
+    return job(f"Creating {hid}", args + (["--server"] if server else []))
 
 
 @app.route("/api/testbed/hosts/<hid>", methods=["PUT", "DELETE"])
@@ -326,14 +380,6 @@ def stats():
             abort(502, err[-500:])
         _stats.update(at=time.time(), data=data)
     return jsonify(_stats["data"])
-
-
-# Brief: The images a host may use, and whether each one is already on the VM (the others need a pull)
-@app.route("/api/images")
-def images():
-    code, data, err = lft("testbed", "status")
-    local = set((data or {}).get("images", []))
-    return jsonify([{"image": i, "local": i in local} for i in IMAGES])
 
 
 # ---------------------------------------------------------------- captures and traffic
@@ -405,15 +451,16 @@ def experiments():
 
 
 class Run:
-    """An experiment runner started from the console: `lft experiment ...` in the background, its output
-    in a log file; its results directory is the one it creates under results/ (found by its start time)"""
+    """A run started from the console (`lft experiment ...` or `lft timeline run ...`) in the background,
+    its output in a log file; its results directory is the one it creates under results/ (found by its
+    start time)"""
 
     def __init__(self, args: list, title: str):
         self.id, self.title, self.args, self.t0, self.dir = f"r{next(ids)}", title, args, time.time(), None
         self.log = HOME / "runs" / f"{self.id}.log"
         self.log.parent.mkdir(parents=True, exist_ok=True)
         with open(self.log, "w") as out:
-            self.proc = subprocess.Popen([*LFT, "experiment", *args], stdout=out, stderr=subprocess.STDOUT,
+            self.proc = subprocess.Popen([*LFT, *args], stdout=out, stderr=subprocess.STDOUT,
                                          stdin=subprocess.DEVNULL, start_new_session=True)
         runs[self.id] = self
 
@@ -433,7 +480,7 @@ class Run:
 def run_experiment(runner):
     need(runner in RUNNERS, f"runner is one of {', '.join(RUNNERS)}")
     need(not any(r.proc.poll() is None for r in runs.values()), "an experiment is already running")
-    b, args = body(), [runner]
+    b, args = body(), ["experiment", runner]
     if runner in ("diamond", "rnp"):
         need(re.fullmatch(r"[\w-]+", str(b.get("mode", ""))), "mode is required")
         args += ["--mode", b["mode"], "--run-name", re.sub(r"[^\w-]", "", b.get("run_name") or f"console-{time.strftime('%Y%m%d-%H%M%S')}"),
@@ -449,16 +496,24 @@ def run_experiment(runner):
     return jsonify(run=Run(args, runner).id), 202
 
 
+# Brief: Runs a plan made in Experimentos as an LFT timeline. AUTO_START = True, which LFT ignores,
+# asks for the REIN services: they start before the warm-up and stop at the end
 @app.route("/api/experiments/plan", methods=["POST"])
 def run_plan():
     text = request.get_data(as_text=True)
-    m = re.search(r'^RUN_NAME\s*=\s*"([\w-]+)"', text, re.M)
-    need(m and "SNAPSHOTS" in text, "expected a plan .py with RUN_NAME and SNAPSHOTS")
+    m = re.search(r'^NAME\s*=\s*"([\w-]+)"', text, re.M)
+    need(m and "WINDOWS" in text, "expected a timeline .py with NAME and WINDOWS")
     need(not any(r.proc.poll() is None for r in runs.values()), "an experiment is already running")
+    if re.search(r"^AUTO_START\s*=\s*True", text, re.M):
+        compose = f"docker compose -f {REIN / 'docker-compose.yml'}"
+        ready = " && ".join(f"curl -sf -o /dev/null {url}" for url in (SERVICES["deployer"] + "/", SERVICES["supervisor"] + "/metrics"))
+        text += (f"\nBEFORE = [{compose + ' up -d --build'!r}, "
+                 f"{'for i in $(seq 90); do ' + ready + ' && exit 0; sleep 2; done; exit 1'!r}]\n"
+                 f"AFTER = [{compose + ' down'!r}]\n")
     path = HOME / "plans" / f"{m.group(1)}.py"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
-    return jsonify(run=Run(["plan", "--path", str(path)], m.group(1)).id), 202
+    return jsonify(run=Run(["timeline", "run", str(path)], m.group(1)).id), 202
 
 
 @app.route("/api/runs")
@@ -520,17 +575,25 @@ def run_log(rid):
 
 @app.route("/api/results/<path:path>")
 def results_file(path):
-    root = Path(os.environ.get("LFT_RESULTS_ROOT", "/home/artdelpi/lft/results"))
+    root = Path(os.environ.get("LFT_RESULTS_ROOT", REIN.parent / "lft" / "results"))   # LFT cloned next to REIN
     need(".." not in Path(path).parts, "invalid path")
     return send_from_directory(root, path)
 
 
 # ---------------------------------------------------------------- REIN services
 
+# Brief: The last lines a REIN service printed (docker logs), without terminal colors
 @app.route("/api/rein/logs/<service>")
 def rein_logs(service):
     need(service in SERVICES, f"service is one of {', '.join(SERVICES)}")
-    return lft_json("rein", "logs", service, "--tail", "200")
+    out = subprocess.run([*SUDO, "docker", "logs", "--timestamps", "--tail", "200", service], capture_output=True, text=True, timeout=10)
+    rows = []
+    for line in (out.stdout + out.stderr).splitlines():
+        ts, _, text = line.partition(" ")
+        text = re.sub(r"\x1b\[[0-9;]*m", "", text).strip()
+        if text:
+            rows.append({"ts": ts, "text": text})
+    return jsonify(sorted(rows, key=lambda r: r["ts"]))
 
 
 
