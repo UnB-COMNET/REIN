@@ -1,14 +1,13 @@
 // Nile (Jacobs et al.) as used by NEAT + REIN extensions. Canonical, whitespace-insensitive.
 // Validated 2026-09-28 with lark (parser="lalr"): parses 256913/256913 NEAT lines, the REIN
-// intents `from endpoint('<ip>') add service('cdn-qoe')`, `for group('students') add middlebox('dpi')`,
-// and rejects malformed inputs (set middlebox, missing scope, unquoted values, allow bandwidth).
+// intents `for endpoint('<ip>') add service('cdn-qoe')`, `for group('students') add middlebox('dpi')`,
+// and rejects malformed inputs (set middlebox, missing scope, from without to, unquoted values, allow bandwidth).
 // This validates SYNTAX only. What the REIN deployer can actually EXECUTE is a smaller subset
 // (CAPABILITIES in nile.py, served at GET /capabilities).
 start: "define" "intent" NAME ":" scope action window?
 
 scope: "from" target "to" target        -> from_to
      | "for" target                     -> for_target
-     | "from" target                    -> from_only   // REIN legacy: from endpoint('ip') add service('cdn-qoe')
 
 target: TARGET_FN "(" STR ")"
 TARGET_FN: "endpoint" | "group" | "service" | "traffic"

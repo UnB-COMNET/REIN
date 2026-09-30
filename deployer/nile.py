@@ -17,7 +17,7 @@ _parser = Lark(GRAMMAR, parser="lalr")
 # profiler may offer; "scope" is the target form compile() needs for that operation.
 CAPABILITIES = {
     "add service('cdn-qoe')": {"executable": True, "chat": True,
-                               "scope": "from endpoint('<client ip>') or for endpoint('<client ip>')",
+                               "scope": "for endpoint('<client ip>')",
                                "reason": "picks the best CDN server for the client and installs the path"},
     "add service":            {"executable": False, "reason": "unknown service; see the executable ones in /capabilities"},
     "remove service":         {"executable": False, "reason": "removing a service is not implemented"},
@@ -68,9 +68,9 @@ def validate(intent: str):
     return None
 
 
-# Brief: The client IP of a single-endpoint scope (from/for endpoint('<ipv4>')), else None
+# Brief: The client IP of a for endpoint('<ipv4>') scope, else None
 def _client_endpoint(scope):
-    if scope.data not in ("from_only", "for_target"):
+    if scope.data != "for_target":
         return None
     fn, value = (str(t) for t in scope.children[0].children)
     try:

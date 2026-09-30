@@ -10,15 +10,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as deployer
 from classes.onos import Onos
 
-CDN_QOE = "define intent q1: from endpoint('192.168.0.2') add service('cdn-qoe')"
+CDN_QOE = "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')"
 
 
 class ParseNileTest(unittest.TestCase):
 
     def test_cdn_qoe_is_one_operation(self):
-        for intent in (CDN_QOE, CDN_QOE.replace("from", "for")):
-            ops = Onos(base_url="", ip="").parse_nile(intent)["operations"]
-            self.assertEqual(ops, [{"type": "add", "function": "service", "value": "('cdn-qoe')"}])
+        ops = Onos(base_url="", ip="").parse_nile(CDN_QOE)["operations"]
+        self.assertEqual(ops, [{"type": "add", "function": "service", "value": "('cdn-qoe')"}])
 
 
 class DeployValidationTest(unittest.TestCase):
@@ -31,6 +30,11 @@ class DeployValidationTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json["error"], "syntax")
         self.assertEqual((r.json["line"], r.json["column"], r.json["expected"]), (1, 1, ["define"]))
+
+    def test_from_without_to_is_400(self):
+        r = self.client.post("/deploy", json={"intent": CDN_QOE.replace("for", "from")})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json["expected"], ["to"])
 
     def test_middlebox_is_422(self):
         r = self.client.post("/deploy", json={"intent": "define intent i1: for group('students') add middlebox('dpi')"})
