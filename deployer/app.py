@@ -3,6 +3,8 @@
 from __future__ import print_function
 
 import argparse
+import collections
+import itertools
 import json
 import os
 import re
@@ -23,8 +25,10 @@ os.environ["DEPLOYER_VERBOSE"] = "1" if _args.verbose else "0"
 VERBOSE = _args.verbose
 
 import metrics as _metrics
+import nile
 from classes.onos import Onos
 from classes.topology import Topology
+from services import cdn_qoe
 
 install_aliases()
 
@@ -37,10 +41,12 @@ topo = Topology()
 
 onos = Onos(base_url="http://127.0.0.1:8181/onos/v1", ip="172.17.0.2", is_main=True)
 topo.add_controller(onos)
-topo.make_network_graph()
 
 _intents_by_client: dict = {}  # {client_ip: intent_request}
 _server_by_client: dict = {}  # {client_ip: server_ip}, updated on every (re)deploy
+_path_by_client: dict = {}  # {client_ip: [UF, ...]}, client to server
+_events = collections.deque(maxlen=500)  # deploy/recalculate history served by GET /events
+_event_ids = itertools.count(1)
 
 
 def _extract_client_ip(intent: str):
@@ -52,6 +58,45 @@ def _extract_client_ip(intent: str):
 # can restart a client's iperf3 against its newly (re)calculated server, instead of
 # polling /deploy/server_for. No-ops silently if that listener isn't running.
 IPERF_NOTIFY_URL = os.environ.get("IPERF_NOTIFY_URL", "http://127.0.0.1:5152/server_changed")
+
+
+# Brief: Re-reads the ONOS graph and deploys under the lock. The graph is rebuilt on every
+# (re)deploy because hosts can be created at runtime
+# Params:
+#   dict intent_req: {"intent": "<Nile>"}
+# Return:
+#   dict response with "status": 503 if ONOS is down, 422 for an endpoint ONOS has not
+#   discovered (instead of failing inside compile()), else the controllers' answer
+def _deploy(intent_req):
+    with _deploy_lock:
+        try:
+            topo.make_network_graph()
+        except Exception as e:
+            return {"status": 503, "error": "onos", "detail": str(e)}
+        client_ip = _extract_client_ip(intent_req.get("intent"))
+        if client_ip and client_ip not in topo.nodes["hosts"]:
+            return {"status": 422, "error": "unsupported", "operation": "endpoint('{}')".format(client_ip),
+                    "reason": "{} is not a host known to ONOS".format(client_ip)}
+        return topo.notify(intent_req)
+
+
+# Brief: Keeps the client's server and path and appends a deploy/recalculate event
+# Params:
+#   String kind: "deploy" or "recalculate"
+#   String client_ip: Client of the intent
+#   dict res: Response of _deploy()
+#   extra: More event fields, e.g. the supervisor's drift reason
+# Return:
+#   None
+def _record(kind, client_ip, res, **extra):
+    previous = _server_by_client.get(client_ip)
+    if res.get("server_ip"):
+        _server_by_client[client_ip] = res["server_ip"]
+        _path_by_client[client_ip] = res.get("path")
+        _notify_iperf_server_change(client_ip, res["server_ip"])
+    _events.append({"id": next(_event_ids), "ts": time.time(), "type": kind, "client_ip": client_ip,
+                    "status": res["status"], "server_ip": res.get("server_ip"), "previous_server_ip": previous,
+                    "path": res.get("path"), **extra})
 
 
 def _notify_iperf_server_change(client_ip, server_ip):
@@ -75,21 +120,23 @@ def deploy():
     """ Endpoint to compile given Nile intent into Merlin, and deploy it to Mininet """
     global _intents_by_client
 
-    req = request.get_json(silent=True, force=True)
+    req = request.get_json(silent=True, force=True) or {}
 
-    # Extract client IP from intent string for per-client recalculation
-    client_ip = _extract_client_ip(req.get("intent", ""))
-    if client_ip:
-        _intents_by_client[client_ip] = req
+    # Syntax (400) and executability (422) are checked before parse_nile ever runs
+    rejected = nile.validate(str(req.get("intent") or ""))
+    if rejected:
+        return make_response(rejected[1], rejected[0])
 
     if VERBOSE:
         print("Request: {}".format(json.dumps(req, indent=4)))
-    with _deploy_lock:
-        res = topo.notify(req) # notify observers
+    res = _deploy(req)
 
-    if client_ip and res.get("server_ip"):
-        _server_by_client[client_ip] = res["server_ip"]
-        _notify_iperf_server_change(client_ip, res["server_ip"])
+    # Extract client IP from intent string for per-client recalculation
+    client_ip = _extract_client_ip(req.get("intent", ""))
+    if client_ip and res["status"] == 200:
+        _intents_by_client[client_ip] = req
+    if client_ip:
+        _record("deploy", client_ip, res)
 
     r = make_response(res, res["status"])
     r.headers["Content-Type"] = "application/json"
@@ -132,13 +179,11 @@ def recalculate():
     label = client_ip or "last"
     print("Recalculating intent for [{}]: {}".format(label, json.dumps(intent_req, indent=4)))
     t_start = time.time()
-    with _deploy_lock:
-        res = topo.notify(intent_req)
+    res = _deploy(intent_req)
     _metrics.set_value("total_recalculate_time_s", time.time() - t_start)
 
-    if client_ip and res.get("server_ip"):
-        _server_by_client[client_ip] = res["server_ip"]
-        _notify_iperf_server_change(client_ip, res["server_ip"])
+    if client_ip:
+        _record("recalculate", client_ip, res, reason=body.get("reason"))
 
     r = make_response(res, res["status"])
     r.headers["Content-Type"] = "application/json"
@@ -153,6 +198,46 @@ def server_for(client_ip):
     if server_ip is None:
         return make_response({"error": "no server assigned"}, 404)
     return make_response({"client_ip": client_ip, "server_ip": server_ip}, 200)
+
+
+# Brief: The Lark grammar /deploy validates intents against (text/plain)
+@app.route("/nile/grammar", methods=["GET"])
+def nile_grammar():
+    r = make_response(nile.GRAMMAR, 200)
+    r.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return r
+
+
+# Brief: Which Nile operations this deployer executes, and why not when it can't
+@app.route("/capabilities", methods=["GET"])
+def capabilities():
+    return make_response({"capabilities": [{"operation": k, **v} for k, v in nile.CAPABILITIES.items()]}, 200)
+
+
+# Brief: The intent deployed for each client and the server currently assigned to it
+@app.route("/intents", methods=["GET"])
+def intents():
+    return make_response({"intents": [
+        {"client_ip": ip, "intent": req["intent"], "server_ip": _server_by_client.get(ip), "path": _path_by_client.get(ip)}
+        for ip, req in _intents_by_client.items()]}, 200)
+
+
+# Brief: Deploy/recalculate events newer than ?after=<id>, oldest first (the profiler polls it)
+@app.route("/events", methods=["GET"])
+def events():
+    after = request.args.get("after", 0, type=int)
+    return make_response({"events": [e for e in list(_events) if e["id"] > after]}, 200)
+
+
+# Brief: The PoPs (UF -> device) and the clients/servers (IP -> UF) the cdn-qoe service sees
+@app.route("/inventory", methods=["GET"])
+def inventory():
+    try:
+        pops = cdn_qoe._discover_device_map()
+        clients, servers = cdn_qoe._discover_host_pop_maps({v: k for k, v in pops.items()})
+    except Exception as e:
+        return make_response({"error": "onos", "detail": str(e)}, 503)
+    return make_response({"pops": pops, "clients": clients, "servers": servers}, 200)
 
 
 @app.route("/metrics", methods=["GET"])
