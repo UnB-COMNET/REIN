@@ -1,0 +1,19 @@
+# REIN console and its API on 127.0.0.1:4180 (reach it through an SSH tunnel, see ../README.md)
+# Install: sudo cp rein-console.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#          sudo systemctl enable --now rein-console
+[Unit]
+Description=REIN console (127.0.0.1:4180)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# Runs `sudo -n lft` for every testbed action: the user needs NOPASSWD for /usr/local/bin/lft
+User=artdelpi
+WorkingDirectory=/home/artdelpi/REIN/console/api
+Environment=PORT=4180 PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/artdelpi/REIN/console/api/app.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
