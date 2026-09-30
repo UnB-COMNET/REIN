@@ -25,10 +25,13 @@
   // Model menu
   const popModels = $('[data-pop="models"]'), modelBtn = $('[data-models]');
   function modelsMenu() {
-    const free = 32 - 25 - (R.state.llamaAwake ? 2.25 : 0);
-    popModels.innerHTML = `<div class="pop-head"><div><h2>Modelo de tradução</h2><p class="pop-sub">GPU de 32 GB, ${R.fmt(free, 2)} GB livres</p></div></div>
+    const live = R.api?.models; // the profiler's /models when the testbed is online
+    const free = live ? live.gpu.free_gb : 32 - 25 - (R.state.llamaAwake ? 2.25 : 0);
+    const rows = live ? live.models.map(m => [m.id, m.state === 'awake' ? `Acordado${m.pinned ? ', fixado' : ''}, ${R.fmt(m.budget_gb, 2)} GB` : m.fits ? 'Dormindo, cabe na memória livre' : `Não cabe: precisa de ${R.fmt(m.budget_gb, 2)} GB, há ${R.fmt(free, 2)} GB livres`, m.state !== 'awake' && !m.fits])
+      : [['qwen3.6', 'Acordado, fixado, 23,4 GB', false], ['llama 3.2 3b', R.state.llamaAwake ? 'Acordado, 2,25 GB' : 'Dormindo, cabe na memória livre', false], ['gemma 4 12b', `Não cabe: precisa de 10,3 GB, há ${R.fmt(free, 2)} GB livres`, true]];
+    popModels.innerHTML = `<div class="pop-head"><div><h2>Modelo de tradução</h2><p class="pop-sub">GPU de ${live ? live.gpu.total_gb : 32} GB, ${R.fmt(free, 2)} GB livres</p></div></div>
       <fieldset class="menu"><legend class="sr-only">Modelo</legend>
-        ${[['qwen3.6', 'Acordado, fixado, 23,4 GB', false], ['llama 3.2 3b', R.state.llamaAwake ? 'Acordado, 2,25 GB' : 'Dormindo, cabe na memória livre', false], ['gemma 4 12b', `Não cabe: precisa de 10,3 GB, há ${R.fmt(free, 2)} GB livres`, true]]
+        ${rows
           .map(([v, s, off]) => `<label><input type="radio" name="model" value="${v}"${R.state.model === v ? ' checked' : ''}${off ? ' disabled' : ''}><span class="m-title">${v}</span><span class="m-sub">${s}</span><span class="m-check">${R.icon('i-check')}</span></label>`).join('')}
       </fieldset>
       <p class="pop-note" style="margin:12px 0 0">Nenhum modelo é descarregado sem sua ação.</p>`;
@@ -43,7 +46,8 @@
     const v = e.target.value;
     R.state.model = v;
     $('[data-model-label]').textContent = v;
-    if (v.startsWith('llama') && !R.state.llamaAwake) { R.state.llamaAwake = true; R.toast('Acordando o modelo:', 'POST /api/profiler/models/llama/load'); R.emit('gpu', {}); }
+    if (R.api?.models) R.api.loadModel(v);
+    else if (v.startsWith('llama') && !R.state.llamaAwake) { R.state.llamaAwake = true; R.toast('Acordando o modelo:', 'POST /api/profiler/models/llama/load'); R.emit('gpu', {}); }
     setTimeout(() => R.pop.close(), 200);
   });
 
