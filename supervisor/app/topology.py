@@ -38,5 +38,15 @@ class DeployedPath:
 # [(1, 2), (2, 0)] -> RTT_MATRIX[1][2] + RTT_MATRIX[2][0]. Ranks paths exactly as
 # the solver's objective does, which normalises by a single max and offsets by a
 # per-target term equal for every server.
+#
+# An edge ONOS no longer lists costs infinity, never 0.0. RTT_MATRIX is filled only
+# from links ONOS reports as ACTIVE, so a hop that dropped out of the topology keeps
+# the 0.0 it was initialised with -- which reads as a free hop and makes the path
+# holding it unbeatable. A saturated link is exactly when ONOS loses sight of it, so
+# that zero used to pin a client to the one path it should be leaving. A genuine
+# sub-1ms link also reports 0.0, hence the adjacency check rather than a check on
+# the latency itself.
 def edges_latency_ms(edges) -> float:
+    if any(not cdn_qoe.ADJ_MATRIX[i][j] for i, j in edges):
+        return float("inf")
     return sum(cdn_qoe.RTT_MATRIX[i][j] for i, j in edges)
