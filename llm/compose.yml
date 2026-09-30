@@ -1,0 +1,53 @@
+# Brief: Llama and Gemma vLLM servers plus llm-status, for the GPU VM (gpu.mfcaetano.lan, 32 GB).
+# The Qwen3.6 server on :8000 already exists and is shared with the supervisor: nothing here touches it.
+# Budgets are in models.yaml (gpu-memory-utilization = budget / 32 GB). Bring the models up one at a
+# time, putting each to sleep before the next, so every server finds its budget free at startup:
+#   docker compose up -d llm-status llama
+#   curl -X POST 'http://localhost:8001/sleep?level=1'   # optional: frees Llama's memory
+#   docker compose --profile gemma up -d gemma           # needs 12 GB free: not while Qwen is loaded
+# Then set llm_status_url: http://gpu.mfcaetano.lan:5500 in models.yaml on the REIN VM.
+
+x-vllm: &vllm
+  image: vllm/vllm-openai:${VLLM_TAG:-v0.29.0}
+  network_mode: host
+  ipc: host
+  environment:
+    - VLLM_SERVER_DEV_MODE=1          # exposes /sleep, /wake_up and /is_sleeping for llm-status
+    - HF_TOKEN=${HF_TOKEN:-}
+  volumes:
+    - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+  deploy:
+    resources:
+      reservations:
+        devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+
+services:
+  llama:
+    <<: *vllm
+    container_name: vllm-llama
+    command: >
+      --model casperhansen/llama-3.2-3b-instruct-awq --host 0.0.0.0 --port 8001
+      --max-model-len 8192 --gpu-memory-utilization 0.125 --enable-sleep-mode
+
+  gemma:
+    <<: *vllm
+    container_name: vllm-gemma
+    profiles: [gemma]
+    command: >
+      --model google/gemma-4-12B-it-qat-w4a16-ct --host 0.0.0.0 --port 8002
+      --max-model-len 8192 --gpu-memory-utilization 0.375 --enable-sleep-mode
+
+  llm-status:
+    build: .
+    container_name: llm-status
+    network_mode: host
+    environment:
+      - MODELS_CONFIG=/app/models.yaml
+      - HOST=0.0.0.0
+      - PORT=5500
+    volumes:
+      - ./models.yaml:/app/models.yaml:ro
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [utility]}]
