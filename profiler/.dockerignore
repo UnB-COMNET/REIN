@@ -1,0 +1,5 @@
+.venv/
+state/
+data/raw/
+eval/
+__pycache__/
