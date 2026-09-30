@@ -27,8 +27,6 @@ LOG_FILE="$SCRIPT_DIR/dependencies.log"
 exec > >(tee "$LOG_FILE") 2>&1
 echo "Log desta instalação em: $LOG_FILE"
 
-# Validado em 2026-08-29 (mesma VM de experimentos do grupo, ver
-# infra/setup.sh do projeto PIBIC).
 PIN_DOCKER_CE="${PIN_DOCKER_CE:-5:29.7.2-1~ubuntu.26.04~resolute}"
 PIN_DOCKER_CE_CLI="${PIN_DOCKER_CE_CLI:-5:29.7.2-1~ubuntu.26.04~resolute}"
 PIN_DOCKER_COMPOSE_PLUGIN="${PIN_DOCKER_COMPOSE_PLUGIN:-5.5.0-1~ubuntu.26.04~resolute}"
