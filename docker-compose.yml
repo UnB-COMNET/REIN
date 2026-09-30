@@ -20,6 +20,10 @@ services:
       dockerfile: Dockerfile
     container_name: supervisor
     network_mode: "host"
+    environment:
+      - SUPERVISOR_MODE=${SUPERVISOR_MODE:-threshold}
+      - LLM_URL=${LLM_URL:-}
+      - ONOS_KARAF=${ONOS_KARAF:-docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf}
     stdin_open: true
     tty: true
     volumes:
