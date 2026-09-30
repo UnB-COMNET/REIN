@@ -91,7 +91,8 @@ class IntentMonitor:
             mbps = probe.read_bps() / 1e6
 
             kpis = {"RTT_ms": delay_ms}
-            if probe.warm:
+            # A path with no traffic reads 0 Mbit/s: that is idleness, not drift
+            if probe.warm and mbps > 0:
                 kpis["Vazao_Mbps"] = mbps
             thr = (f"{mbps:.2f} Mbit/s ({probe.window}/{throughput.WINDOW})"
                    if probe.window else "-- (warming up)")
