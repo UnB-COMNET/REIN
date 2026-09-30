@@ -316,8 +316,8 @@
   // ------------------------------------------------------------ help: a guide to asking, Nile and the deployer
   const helpSheet = $('[data-sheet="help"]'), toc = $('[data-help-toc]'), doc = $('[data-help-doc]');
   const EX = [
-    ['Quero vídeo sem travar para o cliente de SP', "define intent q1: from endpoint('192.168.0.2') add service('cdn-qoe')", 'O deployer escolhe o servidor DASH de menor RTT e o caminho de maior vazão. O supervisor mede a latência e pede outro caminho quando passa de 200 ms.', 'ok'],
-    ['Use o roteamento por LLM para o cl0', "define intent q2: from endpoint('192.168.0.2') add service('llm')", 'Mesmo resultado, com o servidor e o caminho decididos pelo modelo em gpu.mfcaetano.lan:8000.', 'ok'],
+    ['Quero vídeo sem travar para o cliente de SP', "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')", 'O deployer escolhe o servidor DASH de menor RTT e o caminho de maior vazão. O supervisor mede a latência e pede outro caminho quando passa de 200 ms.', 'ok'],
+    ['Use o roteamento por LLM para o cl0', "define intent q2: for endpoint('192.168.0.2') add service('llm')", 'Mesmo resultado, com o servidor e o caminho decididos pelo modelo em gpu.mfcaetano.lan:8000.', 'ok'],
     ['Limite o cl0 a 10 Mb/s', "define intent q3: for endpoint('192.168.0.2') set bandwidth('max', '10', 'mbps')", 'Um meter OpenFlow com banda DROP de 10.000 kbps em cada switch, aplicado ao tráfego do endereço.', 'ok'],
     ['Bloqueie UDP no cliente cl0', "define intent q4: for endpoint('192.168.0.2') block protocol('udp')", 'Regra deny no app ACL do ONOS para ipProto UDP a partir do endereço. O iperf3 -u desse cliente para de receber.', 'ok'],
     ['Bloqueie SSH no cliente de SP', "define intent q5: for endpoint('192.168.0.2') block protocol('ssh')", "Sintaxe válida, mas recusada: o ACL do ONOS só filtra por ipProto (TCP, UDP, ICMP), e SSH é uma porta.", 'no'],
@@ -327,7 +327,6 @@
 
 <scope>     ::= "from" <target> "to" <target>
               | "for" <target>
-              | "from" <target>                 ; extensão do REIN
 
 <target>    ::= <target-fn> "(" <str> ")"
 <target-fn> ::= "endpoint" | "group" | "service" | "traffic"

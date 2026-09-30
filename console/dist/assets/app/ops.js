@@ -232,7 +232,7 @@
   ];
   R.serviceNile = (sid, v, id) => {
     const ep = `endpoint('${v.ip}')`;
-    if (sid === 'cdn-qoe' || sid === 'llm') return `define intent ${id}: from ${ep} add service('${sid}')`;
+    if (sid === 'cdn-qoe' || sid === 'llm') return `define intent ${id}: for ${ep} add service('${sid}')`;
     if (sid === 'bandwidth') return `define intent ${id}: for ${ep} set bandwidth('max', '${v.mbps}', 'mbps')`;
     if (sid === 'acl') return `define intent ${id}: for ${ep} ${v.action} protocol('${v.proto}')`;
     if (sid === 'middlebox') return `define intent ${id}: for ${ep} add middlebox('${v.box}')`;
