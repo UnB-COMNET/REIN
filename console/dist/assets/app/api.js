@@ -82,38 +82,28 @@
   }
 
   // ---------------------------------------------------------------- jobs: what lft runs, step by step
-  // lft's step titles, as the console words them
+  // lft's step titles (profissa_lft.testbed), as the console words them
   const STEP_PT = [
-    [/^Shape the access link/, () => 'Filas tc no link de acesso'],
-    [/^Shape (\S+) in (\S+)/, m => `Filas tc de ${m[1]} em ${m[2]}`],
-    [/^Set (\S+) (up|down) in (\S+)/, m => `${m[1]} ${m[2]} em ${m[3]}`],
-    [/^Start the Open vSwitch container (\S+)/, m => `Subindo o container Open vSwitch ${m[1]}`],
-    [/^Start (\S+) from (\S+)/, m => `Criando o container ${m[1]} (${m[2]})`],
-    [/^Start the REIN services/, () => 'Subindo os serviços do REIN'],
-    [/^Start (\S+)$/, m => `Iniciando o container ${m[1]}`],
-    [/^Stop the REIN services/, () => 'Parando os serviços do REIN'],
-    [/^Stop (\S+)$/, m => `Parando o container ${m[1]}`],
-    [/^Remove (\S+) from (\S+)/, m => `Tirando ${m[1]} do Open vSwitch de ${m[2]}`],
-    [/^Remove (\S+)$/, m => `Removendo o container ${m[1]}`],
-    [/^Expose the (\S+) namespace/, m => `Namespace de ${m[1]} em /var/run/netns`],
-    [/^Link (\S+) to (\S+) again/, m => `Refazendo o link ${m[1]}–${m[2]}`],
-    [/^Link (\S+) to (\S+)/, m => `Par veth ${m[1]}–${m[2]} e filas tc`],
+    [/^Shaping (\S+) in (\S+)/, m => `Filas tc de ${m[1]} em ${m[2]}`],
+    [/^Setting (\S+) (up|down) in (\S+)/, m => `${m[1]} ${m[2]} em ${m[3]}`],
+    [/^Starting (\S+) from (\S+)/, m => `Criando o container ${m[1]} (${m[2]})`],
+    [/^Starting (\S+)$/, m => `Subindo o container Open vSwitch ${m[1]}`],
+    [/^Linking (\S+) to (\S+)/, m => `Par veth ${m[1]}–${m[2]}`],
     [/^Address (\S+) on (\S+)/, m => `Endereço ${m[1]} em ${m[2]}`],
-    [/^ARP from (\S+)/, m => `ARP de ${m[1]} para o ONOS`],
-    [/^ONOS sees (\S+)/, m => `Esperando o ONOS ver ${m[1]}`],
-    [/^ONOS marks (\S+) unavailable/, m => `O ONOS marca ${m[1]} como indisponível`],
-    [/^ONOS forgets (\S+)/, m => `O ONOS esquece ${m[1]}`],
-    [/^Bridge (\S+), datapath (\S+), (\S+)/, m => `Bridge ${m[1]}, datapath ${m[2]}, ${m[3]}`],
-    [/^Point it to ONOS/, () => 'Ligando ao controlador ONOS'],
-    [/^Pin the OpenFlow port numbers/, () => 'Fixando os números das portas OpenFlow'],
-    [/^Its veth pairs go/, () => 'Os pares veth somem com o namespace'],
-    [/^Reconnect (\S+)/, m => `Religando ${m[1]}`],
+    [/^Announcing (\S+)/, m => `ARP de ${m[1]} para o controlador`],
+    [/^Connecting (\S+) to (\S+)/, m => `Ligando ${m[1]} ao controlador ${m[2]}`],
+    [/^Disconnecting (\S+) from its controller/, m => `Desligando ${m[1]} do controlador`],
+    [/^Taking its (\d+) veth pairs down/, m => `Derrubando os ${m[1]} pares veth`],
+    [/^Bringing its (\d+) veth pairs up/, m => `Religando os ${m[1]} pares veth`],
+    [/^Pausing (\S+)/, m => `Pausando ${m[1]}`],
+    [/^Resuming (\S+)/, m => `Retomando ${m[1]}`],
     [/^(Pause|Unpause) (\S+)/, m => `${m[1] === 'Pause' ? 'Pausando' : 'Retomando'} ${m[2]}`],
-    [/^Results directory/, () => 'Diretório de resultados'],
-    [/^Capture (\S+) in (\S+)/, m => `tcpdump em ${m[1]} (${m[2]})`],
+    [/^Removing port (\S+) from (\S+)/, m => `Tirando ${m[1]} do Open vSwitch de ${m[2]}`],
+    [/^Removing its ports from (.+)/, m => `Tirando as portas de ${m[1]}`],
+    [/^Removing (\S+)$/, m => `Removendo o container ${m[1]}`],
+    [/^Capturing (\S+) in (\S+)/, m => `tcpdump em ${m[1]} (${m[2]})`],
     [/^iperf3 server in (\S+)/, m => `Servidor iperf3 em ${m[1]}`],
     [/^(\S+) client in (\S+)/, m => `Cliente ${m[1]} em ${m[2]}`],
-    [/^Wait for deployer/, () => 'Esperando deployer, supervisor e profiler'],
   ];
   const stepText = t => { for (const [re, f] of STEP_PT) { const m = t.match(re); if (m) return f(m); } return t; };
 
@@ -155,7 +145,7 @@
       try {
         const { job } = await req(method, url, body, raw);
         await stream(`/api/jobs/${job}/events`, {}, (ev, d) => {
-          if (ev === 'step') { if (d.step === 1) j.total += d.of; j.steps.push({ text: stepText(d.title) }); d.cmds.forEach(c => j.log.push(['cmd', c])); }
+          if (ev === 'step') { if (d.step === 1) j.total += d.of; j.steps.push({ text: stepText(d.title) }); (d.cmds || []).forEach(c => j.log.push(['cmd', c])); }
           else if (ev === 'stdout' && d.line) j.log.push(['out', d.line]);
           else if (ev === 'status') final = d;
           paintJob(j);
@@ -520,7 +510,7 @@
       run.rid = rid;
       log(`console-api · run ${rid} · sudo lft experiment ${run.flows ? `plan --path ${run.name}.py` : run.runner}`);
       await stream(`/api/runs/${rid}/events`, {}, (ev, e) => {
-        if (ev === 'phase') { const k = keys.indexOf(e.name); if (k >= 0 && k + 1 > run.phaseAt) run.phaseAt = k + 1; log(`${e.name} · ${e.text}`); }
+        if (ev === 'phase') { const k = keys.indexOf({ before: 'rein', warmup: 'stabilize' }[e.name] || e.name); if (k >= 0 && k + 1 > run.phaseAt) run.phaseAt = k + 1; log(`${e.name} · ${e.text}`); }
         else if (ev === 'window') {
           if (e.state === 'start') {
             // each window's clock starts when the runner opens it (its windows also hold setup waits)

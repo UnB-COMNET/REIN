@@ -1,4 +1,4 @@
-# REIN console and its API on 127.0.0.1:4180 (reach it through an SSH tunnel, see ../README.md)
+# REIN console and its API on 127.0.0.1:4180. Adjust User and the paths to this machine
 # Install: sudo cp rein-console.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #          sudo systemctl enable --now rein-console
 [Unit]
@@ -7,10 +7,11 @@ After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-# Runs `sudo -n lft` for every testbed action: the user needs NOPASSWD for /usr/local/bin/lft
+# Runs `sudo -n lft` and `sudo -n docker`: the user needs NOPASSWD for both. LFT_BIN is lft's path
+# (with LFT's dependencies.sh: <lft>/.venv/bin/lft)
 User=artdelpi
 WorkingDirectory=/home/artdelpi/REIN/console/api
-Environment=PORT=4180 PYTHONUNBUFFERED=1
+Environment=PORT=4180 PYTHONUNBUFFERED=1 LFT_BIN=/usr/local/bin/lft
 ExecStart=/usr/bin/python3 /home/artdelpi/REIN/console/api/app.py
 Restart=on-failure
 RestartSec=3
