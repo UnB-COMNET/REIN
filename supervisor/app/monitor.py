@@ -112,7 +112,7 @@ class IntentMonitor:
                 # Only pause on a request that landed; a deployer down for one
                 # cycle would otherwise leave this client unmonitored for the
                 # rest of the run.
-                if self._sup.notify_recalculate(self.client_ip):
+                if self._sup.notify_recalculate(self.client_ip, verdict.detail.strip()):
                     return # deployer will call /supervise again with the new path
 
             self._schedule_next()

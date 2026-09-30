@@ -72,12 +72,12 @@ class SupervisorService:
                        for i, j in path.remapped()) + 2 * access_delay_ms
 
     # Brief: POSTs to /deploy/recalculate so the deployer redeploys this client's
-    # intent. Returns whether it succeeded.
-    def notify_recalculate(self, client_ip: str) -> bool:
+    # intent; reason is the drift verdict, shown to the operator. Returns whether it succeeded.
+    def notify_recalculate(self, client_ip: str, reason: str = "") -> bool:
         _metrics.increment("msgs_observer_to_deployer")
         try:
             resp = requests.post(self.deployer_base_url + "/recalculate",
-                                 json={"client_ip": client_ip}, timeout=300)
+                                 json={"client_ip": client_ip, "reason": reason}, timeout=300)
             resp.raise_for_status()
             time.sleep(2)
             logger.info("[%s] Deployer notified — recalculate requested.", client_ip)
