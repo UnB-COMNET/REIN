@@ -59,7 +59,8 @@
   function logs(s) {
     const fresh=M.events.filter(e=>e.source===s.source).slice(-12).map(e=>[e.time,e.text,e.tone]);
     const asks=s.id==='profiler'?M.chat.slice(5).filter(m=>m.role==='user').map(m=>[m.time,`POST /profile "${m.text.slice(0,80)}"`]):[];
-    return [...baseLogs[s.source],...fresh,...asks].filter(row=>row.join(' ').toLocaleLowerCase().includes(logQuery.toLocaleLowerCase()));
+    const live=R.api?.logs?.[s.id]; // the service's own log (docker logs) when the testbed is online
+    return (live||[...baseLogs[s.source],...fresh,...asks]).filter(row=>row.join(' ').toLocaleLowerCase().includes(logQuery.toLocaleLowerCase()));
   }
   function logRows(s, previewOnly=false) {
     const rows=logs(s);return (previewOnly?rows.slice(-4):rows).map(([t,text,tone])=>`<div class="st-log-row" data-level="${tone==='warn'?'warn':tone==='down'?'error':'info'}"><time>${esc(t)}</time><span>${tone==='warn'?'Aviso':tone==='down'?'Erro':'Info'}</span><code>${esc(text)}</code></div>`).join('')||'<p class="st-empty">Nenhum registro corresponde à busca.</p>';
