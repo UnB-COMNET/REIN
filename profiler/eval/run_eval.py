@@ -24,7 +24,7 @@ from app import graph, inventory, llm, rag  # noqa: E402
 MODES = ["zero", "few", "rag", "rag_constrained", "rag_regen"]
 # Fixed few-shot: the same 8 examples for every request (4 REIN seeds, 4 NEAT action families)
 FIXED_SEEDS = ["Quero a melhor qualidade de vídeo para o cliente 192.168.0.2",
-               "Garanta QoE de streaming para o cliente em SP", "Melhore o vídeo", "Limite a banda dos alunos a 10 Mbps"]
+               "Enable the CDN QoE service for host 192.168.0.3", "Melhore o vídeo", "Limite a banda dos alunos a 10 Mbps"]
 FIXED_NEAT = [r"set bandwidth\(.*quota\(", r"allow .* start ", r"add middlebox\(", r"^define intent i1: from .* to .* block "]
 
 
@@ -34,12 +34,12 @@ def load_items(n: int, seed: int) -> list:
         test = [line.rstrip("\n").split("\t") for line in f]
     with open(os.path.join(ROOT, "eval", "rein_eval.tsv"), encoding="utf-8") as f:
         rein = [line.rstrip("\n").split("\t") for line in f]
-    return ([{"set": "neat", "text": t, "gold": g} for t, g, _ in random.Random(seed).sample(test, n)]
+    return ([{"set": "neat", "text": t, "gold": g} for t, g in random.Random(seed).sample(test, n)]
             + [{"set": "rein", "text": t, "gold": g} for t, g in rein])
 
 
 def fixed_examples() -> list:
-    _, meta, _ = rag._load()
+    _, meta = rag._load()
     seeds = [next(m for m in meta if m["text"] == t) for t in FIXED_SEEDS]
     neat = [next(m for m in meta if m["source"] == "neat" and re.search(p, m["nile"])) for p in FIXED_NEAT]
     return seeds + neat
@@ -52,6 +52,11 @@ def canon(out: str) -> str:
     s = re.sub(r"^define intent \w+:", "define intent _:", rag.normalize_nile(out)).lower()
     m = re.match(r"(.*? (?:unset|set|allow|block|add|remove) )(.*?)((?: start .*)?)$", s)
     return m.group(1) + ", ".join(sorted(re.findall(r"\w+\([^)]*\)", m.group(2)))) + m.group(3) if m else s
+
+
+# Brief: Intent shape with names and values blanked, e.g. "define intent _: for group('') block protocol('')"
+def skeleton(nile: str) -> str:
+    return re.sub(r"'[^']*'", "''", nile)
 
 
 # Brief: Slots as (function, argument index, value) for the slot F1
@@ -77,7 +82,7 @@ def score(item: dict, out: str, seconds: float, calls: int) -> dict:
     v = verdict(out)
     return {**item, "output": out, "seconds": round(seconds, 3), "calls": calls,
             "syntax_ok": v is None or v[0] != 400, "executable": v is None and not out.startswith("ASK:"),
-            "exact": canon(out) == canon(item["gold"]), "skeleton": rag.skeleton(canon(out)) == rag.skeleton(canon(item["gold"])),
+            "exact": canon(out) == canon(item["gold"]), "skeleton": skeleton(canon(out)) == skeleton(canon(item["gold"])),
             "slot_f1": round(f1(slots(out), slots(item["gold"])), 3)}
 
 
@@ -93,12 +98,11 @@ def run(model_id: str, items: list, workers: int) -> list:
     fixed = fixed_examples()
     for it in items:  # grounding and retrieval once, before the parallel LLM calls
         it["_g"] = graph.ground(it["text"], REIN_INVENTORY) if it["set"] == "rein" else None
-        it["_rag"] = graph.retrieve(it["text"], it["_g"])
-        it["_few"] = graph.render(fixed, it["_g"])
+        it["_rag"] = rag.retrieve(it["text"])
     public = lambda it: {k: v for k, v in it.items() if not k.startswith("_")}
 
     def one(mode, it, first=None):
-        examples = {"zero": [], "few": it["_few"]}.get(mode, it["_rag"])
+        examples = {"zero": [], "few": fixed}.get(mode, it["_rag"])
         if mode == "rag_regen":
             out, seconds = first["output"], first["seconds"]
             v = verdict(out)
