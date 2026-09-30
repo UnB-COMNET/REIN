@@ -102,43 +102,12 @@ def ground(text: str, inv: dict) -> dict:
     return {**inv, "mentions": mentions}
 
 
-# Brief: RAG examples for the request, most relevant first
-# Params:
-#   String text: The operator's request
-#   dict grounding: Output of ground()
-#   int k: Number of examples
-# Return:
-#   list of example dicts (see rag.retrieve) with seed placeholders filled
-def retrieve(text: str, grounding: dict, k: int = rag.K) -> list:
-    return render(rag.retrieve(text, k + 4), grounding)[:k]
-
-
-# Brief: Fills <client@UF> seed placeholders from the inventory; drops examples it cannot fill
-# Params:
-#   list candidates: Example dicts with "text" and "nile"
-#   dict grounding: Output of ground()
-# Return:
-#   list of example dicts ready for the prompt
-def render(candidates: list, grounding: dict) -> list:
-    examples = []
-    for ex in candidates:
-        nile = ex["nile"]
-        for uf in re.findall(r"<client@(\w+)>", nile):
-            ips = [ip for ip, u in (grounding or {}).get("clients", {}).items() if u == uf]
-            nile = nile.replace(f"<client@{uf}>", ips[0]) if ips else None
-            if nile is None:
-                break
-        if nile:
-            examples.append({**ex, "nile": nile})
-    return examples
-
-
 # Brief: Builds the system prompt and makes one LLM call
 # Params:
 #   String model_id: Model id from models.yaml
 #   String text: The operator's request
 #   dict grounding: Output of ground()
-#   list examples: Output of retrieve()
+#   list examples: Output of rag.retrieve()
 #   String deployer_error: rejection() text when regenerating
 #   bool constrained: Force constrained decoding on/off (default: CONSTRAINED_DECODING)
 # Return:
@@ -218,7 +187,7 @@ def _ground_node(s: State) -> dict:
 
 
 def _retrieve_node(s: State) -> dict:
-    return {"examples": retrieve(s["text"], s["grounding"])}
+    return {"examples": rag.retrieve(s["text"])}
 
 
 def _generate_node(s: State) -> dict:
@@ -282,7 +251,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     g = ground(args.text, inventory.load(args.inventory) if args.inventory else inventory.get())
-    examples = retrieve(args.text, g)
+    examples = rag.retrieve(args.text)
     answer, seconds, system = generate(args.model, args.text, g, examples)
     if args.verbose:
         print(system, "\n" + "-" * 60)
