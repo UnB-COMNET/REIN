@@ -1051,8 +1051,8 @@
     if (R.pop.current?.key === 'conn') { R.pop.close(); return; }
     const running = R.traffic.sessions.filter(x => x.status === 'running').length;
     popConn.innerHTML = `<div class="pop-head"><div><h2>Testbed ${R.env.testbed}</h2><p class="pop-sub"><span class="dot"></span>LFT, ${R.switches().length} switches, ${R.hosts().length} hosts, ${running} fluxo${running === 1 ? '' : 's'} de teste</p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
-      ${kvRows([['ONOS', `${location.hostname}:8181 · OpenFlow 6653`, true], ['Deployer', `${location.hostname}:5000`, true], ['Supervisor', `${location.hostname}:5151`, true], ['Intent profiler', `${location.hostname}:5300`, true], ['testbed-api', `${location.hostname}:5400`, true], ['Resultados', `${R.env.results}/iperf, ${R.env.results}/dash`, true]])}
-      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], ['Karaf do ONOS', R.env.onos.karaf], ['Túnel para esta máquina', `ssh -p 13508 -L 3000:127.0.0.1:3000 -L 8181:127.0.0.1:8181 ${R.env.testbed}.mfcaetano.cc`]])}
+      ${kvRows([['ONOS', `${location.hostname}:8181 · OpenFlow 6653`, true], ['Deployer', `${location.hostname}:5000`, true], ['Supervisor', `${location.hostname}:5151`, true], ['Intent profiler', `${location.hostname}:5300`, true], ['Console API', `${location.hostname}:4180`, true], ['Resultados', `${R.env.results}/iperf, ${R.env.results}/dash`, true]])}
+      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], ['Karaf do ONOS', R.env.onos.karaf], ['Túnel para esta máquina', `ssh -p 13508 -L 4180:127.0.0.1:4180 -L 8181:127.0.0.1:8181 ${R.env.testbed}.mfcaetano.cc`]])}
       <div class="pop-actions"><a class="btn" href="${R.env.onos.gui}" target="_blank" rel="noreferrer">${R.icon('i-external')}GUI2 do ONOS</a></div>`;
     const r = connBtn.getBoundingClientRect();
     R.pop.open(popConn, r.left + r.width / 2, r.bottom - 6, { trigger: connBtn, key: 'conn' });
