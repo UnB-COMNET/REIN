@@ -22,6 +22,7 @@
     { id: 'dash', title: 'dash', topo: 'dash', what: 'Topologia DASH com captura contínua: tcpdump nos switches e conversão para CSV com tshark ao fim de cada ciclo.', modes: [], windows: 0, win: 60, outputs: ['packet_flow_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
     { id: 'dash-load', title: 'dash-load', topo: 'dash', what: 'Carga cumulativa de clientes DASH em quatro janelas de 300 s, limitada pelos clientes disponíveis.', modes: [], windows: 4, win: 300, hit: [], outputs: ['packet_flow_all.csv', 'dash_segments.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
   ];
+  R.xRunners = RUNNERS; // api.js corrects windows and modes from `lft experiment --json`
   const HARD = { rate: .1, delay: 10 }; // HARD_DEGRADE in the LFT: rate ×0,1 and delay ×10
 
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') || d; } catch { return d; } };
@@ -124,7 +125,7 @@
     return P;
   }
   const blankPlan = () => normPlan({ name: `plano-${pad(new Date().getDate())}${pad(new Date().getMonth() + 1)}-${pad(customs.length + 1)}`, win: 60, mode: 'cdn-qoe', auto: true, snapshots: Array.from({ length: 6 }, (_, i) => (i % 2 ? Object.fromEntries(M.links.slice(0, 1).map(l => [l.id, 'warn'])) : {})) });
-  const planSpec = P => ({ name: P.name, runner: 'plano do console', mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'ping_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'] });
+  const planSpec = P => ({ name: P.name, runner: 'plano do console', mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'ping_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], py: planPy(P) });
 
   // Shortest switch path that avoids the links a snapshot takes down
   function swPath(a, b, st = {}) {
@@ -575,7 +576,7 @@
   function phasesFor(r) {
     const n = M.nodes.length, h0 = r.hosts?.[0];
     return [
-      ['Limpando containers anteriores', 'docker rm -f $(docker ps -aq)', 3],
+      ['Limpando containers anteriores', 'docker rm -f $(docker ps -aq --filter label=lft=1)', 3],
       ['Subindo o ONOS 2.5.0', 'docker run -d --name c1 -p 8181:8181 -p 8101:8101 -p 6653:6653 onosproject/onos:2.5.0', 9],
       ['Ativando apps e o link-quality (.oar)', 'onos-app 172.17.0.2 install! assets/onos_apps/link-quality.oar', 5],
       [`Criando a topologia: ${R.switches().length} switches, ${R.hosts().length} hosts`, `lft topology create --path ${r.config || `${r.name}.py`}`, Math.min(14, 4 + n)],
@@ -608,6 +609,8 @@
     R.log('Testbed', `Experimento ${spec.name} iniciado (${spec.runner}).`);
     view = { name: 'run' };
     paint();
+    // With the testbed online the LFT runs it: api.js follows its events.jsonl into this run
+    if (R.api?.online) { Object.assign(run, { real: true, pre: Infinity, finish, paint: () => { if (view.name === 'run') paintRun(); } }); R.api.startRun(run); }
     run.tick = setInterval(tick, 1000);
     tick();
   }
@@ -678,6 +681,7 @@
   }
   function tick() {
     if (!run?.on) return;
+    if (run.real) { if (view.name === 'run') paintRun(); return; }
     const t = (Date.now() - run.t0) / 1000;
     let acc = 0, phase = run.phases.length;
     for (let i = 0; i < run.phases.length; i++) { if (t < acc + run.phases[i][2]) { phase = i; break; } acc += run.phases[i][2]; }
@@ -706,14 +710,17 @@
     if (view.name === 'run') paintRun();
   }
   function finish(done) {
+    if (run.real && run.on && !done && !run.exited) { R.api.stopRun(run); return; } // SIGINT; the run ends when the runner does
     clearInterval(run.tick);
     run.on = false; run.status = done ? 'done' : 'stopped';
-    run.flows?.forEach(f => { if (f.sess) R.traffic.stop(f.sess); if (f.state === 'on') { f.state = 'off'; run.log.push(`[${hms()}] flow ${f.tool} ${dirText(f)} end`); } });
-    run.events?.forEach(e => { if (e.state === 'on' && e.kind !== 'intent') endEvent(e); });
-    // Links back to their base values and the plan's hosts removed, as the runner's cleanup does
-    M.links.forEach(l => { if (l.now.down || l.now.rate !== l.base.rate || l.now.delay !== l.base.delay) R.apply(l.id, { ...l.base, down: false }, { quiet: true }); });
-    if (run.created?.length) { run.log.push(`[${hms()}] cleanup · docker rm -f ${run.created.join(' ')}`); run.created.forEach(id => R.removeHost(id)); }
-    if (done) run.files.push(...run.outputs, 'meta.json', 'events.log');
+    if (!run.real) {
+      run.flows?.forEach(f => { if (f.sess) R.traffic.stop(f.sess); if (f.state === 'on') { f.state = 'off'; run.log.push(`[${hms()}] flow ${f.tool} ${dirText(f)} end`); } });
+      run.events?.forEach(e => { if (e.state === 'on' && e.kind !== 'intent') endEvent(e); });
+      // Links back to their base values and the plan's hosts removed, as the runner's cleanup does
+      M.links.forEach(l => { if (l.now.down || l.now.rate !== l.base.rate || l.now.delay !== l.base.delay) R.apply(l.id, { ...l.base, down: false }, { quiet: true }); });
+      if (run.created?.length) { run.log.push(`[${hms()}] cleanup · docker rm -f ${run.created.join(' ')}`); run.created.forEach(id => R.removeHost(id)); }
+      if (done) run.files.push(...run.outputs, 'meta.json', 'events.log');
+    }
     run.log.push(`[${hms()}] ${done ? 'run finished · CSVs merged' : 'interrupted (SIGINT) · partial results kept'}`);
     const h = runs.find(x => x.name === run.name && x.status === 'running');
     if (h) h.status = run.status;
