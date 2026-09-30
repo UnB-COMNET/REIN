@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>REIN</title>
+<meta name="description" content="REIN Console: a rede, as intents e o que acontece quando um link piora.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#ECEDEF">
+<link rel="icon" href="assets/rein-mark.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/img/backdrop-sky.webp" as="image" type="image/webp">
+<script>
+  // The opening plays once per page load; ?demo=… and ?intro=0 start with everything in place
+  (d => { d.classList.replace('no-js', 'js'); if (!/[?&](demo|intro=0)/.test(location.search)) { d.classList.add('is-opening'); setTimeout(() => d.classList.remove('is-opening'), 6000); } })(document.documentElement);
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/studio.css">
+<link rel="stylesheet" href="assets/interaction.css">
+<link rel="stylesheet" href="assets/console.css">
+<script defer src="assets/app/brazil.js"></script>
+<script defer src="assets/app/model.js"></script>
+<script defer src="assets/app/ui.js"></script>
+<script defer src="assets/app/select.js"></script>
+<script defer src="assets/app/ops.js"></script>
+<script defer src="assets/app/video.js"></script>
+<script defer src="assets/app/topology.js"></script>
+<script defer src="assets/app/intents.js"></script>
+<script defer src="assets/app/figures.js"></script>
+<script defer src="assets/app/pages.js"></script>
+<script defer src="assets/vendor/gsap.min.js"></script>
+<script defer src="assets/app/studio.js"></script>
+<script defer src="assets/app/experiments.js"></script>
+<script defer src="assets/app/lens.js"></script>
+<script defer src="assets/app/main.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="rein-logo" viewBox="0 0 1614 400"><path fill="currentColor" fill-rule="evenodd" d="M334.6 398.8C322.3 397.0 323.7 398.3 239.2 313.8C159.6 234.1 159.0 233.5 161.8 229.4C163.9 226.2 167.1 226.0 207.7 226.0C251.2 226.0 254.7 226.3 264.3 231.1C268.3 233.1 321.3 285.4 394.4 359.7C421.3 387.0 423.1 389.1 422.8 392.1C422.6 394.1 421.6 395.9 420.0 397.1C417.7 398.7 413.9 398.9 378.5 399.2C357.1 399.4 337.3 399.2 334.6 398.8ZM154.6 397.9C145.3 395.7 139.8 391.4 121.5 372.2C111.7 361.9 82.4 332.3 56.5 306.4C11.6 261.7 9.1 259.0 5.7 251.9C-1.5 237.0 -1.5 224.4 5.7 210.7C8.9 204.6 14.0 199.3 48.2 165.7C87.7 126.8 92.7 122.6 104.1 118.5C109.3 116.6 113.2 116.5 201.9 116.2C284.5 116.0 294.9 116.1 299.9 117.6C311.8 121.0 314.1 122.9 348.0 156.5C365.9 174.2 382.1 189.5 383.9 190.5C390.8 194.0 392.1 193.2 418.9 166.7C432.4 153.4 444.4 141.3 445.7 139.8C448.9 136.1 449.6 131.1 447.6 126.8C446.7 124.9 435.0 112.5 421.7 99.3C401.8 79.7 396.8 75.2 393.4 74.2C390.3 73.3 357.5 73.0 261.5 73.0L133.6 73.0L125.6 69.1C118.0 65.4 115.9 63.5 90.7 38.3C67.8 15.3 63.9 10.9 63.4 7.8C62.9 5.0 63.2 3.8 64.9 2.1L67.0 -0.0L239.4 -0.0C349.3 -0.0 413.7 0.4 417.1 1.0C420.1 1.5 426.2 3.8 430.7 6.0C439.4 10.3 440.7 11.6 506.7 80.2C524.2 98.5 529.5 106.4 532.5 119.1C535.6 132.5 534.1 144.3 527.4 158.0C524.0 165.1 521.1 168.2 475.6 213.8C431.2 258.4 422.1 266.8 413.3 271.4C403.3 276.5 384.5 277.7 373.0 274.0C359.1 269.5 355.7 266.6 316.9 227.1C296.9 206.7 278.7 189.1 276.5 187.8L272.5 185.5L203.2 185.2C134.3 184.9 134.0 185.0 129.0 187.1C125.0 188.8 120.7 192.7 107.9 206.1C93.0 221.7 91.7 223.3 91.3 227.4C91.0 230.0 91.3 232.7 92.1 234.2C92.9 235.7 126.1 270.0 166.0 310.5C205.9 351.1 239.3 385.4 240.2 386.9C242.8 390.8 242.5 395.4 239.5 397.4C237.4 398.8 232.4 399.0 197.8 398.9C176.2 398.8 156.8 398.4 154.6 397.9ZM595.7 344.3C595.3 344.0 595.0 284.5 595.0 212.3L595.0 80.9L690.2 81.2C783.6 81.5 785.7 81.6 795.0 83.7C844.5 94.9 871.0 125.0 871.0 169.9C871.0 203.5 856.0 227.9 826.0 243.4C821.3 245.8 814.1 248.8 810.0 250.1C805.9 251.4 802.1 252.7 801.6 253.1C800.9 253.7 829.5 285.3 870.8 329.4C877.0 336.0 882.0 342.2 882.0 343.2C882.0 344.9 879.8 345.0 838.1 345.0C814.0 345.0 792.9 344.7 791.2 344.4C788.9 343.9 779.8 334.8 750.4 303.8C729.5 281.8 711.0 262.3 709.3 260.4L706.1 256.9L691.3 257.2L676.5 257.5L676.0 301.0L675.5 344.5L635.9 344.8C614.2 344.9 596.1 344.7 595.7 344.3ZM917.5 343.8C917.2 343.1 917.1 283.8 917.2 212.0L917.5 81.5L1040.3 81.2L1163.0 81.0L1162.8 110.7L1162.5 140.5L1080.2 140.8L998.0 141.0L998.0 161.5L998.0 182.0L1067.9 182.0L1137.8 182.0L1138.2 190.8C1138.4 195.6 1138.4 208.8 1138.1 220.2L1137.8 241.0L1074.0 241.0C1039.0 241.0 1007.5 241.3 1004.1 241.6L998.0 242.3L998.0 262.6C998.0 281.0 998.2 282.9 999.8 283.4C1000.7 283.7 1029.2 283.9 1063.0 283.8C1096.8 283.8 1133.2 283.8 1143.8 283.9L1163.0 284.0L1162.8 314.2L1162.5 344.5L1040.2 344.8C942.9 345.0 917.8 344.8 917.5 343.8ZM1200.5 343.8C1200.2 343.1 1200.1 283.8 1200.2 212.0L1200.5 81.5L1242.2 81.2L1284.0 81.0L1284.0 211.8C1284.0 312.2 1283.7 342.9 1282.8 343.8C1281.0 345.6 1201.1 345.5 1200.5 343.8ZM1328.5 343.8C1328.2 343.1 1328.1 283.8 1328.2 212.0L1328.5 81.5L1365.0 81.3L1401.5 81.0L1422.5 103.7C1434.0 116.2 1449.8 133.2 1457.5 141.5C1465.2 149.8 1484.1 170.3 1499.6 187.0C1515.0 203.8 1528.4 218.1 1529.3 218.9C1531.3 220.5 1531.1 227.5 1531.3 138.0L1531.5 81.5L1572.8 81.2L1614.0 81.0L1613.8 212.7L1613.5 344.5L1579.0 344.8L1544.5 345.0L1516.4 315.8C1501.0 299.7 1470.9 267.9 1449.5 245.2C1428.1 222.6 1410.2 204.0 1409.8 204.0C1409.4 204.0 1408.9 235.6 1408.8 274.2L1408.5 344.5L1368.7 344.8C1337.4 345.0 1328.8 344.8 1328.5 343.8ZM775.5 194.2C781.5 191.4 786.4 186.9 789.3 181.5C790.9 178.4 791.4 175.6 791.4 169.5C791.4 162.5 791.0 160.8 788.4 156.1C785.5 150.7 780.7 146.3 774.0 143.2C770.9 141.7 764.8 141.5 723.2 141.2L676.0 140.9L676.0 169.0L676.0 197.1L723.2 196.8C770.1 196.5 770.5 196.5 775.5 194.2Z"/></symbol>
+  <symbol id="rein-mark" viewBox="0 0 534 400"><path fill="currentColor" fill-rule="evenodd" d="M334.6 398.8C322.3 397.0 323.7 398.3 239.2 313.8C159.6 234.1 159.0 233.5 161.8 229.4C163.9 226.2 167.1 226.0 207.7 226.0C251.2 226.0 254.7 226.3 264.3 231.1C268.3 233.1 321.3 285.4 394.4 359.7C421.3 387.0 423.1 389.1 422.8 392.1C422.6 394.1 421.6 395.9 420.0 397.1C417.7 398.7 413.9 398.9 378.5 399.2C357.1 399.4 337.3 399.2 334.6 398.8ZM154.6 397.9C145.3 395.7 139.8 391.4 121.5 372.2C111.7 361.9 82.4 332.3 56.5 306.4C11.6 261.7 9.1 259.0 5.7 251.9C-1.5 237.0 -1.5 224.4 5.7 210.7C8.9 204.6 14.0 199.3 48.2 165.7C87.7 126.8 92.7 122.6 104.1 118.5C109.3 116.6 113.2 116.5 201.9 116.2C284.5 116.0 294.9 116.1 299.9 117.6C311.8 121.0 314.1 122.9 348.0 156.5C365.9 174.2 382.1 189.5 383.9 190.5C390.8 194.0 392.1 193.2 418.9 166.7C432.4 153.4 444.4 141.3 445.7 139.8C448.9 136.1 449.6 131.1 447.6 126.8C446.7 124.9 435.0 112.5 421.7 99.3C401.8 79.7 396.8 75.2 393.4 74.2C390.3 73.3 357.5 73.0 261.5 73.0L133.6 73.0L125.6 69.1C118.0 65.4 115.9 63.5 90.7 38.3C67.8 15.3 63.9 10.9 63.4 7.8C62.9 5.0 63.2 3.8 64.9 2.1L67.0 -0.0L239.4 -0.0C349.3 -0.0 413.7 0.4 417.1 1.0C420.1 1.5 426.2 3.8 430.7 6.0C439.4 10.3 440.7 11.6 506.7 80.2C524.2 98.5 529.5 106.4 532.5 119.1C535.6 132.5 534.1 144.3 527.4 158.0C524.0 165.1 521.1 168.2 475.6 213.8C431.2 258.4 422.1 266.8 413.3 271.4C403.3 276.5 384.5 277.7 373.0 274.0C359.1 269.5 355.7 266.6 316.9 227.1C296.9 206.7 278.7 189.1 276.5 187.8L272.5 185.5L203.2 185.2C134.3 184.9 134.0 185.0 129.0 187.1C125.0 188.8 120.7 192.7 107.9 206.1C93.0 221.7 91.7 223.3 91.3 227.4C91.0 230.0 91.3 232.7 92.1 234.2C92.9 235.7 126.1 270.0 166.0 310.5C205.9 351.1 239.3 385.4 240.2 386.9C242.8 390.8 242.5 395.4 239.5 397.4C237.4 398.8 232.4 399.0 197.8 398.9C176.2 398.8 156.8 398.4 154.6 397.9Z"/></symbol>
+  <symbol id="i-topo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="17" r="2.6"/><circle cx="18" cy="17" r="2.6"/><circle cx="12" cy="6.5" r="2.6"/><path d="M10.6 8.7 7.4 14.8M13.4 8.7l3.2 6.1M8.6 17h6.8"/></g></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5.5 5h13A2.5 2.5 0 0 1 21 7.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3.5V17h-1A2.5 2.5 0 0 1 3 14.5v-7A2.5 2.5 0 0 1 5.5 5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><path d="M5 19V13M10 19V9M15 19V11M20 19V5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5h5M10.5 3.5v5.2L5 18.2A1.9 1.9 0 0 0 6.7 21h10.6a1.9 1.9 0 0 0 1.7-2.8l-5.5-9.5V3.5"/><path d="M7.3 15h9.4"/></g></symbol>
+  <symbol id="i-modules" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></g></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6v.01" stroke-width="2.2"/></g></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13l-5.5 2-6-2-5.5 2Z M9 4.5v13M15 6.5v13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10.5l4 4 4-4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></g></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4.5M8 8.5l4-4 4 4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></g></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m10 7 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4.5 9.5 9 5M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 4.5-4.5L15 5m4.5 4.5H10a5.5 5.5 0 0 0 0 11h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-question" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 9a3 3 0 1 1 4.2 2.8c-.8.3-1.2 1-1.2 1.8v.4"/><path d="M12 17.5v.01"/></g></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.8v12.4a.8.8 0 0 0 1.2.7l10-6.2a.8.8 0 0 0 0-1.4l-10-6.2a.8.8 0 0 0-1.2.7Z" fill="currentColor"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M7.5 7.5h.01M7.5 16.5h.01" stroke-width="2.4"/></g></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="10" rx="1.8"/><path d="M3 18.5h18"/></g></symbol>
+  <symbol id="i-deployer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="m12 3.5 8 4.2v8.6L12 20.5l-8-4.2V7.7Z"/><path d="M4 7.7l8 4.3 8-4.3M12 12v8.5"/></g></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></g></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4.5 9V6.5a2 2 0 0 1 2-2H9M15 4.5h2.5a2 2 0 0 1 2 2V9M19.5 15v2.5a2 2 0 0 1-2 2H15M9 19.5H6.5a2 2 0 0 1-2-2V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-compose" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4.5H7A2.5 2.5 0 0 0 4.5 7v10A2.5 2.5 0 0 0 7 19.5h10a2.5 2.5 0 0 0 2.5-2.5v-4"/><path d="M17.6 3.9a1.9 1.9 0 0 1 2.7 2.7L12.6 14.3l-3.6.9.9-3.6Z"/></g></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/></g></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.8 7.2a2 2 0 0 1 2-2h3.6l2 2.2h6.8a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></g></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5.5M6 11.5l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></g></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6Z"/><path d="m9 12 2.2 2.2L15.5 10" stroke-linecap="round"/></g></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5.5 13.5H11L10 21l7.5-10.5H12Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-switch" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M8 10h8l-2-2M16 14H8l2 2"/></g></symbol>
+  <symbol id="i-traffic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14M14.5 4.5 18 8l-3.5 3.5M20 16H6M9.5 12.5 6 16l3.5 3.5"/></g></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h6v6M19 5l-8 8"/><path d="M17 14v3.5A2.5 2.5 0 0 1 14.5 20h-8A2.5 2.5 0 0 1 4 17.5v-8A2.5 2.5 0 0 1 6.5 7H10"/></g></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.3"/><path d="M12 16.8v.01" stroke-width="2.2"/></g></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="m7.5 10 2.5 2-2.5 2M12 15h4.5"/></g></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2" fill="currentColor"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+</svg>
+
+<div class="backdrop" data-backdrop aria-hidden="true"></div>
+<div class="intro" data-intro aria-hidden="true"><svg viewBox="-12 -12 1638 424"></svg></div>
+
+<a class="skip" href="#ask" data-skip>Ir para o campo de intent</a>
+
+<nav class="nav" aria-label="Seções">
+  <span class="nav-ind" data-nav-ind aria-hidden="true"></span>
+  <a href="#topologia" data-nav="topologia"><svg aria-hidden="true"><use href="#i-topo"/></svg>Topologia</a>
+  <a href="#intents" data-nav="intents"><svg aria-hidden="true"><use href="#i-chat"/></svg>Intents</a>
+  <a href="#monitor" data-nav="monitor" aria-label="Monitoramento"><svg aria-hidden="true"><use href="#i-monitor"/></svg><span class="lbl-long">Monitoramento</span><span class="lbl-short">Monitor</span></a>
+  <a href="#experimentos" data-nav="experimentos"><svg aria-hidden="true"><use href="#i-flask"/></svg>Experimentos</a>
+  <a href="#modulos" data-nav="modulos"><svg aria-hidden="true"><use href="#i-modules"/></svg>Módulos</a>
+  <a href="#sobre" data-nav="sobre"><svg aria-hidden="true"><use href="#i-info"/></svg>Sobre</a>
+</nav>
+
+<div class="window">
+  <header class="w-head">
+    <a class="brand" href="#topologia" aria-label="REIN, topologia"><svg viewBox="0 0 1614 400" aria-hidden="true"><use href="#rein-logo"/></svg></a>
+    <div class="w-tools" data-for="topologia" role="toolbar" aria-label="Topologia">
+      <button class="tool" type="button" data-tool="map" aria-pressed="false" data-tip="Mapa do Brasil" aria-label="Mapa do Brasil"><svg aria-hidden="true"><use href="#i-map"/></svg></button>
+      <button class="tool" type="button" data-tool="add" data-keep-pop data-tip="Adicionar" aria-label="Adicionar switch, host ou tráfego" aria-haspopup="menu" aria-expanded="false"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button class="tool" type="button" data-tool="services" data-tip="Serviços do deployer" aria-label="Serviços do deployer"><svg aria-hidden="true"><use href="#i-shield"/></svg></button>
+      <button class="tool" type="button" data-tool="traffic" data-tip="Tráfego" aria-label="Tráfego entre hosts"><svg aria-hidden="true"><use href="#i-traffic"/></svg></button>
+      <button class="tool" type="button" data-tool="look" data-keep-pop data-tip="Aparência" aria-label="Aparência" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true"><use href="#i-sliders"/></svg></button>
+      <span class="tool-sep" aria-hidden="true"></span>
+      <a class="tool" data-tool="onos" target="_blank" rel="noreferrer" data-tip="Abrir o ONOS (GUI2)" aria-label="Abrir a interface GUI2 do ONOS em nova aba"><svg aria-hidden="true"><use href="#i-external"/></svg></a>
+      <button class="tool" type="button" data-tool="import" data-tip="Importar .py" aria-label="Importar topologia .py"><svg aria-hidden="true"><use href="#i-import"/></svg></button>
+      <button class="tool" type="button" data-tool="export" data-tip="Exportar .py" aria-label="Exportar topologia .py"><svg aria-hidden="true"><use href="#i-export"/></svg></button>
+      <input type="file" accept=".py,text/x-python" data-import hidden>
+    </div>
+    <button class="conn" type="button" data-conn data-keep-pop aria-haspopup="dialog" aria-expanded="false"><span class="dot"></span><span data-conn-label>lft · cdn-qoe</span></button>
+  </header>
+
+  <main class="pages" id="main">
+    <section class="page" data-page="topologia" aria-labelledby="t-title">
+      <div class="topo-head page-head">
+        <h1 id="t-title" tabindex="-1">Sua rede <span data-net-status></span></h1>
+        <p>Conectividade orientada a intenções.</p>
+      </div>
+      <div class="stage" data-stage data-slot="topology">
+        <div class="world" data-world></div>
+        <section class="tpanel" data-tpanel hidden aria-label="Tráfego em curso"></section>
+        <div class="zoom" role="toolbar" aria-label="Zoom" data-zoom-bar>
+          <button type="button" data-zoom="in" aria-label="Aproximar" data-tip="Aproximar  +"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button type="button" data-zoom="out" aria-label="Afastar" data-tip="Afastar  −"><svg aria-hidden="true"><use href="#i-minus"/></svg></button>
+          <button type="button" data-zoom="fit" aria-label="Enquadrar a rede" data-tip="Enquadrar  0"><svg aria-hidden="true"><use href="#i-fit"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="intents" aria-labelledby="i-title">
+      <div class="chat">
+        <aside class="chat-side">
+          <div class="side-head">
+            <h1 id="i-title" tabindex="-1">Intents</h1>
+            <button class="tool" type="button" data-new-intent data-tip="Nova intent" aria-label="Nova intent"><svg aria-hidden="true"><use href="#i-compose"/></svg></button>
+          </div>
+          <label class="search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Buscar" data-i-search aria-label="Buscar intents" autocomplete="off"></label>
+          <nav class="i-list" data-i-list aria-label="Intents"></nav>
+        </aside>
+        <div class="chat-main">
+          <div class="thread" data-thread aria-live="polite" data-slot="chat"></div>
+          <div class="suggest" data-suggest aria-label="Sugestões"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="monitor" aria-labelledby="m-title">
+      <div class="page-head"><h1 id="m-title" tabindex="-1">Monitoramento</h1><p>O que o observer vê em cada fluxo com intent.</p></div>
+      <div class="page-scroll" data-slot="observer"></div>
+    </section>
+
+    <section class="page" data-page="experimentos" aria-labelledby="e-title">
+      <div class="page-head"><h1 id="e-title" tabindex="-1">Experimentos</h1><p>Os runners do LFT e os seus planos, executados no testbed com resultados em results/.</p></div>
+      <div class="page-scroll" data-slot="experiments"></div>
+    </section>
+
+    <section class="page" data-page="modulos" aria-labelledby="mo-title">
+      <div class="page-head"><h1 id="mo-title" tabindex="-1">Módulos</h1><p>Do pedido à execução. Inspecione cada serviço do REIN.</p></div>
+      <div class="page-scroll" data-slot="modules"></div>
+    </section>
+
+    <section class="page" data-page="sobre" aria-labelledby="s-title">
+      <div class="page-head"><h1 id="s-title" tabindex="-1">Sobre</h1><p>O que é o REIN e como as peças se conectam.</p></div>
+      <div class="page-scroll"></div>
+    </section>
+  </main>
+
+  <form class="composer" data-composer data-slot="composer">
+    <div class="composer-field">
+      <button class="model-btn" type="button" data-models data-keep-pop aria-haspopup="dialog" aria-expanded="false"><span data-model-label>qwen3.6</span><svg aria-hidden="true"><use href="#i-chevron"/></svg></button>
+      <label class="sr-only" for="ask">Descreva o que a rede precisa garantir</label>
+      <textarea id="ask" rows="1" placeholder="Descreva o que a rede precisa garantir" autocomplete="off"></textarea>
+      <button class="clear" type="button" data-clear aria-label="Limpar"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <button class="btn btn-blue send" type="submit" data-send disabled aria-label="Revisar"><span class="send-label">Revisar</span><svg class="send-ic" aria-hidden="true"><use href="#i-arrow-up"/></svg></button>
+  </form>
+
+  <section class="card" data-card hidden aria-live="polite" data-slot="intent-review"></section>
+</div>
+
+<section class="pop" data-pop="link" role="dialog" aria-label="Link" hidden data-slot="link-editor"></section>
+<section class="pop" data-pop="node" role="dialog" aria-label="Nó" hidden data-slot="node-detail"></section>
+<section class="pop pop-look" data-pop="look" role="dialog" aria-label="Aparência" hidden></section>
+<section class="pop pop-menu" data-pop="add" role="menu" aria-label="Adicionar" hidden></section>
+<section class="pop pop-iface" data-pop="iface" role="dialog" aria-label="Interface" hidden></section>
+<section class="pop pop-conn" data-pop="conn" role="dialog" aria-label="Testbed" hidden></section>
+<section class="pop" data-pop="models" role="dialog" aria-label="Modelo de tradução" hidden data-slot="model-picker"></section>
+
+<dialog class="sheet sheet-md" data-sheet="host" aria-labelledby="host-title">
+  <form class="sheet-in" data-host-form data-slot="host-form">
+    <div class="sheet-head"><div><h2 id="host-title" data-host-title>Adicionar host</h2><p>Um container Docker ligado ao switch por um par veth. Ao responder ARP, o ONOS o descobre.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="fgrid">
+      <div class="frow"><span class="flabel">Papel</span><div class="seg" role="group" aria-label="Papel"><button type="button" data-role="Cliente">Cliente</button><button type="button" data-role="Servidor">Servidor</button></div><input type="hidden" name="role"></div>
+      <label class="frow"><span class="flabel">Nome</span><span class="fctl"><input name="name" required pattern="(cl|ds)[0-9]+" autocomplete="off" spellcheck="false"><small>cl para cliente, ds para servidor</small></span></label>
+      <label class="frow"><span class="flabel">Switch</span><span class="fctl"><select name="sw" aria-label="Switch"></select></span></label>
+      <label class="frow"><span class="flabel">Endereço</span><span class="fctl"><input name="ip" inputmode="decimal" autocomplete="off"><small>/24 na rede 192.168.0.0</small></span></label>
+      <label class="frow"><span class="flabel">Imagem</span><span class="fctl"><select name="image" aria-label="Imagem Docker"><option value="rein-dash-video">rein-dash-video</option><option value="rein-dash-client">rein-dash-client</option><option value="pydash">pydash</option><option value="lft-iperf:latest">lft-iperf:latest</option><option value="networkstatic/iperf3">networkstatic/iperf3</option><option value="nginx:alpine">nginx:alpine</option><option value="ubuntu:22.04">ubuntu:22.04</option><option value="__other">Outra imagem…</option></select><small data-image-hint></small></span></label>
+      <label class="frow" data-custom-image hidden><span class="flabel">Nome da imagem</span><span class="fctl"><input name="custom" placeholder="registry/imagem:tag" autocomplete="off" spellcheck="false"></span></label>
+    </div>
+    <div class="fcli"><span class="flabel">O que o testbed executa</span><pre data-host-cli></pre></div>
+    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-host-remove hidden>Remover host</button><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar host</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet sheet-md" data-sheet="switch" aria-labelledby="sw-title">
+  <form class="sheet-in" data-switch-form>
+    <div class="sheet-head"><div><h2 id="sw-title">Adicionar switch</h2><p>Um container Open vSwitch com datapath próprio, ligado ao controlador ONOS. O dp-desc guarda o estado.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="fgrid">
+      <label class="frow"><span class="flabel">Nome</span><span class="fctl"><input name="name" required pattern="s[0-9]+" autocomplete="off" spellcheck="false"><small data-dpid></small></span></label>
+      <label class="frow"><span class="flabel">Estado</span><span class="fctl"><select name="uf" aria-label="Estado (dp-desc)" data-uf></select><small>other-config:dp-desc</small></span></label>
+    </div>
+    <div class="fsec"><div class="fsec-h"><span class="flabel">Links</span><button class="btn btn-plain" type="button" data-add-conn><svg aria-hidden="true"><use href="#i-plus"/></svg>Adicionar link</button></div>
+      <div class="conns" data-conns></div></div>
+    <div class="fcli"><span class="flabel">O que o testbed executa</span><pre data-sw-cli></pre></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar switch</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet sheet-lg" data-sheet="services" aria-labelledby="svc-title">
+  <div class="sheet-in svc">
+    <div class="sheet-head"><div><h2 id="svc-title">Serviços do deployer</h2><p>O que o deployer sabe instalar no ONOS. Cada serviço vira uma intent em Nile e passa pela sua aprovação.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="svc-body"><nav class="svc-list" data-svc-list aria-label="Serviços"></nav><form class="svc-form" data-svc-form></form></div>
+  </div>
+</dialog>
+
+<dialog class="sheet sheet-md" data-sheet="traffic" aria-labelledby="tr-title">
+  <form class="sheet-in" data-traffic-form>
+    <div class="sheet-head"><div><h2 id="tr-title">Iniciar tráfego</h2><p>As ferramentas rodam dentro dos containers e o tráfego atravessa os veth, as filas tc e os switches OVS.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="fgrid" data-traffic-fields></div>
+    <div class="fcli"><span class="flabel">Comandos</span><pre data-traffic-cli></pre></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit"><svg aria-hidden="true"><use href="#i-play"/></svg>Iniciar</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet sheet-lg" data-sheet="tlog" aria-labelledby="tl-title">
+  <div class="sheet-in">
+    <div class="sheet-head"><div><h2 id="tl-title" data-tl-title>Log</h2><p data-tl-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="tl-bar"><div class="seg" role="group" aria-label="Lado"><button type="button" data-tl-side="client" aria-pressed="true">Cliente</button><button type="button" data-tl-side="server" aria-pressed="false">Servidor</button></div><span class="tl-file" data-tl-file></span></div>
+    <pre class="term" data-tl-log></pre>
+    <div class="sheet-foot"><button class="btn" type="button" data-tl-copy>Copiar caminho</button><button class="btn btn-danger" type="button" data-tl-stop>Parar tráfego</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet sheet-xl" data-sheet="help" aria-labelledby="help-title">
+  <div class="sheet-in help">
+    <div class="sheet-head"><div><h2 id="help-title">Guia das intents</h2><p>Como pedir, como ler a Nile e o que o deployer executa.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="help-body"><nav class="help-toc" data-help-toc aria-label="Seções"></nav><article class="help-doc" data-help-doc></article></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" data-sheet="video" aria-labelledby="video-title">
+  <div class="sheet-in" data-slot="player">
+    <div class="sheet-head"><div><h2 id="video-title" data-video-title>Vídeo</h2><p data-video-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="player"><canvas data-video-canvas aria-label="Vídeo transmitido ao cliente"></canvas></div>
+    <dl class="player-meta" data-video-meta></dl>
+    <div class="sheet-foot"><button class="btn" type="button" data-video-play>Conectar ao dash.js</button></div>
+  </div>
+</dialog>
+
+<div class="notices" data-notices aria-live="polite"></div>
+</body>
+</html>
