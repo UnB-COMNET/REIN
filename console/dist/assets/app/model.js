@@ -360,7 +360,7 @@
   };
 
   function seedConversation() {
-    M.intents = [{ id: 'q1', ask: 'Quero vídeo sem travar para o cliente 192.168.0.2', nile: "define intent q1: from endpoint('192.168.0.2') add service('cdn-qoe')", state: 'deployed', when: '14:28', client: 'cl0', kind: 'cdn-qoe', flows: 6 }];
+    M.intents = [{ id: 'q1', ask: 'Quero vídeo sem travar para o cliente 192.168.0.2', nile: "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')", state: 'deployed', when: '14:28', client: 'cl0', kind: 'cdn-qoe', flows: 6 }];
     M.chat = [
       { role: 'user', text: 'Quero vídeo sem travar para o cliente 192.168.0.2', time: '14:26', source: 'Topologia', intent: 'q1' },
       { role: 'rein', kind: 'proposal', intent: 'q1', time: '14:26', steps: [['Contexto', 0.2], ['Exemplos', 0.1], ['Tradução com qwen3.6', 1.4]] },
@@ -417,7 +417,7 @@
     let nile, kind;
     if (/ssh|bloque|block/i.test(text)) { const pr = (text.match(/\b(tcp|udp|icmp)\b/i) || [, /ssh/i.test(text) ? 'ssh' : 'tcp'])[1].toLowerCase(); nile = `define intent ${id}: for endpoint('${target}') block protocol('${pr}')`; kind = 'block'; }
     else if (/limit|banda|mbps|mb\/s/i.test(text)) { const n = (text.match(/(\d+)\s*(?:mbps|mb\/s|mbit)/i) || [, '10'])[1]; nile = `define intent ${id}: for endpoint('${target}') set bandwidth('max', '${n}', 'mbps')`; kind = 'bandwidth'; }
-    else { nile = `define intent ${id}: from endpoint('${target}') add service('cdn-qoe')`; kind = 'cdn-qoe'; }
+    else { nile = `define intent ${id}: for endpoint('${target}') add service('cdn-qoe')`; kind = 'cdn-qoe'; }
     const intent = { id, ask: text, nile, state: 'pending', when: null, client: client.id, kind };
     M.intents.push(intent);
     msg.kind = 'proposal';
