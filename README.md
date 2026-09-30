@@ -14,20 +14,30 @@ REIN was developed to operate on top of the ONOS (Open Network Operating System)
 
 ## Prerequisites
 
-Before running REIN, make sure you have the following installed:
-
-- Docker
-- Docker Compose v2
-
-## Running REIN
-
-### First-time setup
+Before running REIN, make sure you have Docker and Docker Compose v2
+installed. On a fresh Ubuntu host, one command handles that and the rest of
+first-time setup:
 
 ```bash
-docker compose build
-````
+chmod +x dependencies.sh
+sudo ./dependencies.sh
+```
 
-This command builds all required images.
+`dependencies.sh` does everything, in order, and is idempotent (safe to
+rerun). The full output also goes to `dependencies.log` (overwritten on
+every run):
+
+1. Installs Docker CE + Compose plugin (pinned versions, official Docker
+   repository) and adds you to the `docker` group.
+2. Creates `deployer/.env` with the default ONOS credentials, if it doesn't
+   exist yet.
+3. Builds the `deployer`, `supervisor`, `collector` and `gui` images via
+   `docker compose build`.
+
+If Docker is already installed, create `deployer/.env` yourself (see step 2
+above) and run `docker compose build` (see below) instead.
+
+## Running REIN
 
 ### Starting the environment
 
