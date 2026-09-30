@@ -89,7 +89,6 @@ def install_bidirectional_custom_path(onos, netgraph, client_ip, server_ip, path
 
 
     # Final switch forwards the packet to the Server host
-    last_sw_id = device_map[estados[path_indices[-1][1]]]
     srv_sw, srv_port = _get_host_location(netgraph, server_ip)
     resps.append(onos._make_request("POST", f"/flows/{urllib.parse.quote_plus(srv_sw)}", 
                  data=_flow_body(client_ip, server_ip, srv_port, srv_sw, priority)))
@@ -115,16 +114,17 @@ def install_bidirectional_custom_path(onos, netgraph, client_ip, server_ip, path
 
 
 def remove_old_flows(onos, client_ip, server_ip, device_map):
+    if not server_ip:
+        return  # first deploy for this client -- no prior flow to remove
+
     print(f" [LIMPEZA] Varrendo e apagando regras antigas para {client_ip} <-> {server_ip}...")
     
     for uf, device_id in device_map.items():
         # Get all frules installed inside a switch
         res = onos._make_request("GET", f"/flows/{urllib.parse.quote_plus(device_id)}")
         
-        if not res or "flows" not in res:
-            continue
-            
-        for flow in res["flows"]:
+        flows = ((res or {}).get("content") or {}).get("flows", [])
+        for flow in flows:
             # Ignore default ONOS frules (ARP, LLDP) and focuses only in IPv4 traffic
             criteria = flow.get("selector", {}).get("criteria", [])
             
