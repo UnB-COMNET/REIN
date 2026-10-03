@@ -50,6 +50,15 @@ class SupervisorService:
                  target_ufs[0] if target_ufs else None, source_uf,
                  float(tx[0]) if tx else drift.DEFAULT_SERVER_TX)
 
+    # Brief: Stops monitoring a client (its intent was removed); False when it had no monitor
+    def forget(self, client_ip: str) -> bool:
+        with self._lock:
+            m = self._monitors.pop(client_ip, None)
+        if m:
+            m.close()
+            logger.info("[SUPERVISOR] Monitor for %s removed  (total: %d)", client_ip, len(self._monitors))
+        return m is not None
+
     # Brief: Deduplicated edges across all clients' active paths, as name pairs:
     #   [["AM", "BA"], ["BA", "CE"]]
     def get_active_links(self) -> list:
