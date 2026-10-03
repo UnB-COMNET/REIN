@@ -7,7 +7,7 @@ import pytest
 
 import app as api
 
-# Stands in for `sudo lft`: `testbed ...` prints LFT's state; any other command prints one step on stderr
+# Stands in for `sudo lft`: `topology show` and `sync` print LFT's state; any other command prints one step on stderr
 # (as lft --json does) and its result, with the args it got, on stdout
 FAKE_LFT = textwrap.dedent('''
     import json, sys
@@ -17,7 +17,7 @@ FAKE_LFT = textwrap.dedent('''
         {"id": "s1", "kind": "switch", "dpid": "of:0000000000000002", "desc": None, "off": False},
         {"id": "ds0", "kind": "host", "role": None, "sw": "s0", "ip": "192.168.0.1", "image": "lft-dash-video"},
         {"id": "cl0", "kind": "host", "role": "client", "sw": "s1", "ip": "192.168.0.2", "image": "lft-dash-client"}]}
-    if args[:1] == ["testbed"]:
+    if args[:2] in (["topology", "show"], ["topology", "sync"]):
         print(json.dumps(state))
         sys.exit(0)
     print(json.dumps({"step": 1, "of": 1, "title": "Shaping s0s1 in s0"}), file=sys.stderr)
@@ -28,11 +28,27 @@ FAKE_LFT = textwrap.dedent('''
 ''')
 
 
+# Stands in for `rein model [ID] --json`: the models on stdout, what it does on stderr; llama does not fit
+FAKE_REIN = textwrap.dedent('''
+    import json, sys
+    chosen = sys.argv[2] if len(sys.argv) > 3 else "qwen3.6"
+    if chosen == "llama":
+        print(json.dumps({"ok": False, "error": "llama cannot be used on this machine: needs 4 GB, 3 GB free"}))
+        sys.exit(1)
+    if len(sys.argv) > 3:
+        print(f"starting {chosen}", file=sys.stderr)
+    print(json.dumps({"gpu": {"total_gb": 4, "free_gb": 3}, "selected": "qwen3.6", "chosen": chosen,
+                      "models": [{"id": "qwen3.6", "fits": True}, {"id": "llama", "fits": False}, {"id": "lite", "fits": True}]}))
+''')
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     fake = tmp_path / "lft.py"
     fake.write_text(FAKE_LFT)
     monkeypatch.setattr(api, "LFT", [sys.executable, str(fake)])
+    (tmp_path / "rein.py").write_text(FAKE_REIN)
+    monkeypatch.setattr(api, "REIN_CLI", [sys.executable, str(tmp_path / "rein.py")])
     monkeypatch.setattr(api, "HOME", tmp_path)
     monkeypatch.setattr(api, "LAYOUT", tmp_path / "layout.json")
     return api.app.test_client()
@@ -112,6 +128,48 @@ def test_a_failing_command_fails_the_job_with_the_lft_error(client, monkeypatch)
     r = client.post("/api/testbed/switches/s1/start")
     status = events(client, r.get_json()["job"])[-1][1]
     assert status == {"status": "failed", "result": {"ok": False, "error": "boom"}, "error": "boom"}
+
+
+def test_the_models_are_reins_and_choosing_one_is_a_job(client):
+    assert client.get("/api/models").get_json()["chosen"] == "qwen3.6"
+    got = events(client, client.post("/api/models/lite").get_json()["job"])
+    assert got[0] == ("stdout", {"line": "starting lite"})
+    assert got[-1][1]["status"] == "done" and got[-1][1]["result"]["chosen"] == "lite"
+    refused = events(client, client.post("/api/models/llama").get_json()["job"])[-1][1]
+    assert refused["status"] == "failed" and "needs 4 GB" in refused["error"]
+    assert client.post("/api/models/a;b").status_code == 400
+
+
+def test_a_service_log_can_leave_out_the_requests(client, monkeypatch):
+    printed = ('2026-10-03T21:52:30.1Z 127.0.0.1 - - [03/Oct/2026 21:52:30] "GET /events?after=0 HTTP/1.1" 200 -\n'
+               '2026-10-03T21:52:30.2Z INFO:werkzeug:127.0.0.1 - - [03/Oct/2026 21:52:30] "POST /deploy HTTP/1.1" 200 -\n'
+               '2026-10-03T21:52:30.3Z [CDN-QoE] Best path: SP -> MG -> ES\n')
+    monkeypatch.setattr(api.subprocess, "run", lambda *a, **k: type("Out", (), {"stdout": printed, "stderr": ""}))
+    assert len(client.get("/api/rein/logs/deployer").get_json()) == 3
+    assert [r["text"] for r in client.get("/api/rein/logs/deployer?requests=0").get_json()] == ["[CDN-QoE] Best path: SP -> MG -> ES"]
+
+
+def test_monitoring_is_what_the_collector_stored(client, monkeypatch):
+    asked = []
+
+    def stored(sql, **params):
+        asked.append(params)
+        return ([[100, 4.2]] if "throughput" in sql else [[100, 40.0]] if "latency" in sql
+                else [["sdn.onos.requests", 55.0, 120], ["sdn.port.drops", 3.0, 118]])
+    a, b = "of:0000000000000004", "of:0000000000000002"
+    monkeypatch.setattr(api, "clickhouse", stored)
+    monkeypatch.setattr(api, "onos_hosts", lambda: {"192.168.0.2": (a, "3")})
+    got = client.get(f"/api/monitor?ip=192.168.0.2&path={a},{b}&range=3600").get_json()
+    assert got == {"step": 20, "thr": [[100, 4.2]], "lat": [[100, 40.0]], "requests": 55, "drops": 3, "last": 120}
+    assert (asked[0]["device"], asked[0]["port"]) == (a, "3")   # the port ONOS sees the client at
+    assert asked[1]["links"] == f"[('{a}','{b}'),('{b}','{a}')]"   # each link, both ways
+    assert client.get("/api/monitor?path=s0;drop").status_code == 400
+    monkeypatch.setattr(api, "clickhouse", mock_down)
+    assert client.get("/api/monitor?range=300").status_code == 503
+
+
+def mock_down(sql, **params):
+    raise api.requests.ConnectionError("refused")
 
 
 def test_the_console_is_served(client):

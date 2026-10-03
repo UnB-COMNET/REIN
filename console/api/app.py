@@ -5,7 +5,8 @@
 # /api/deployer and /api/supervisor. The testbed state is LFT's (/var/lib/lft); the console keeps only
 # where its nodes are drawn (~/.rein-console/layout.json).
 #   GET  /api/testbed[?sync=1] /api/testbed/export.py /api/ifaces[?node=] /api/stats
-#   POST /api/testbed/import (body: topology .py)                                    -> {job}
+#   POST /api/testbed/import (body: topology .py)   POST /api/testbed/clean                -> {job}
+#   GET|PUT /api/onos/fwd {active}: ONOS reactive forwarding
 #   POST /api/testbed/switches {id?, uf, links: [{to, rate, delay, jitter, loss}]}     -> {job}
 #   POST /api/testbed/switches/<id>/stop|start   DELETE /api/testbed/switches/<id>    -> {job}
 #   PUT  /api/testbed/links/<a-b> {rate?, delay?, jitter?, loss?, down?, reset?}       -> {job}
@@ -16,7 +17,9 @@
 #   GET|POST /api/traffic   DELETE /api/traffic/<id>   GET /api/traffic/<id>/logs (SSE)
 #   GET  /api/experiments   POST /api/experiments/<runner>/run   POST /api/experiments/plan (body: timeline .py)
 #   GET  /api/runs   GET /api/runs/<id>/events (SSE)   POST /api/runs/<id>/stop   GET /api/results/<path>
-#   GET  /api/rein/logs/<service>
+#   GET  /api/rein/logs/<service>[?requests=0]
+#   GET  /api/models   POST /api/models/<id> (rein model: the one in use)                 -> {job}
+#   GET  /api/monitor?ip=&path=&range= (the collector module's measurements, from ClickHouse)
 #   *    /api/profiler/<path>  /api/deployer/<path>  /api/supervisor/<path>
 
 import ast
@@ -39,19 +42,28 @@ HOME = Path(os.environ.get("CONSOLE_HOME", Path.home() / ".rein-console"))   # i
 REIN = Path(__file__).resolve().parents[2]
 SUDO = [] if os.geteuid() == 0 else ["sudo", "-n"]
 LFT = [*SUDO, os.environ.get("LFT_BIN", "/usr/local/bin/lft")]
+REIN_CLI = [str(REIN / "rein")]   # the models are rein's: it measures the VRAM and starts the one chosen
+ONOS = os.environ.get("ONOS_URL", "http://127.0.0.1:8181/onos/v1")
+ONOS_AUTH = (os.environ.get("ONOSUSER", "onos"), os.environ.get("ONOSPASS", "rocks"))
+CLICKHOUSE = os.environ.get("CLICKHOUSE_URL", "http://127.0.0.1:8123")   # the collector module's database
 SERVICES = {"profiler": os.environ.get("PROFILER_URL", "http://127.0.0.1:5300"),
             "deployer": os.environ.get("DEPLOYER_URL", "http://127.0.0.1:5000"),
             "supervisor": os.environ.get("SUPERVISOR_URL", "http://127.0.0.1:5151")}
 # Images hosts may run: the ones LFT builds locally, plus CONSOLE_IMAGES (comma separated)
-IMAGES = ["lft-dash-video", "lft-dash-client", "lft-iperf", "neubot/dash", "neubot/dash-client",
+IMAGES = ["lft-dash-video", "lft-dash-live", "lft-pydash-server", "lft-dash-client", "lft-pydash-client", "lft-iperf",
+          "neubot/dash", "neubot/dash-client",
           *filter(None, os.environ.get("CONSOLE_IMAGES", "").split(","))]
 RUNNERS = ("diamond", "rnp", "dash", "dash-load")
 
 HOST, SWITCH, IFACE = re.compile(r"^(cl|ds)\d+$"), re.compile(r"^s\d+$"), re.compile(r"^[a-z0-9]+$")
+MODEL = re.compile(r"^[\w.-]+$")
+DPID = re.compile(r"^of:[0-9a-f]{16}$")
+ACCESS = re.compile(r'"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) \S+ HTTP/[\d.]+" \d{3}')   # a request, as Flask's server logs it
 SUBNET = ipaddress.ip_network("192.168.0.0/24")
 
 app = Flask(__name__, static_folder=None)
 topology_lock = threading.Lock()   # topology changes run one at a time; traffic and reads do not wait
+model_lock = threading.Lock()      # and so do model changes
 jobs, runs, ids = {}, {}, itertools.count(1)
 
 
@@ -78,11 +90,11 @@ def lft_json(*args):
 # ---------------------------------------------------------------- jobs
 
 class Job:
-    """One or more lft commands run in the background, their progress kept as events for the UI:
-    step {step, of, key, title, cmds}, stdout {line}, status {status, result, error}"""
+    """One or more commands of lft (or of `command`) run in the background, their progress kept as
+    events for the UI: step {step, of, key, title, cmds}, stdout {line}, status {status, result, error}"""
 
-    def __init__(self, title: str, calls: list, lock=None):
-        self.id, self.title, self.calls, self.lock = f"j{next(ids)}", title, calls, lock
+    def __init__(self, title: str, calls: list, lock=None, command: list = None):
+        self.id, self.title, self.calls, self.lock, self.command = f"j{next(ids)}", title, calls, lock, command
         self.events, self.status, self.cond = [], "queued", threading.Condition()
         jobs[self.id] = self
         threading.Thread(target=self.run, daemon=True).start()
@@ -96,8 +108,9 @@ class Job:
         result, error = None, None
         with self.lock or threading.Lock():
             self.status = "running"
+            command = self.command or LFT
             for args in self.calls:
-                proc = subprocess.Popen([*LFT, *args, "--json"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                proc = subprocess.Popen([*command, *args, "--json"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 out = []
                 reader = threading.Thread(target=lambda: out.append(proc.stdout.read()))
                 reader.start()
@@ -119,7 +132,7 @@ class Job:
                 if isinstance(result, dict) and "state" in result:
                     result["state"] = ui_state(result["state"])
                 if proc.returncode:
-                    error = (result or {}).get("error") or f"lft {' '.join(args)} exited with {proc.returncode}"
+                    error = (result or {}).get("error") or f"{Path(command[-1]).name} {' '.join(args)} exited with {proc.returncode}"
                     break
         self.status = "failed" if error else "done"
         self.emit("status", status=self.status, result=result, error=error)
@@ -144,8 +157,8 @@ def sse(kind: str, data) -> str:
     return f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def job(title: str, *calls, lock=topology_lock):
-    return jsonify(job=Job(title, list(calls), lock).id), 202
+def job(title: str, *calls, lock=topology_lock, command: list = None):
+    return jsonify(job=Job(title, list(calls), lock, command).id), 202
 
 
 @app.route("/api/jobs/<jid>")
@@ -239,7 +252,7 @@ def ui_state(state: dict) -> dict:
 
 
 def lft_state() -> dict:
-    code, data, err = lft("testbed", "show")
+    code, data, err = lft("topology", "show")
     if data is None:
         abort(502, (err or "lft failed").strip()[-500:])
     return data
@@ -247,7 +260,7 @@ def lft_state() -> dict:
 
 @app.route("/api/testbed")
 def testbed():
-    code, data, err = lft("testbed", "sync" if request.args.get("sync") else "show")
+    code, data, err = lft("topology", "sync" if request.args.get("sync") else "show")
     if data is None:
         abort(502, (err or "lft failed").strip()[-500:])
     return jsonify(ui_state(data))
@@ -279,6 +292,27 @@ def import_py():
             where = {k: {"x": v[0], "y": v[1]} for k, v in ast.literal_eval(statement.value).items()}
     LAYOUT.write_text(json.dumps(where))
     return job(f"Importing {stem}", ["topology", "create", "--path", str(path), "--detach", "--disable-fwd"])
+
+
+# Brief: Removes the testbed's containers, ONOS included (lft utils clean)
+@app.route("/api/testbed/clean", methods=["POST"])
+def clean_testbed():
+    return job("Removing the testbed", ["utils", "clean"])
+
+
+# Brief: ONOS reactive forwarding (org.onosproject.fwd): without it only the paths the deployer installs
+# carry traffic; with it any two hosts reach each other
+@app.route("/api/onos/fwd", methods=["GET", "PUT"])
+def onos_fwd():
+    url = f"{ONOS}/applications/org.onosproject.fwd"
+    try:
+        if request.method == "PUT":
+            active = bool(body().get("active"))
+            requests.request("POST" if active else "DELETE", f"{url}/active", auth=ONOS_AUTH, timeout=15).raise_for_status()
+        state = requests.get(url, auth=ONOS_AUTH, timeout=5).json().get("state")
+    except requests.RequestException as error:
+        return jsonify(error="ONOS unreachable", detail=str(error)), 503
+    return jsonify(active=state == "ACTIVE")
 
 
 # Brief: A new switch: the next free s<n> unless given, with datapath n+1 and its UF as dp-desc (how
@@ -380,6 +414,72 @@ def stats():
             abort(502, err[-500:])
         _stats.update(at=time.time(), data=data)
     return jsonify(_stats["data"])
+
+
+# ---------------------------------------------------------------- monitoring
+
+# The collector module's metrics (collector/README.md), per `step` seconds of the last `span`.
+# Throughput: what a switch port sends, in Mb/s. Latency: the sum over a path's links, both ways, in ms.
+# Totals: how much each counter grew (they are cumulative), and when the last sample came
+BUCKET = "toUnixTimestamp(toStartOfInterval(TimeUnix, INTERVAL {step:UInt32} SECOND))"
+SINCE = "TimeUnix >= now() - INTERVAL {span:UInt32} SECOND"
+THROUGHPUT = f"""SELECT {BUCKET} AS t, avg(Value) / 1e6 FROM otel_metrics_gauge
+    WHERE MetricName = 'sdn.port.throughput' AND Attributes['device_id'] = {{device:String}}
+    AND Attributes['port'] = {{port:String}} AND Attributes['direction'] = 'sent' AND {SINCE} GROUP BY t ORDER BY t"""
+LATENCY = f"""SELECT t, sum(v) FROM (SELECT {BUCKET} AS t, avg(Value) AS v FROM otel_metrics_gauge
+    WHERE MetricName = 'sdn.link.latency' AND {SINCE}
+    AND (Attributes['src_device'], Attributes['dst_device']) IN {{links:Array(Tuple(String, String))}}
+    GROUP BY t, Attributes['src_device'], Attributes['dst_device']) GROUP BY t ORDER BY t"""
+TOTALS = f"""SELECT MetricName, sum(grown), toUnixTimestamp(max(last)) FROM (
+    SELECT MetricName, max(Value) - min(Value) AS grown, max(TimeUnix) AS last FROM otel_metrics_sum
+    WHERE MetricName IN ('sdn.onos.requests', 'sdn.port.drops') AND {SINCE} GROUP BY MetricName, Attributes)
+    GROUP BY MetricName"""
+_hosts = {"at": 0.0, "data": {}}
+
+
+# Brief: One query to the collector module's database (ClickHouse, database otel)
+# Params:
+#   String sql: The query, its values as {name:Type}
+#   params: Those values
+# Return:
+#   list of the rows, each a list
+def clickhouse(sql: str, **params) -> list:
+    r = requests.post(CLICKHOUSE, params={"database": "otel", **{f"param_{k}": v for k, v in params.items()}},
+                      data=f"{sql} FORMAT JSONCompact", timeout=10)
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+# Brief: Where ONOS sees each host, by IP: (switch dpid, port). Kept for 30 s
+def onos_hosts() -> dict:
+    if time.time() - _hosts["at"] > 30:
+        hosts = requests.get(f"{ONOS}/hosts", auth=ONOS_AUTH, timeout=5).json()["hosts"]
+        _hosts.update(at=time.time(), data={address: (h["locations"][0]["elementId"], h["locations"][0]["port"])
+                                             for h in hosts if h.get("locations") for address in h["ipAddresses"]})
+    return _hosts["data"]
+
+
+# Brief: What the collector module measured for a client: the throughput its switch sends it, the RTT of
+# its path and, network wide, the collector's requests to ONOS and the packets dropped
+#   GET /api/monitor?ip=<client>&path=<dpid,dpid,...>&range=<seconds>
+# Return:
+#   JSON {step, thr: [[unix time, Mb/s]], lat: [[unix time, ms]], requests, drops, last: unix time or None}
+@app.route("/api/monitor")
+def monitor():
+    span = int(float(number(request.args.get("range", 900), 60, 86400, "range")))
+    path = [name(d, DPID, "switch") for d in request.args.get("path", "").split(",") if d]
+    client = ip(request.args["ip"]) if request.args.get("ip") else None
+    links = ",".join(f"('{a}','{b}'),('{b}','{a}')" for a, b in zip(path, path[1:]))
+    window = {"step": max(5, span // 180 // 5 * 5), "span": span}
+    try:
+        device, port = onos_hosts().get(client, (None, None))
+        thr = clickhouse(THROUGHPUT, device=device, port=port, **window) if device else []
+        lat = clickhouse(LATENCY, links=f"[{links}]", **window) if links else []
+        totals = {metric: (grown, last) for metric, grown, last in clickhouse(TOTALS, span=span)}
+    except (requests.RequestException, ValueError, KeyError) as error:
+        return jsonify(error="the collector's database does not answer", detail=str(error)), 503
+    return jsonify(step=window["step"], thr=thr, lat=lat, last=max((last for _, last in totals.values()), default=None),
+                   requests=round(totals.get("sdn.onos.requests", (0, 0))[0]), drops=round(totals.get("sdn.port.drops", (0, 0))[0]))
 
 
 # ---------------------------------------------------------------- captures and traffic
@@ -582,19 +682,38 @@ def results_file(path):
 
 # ---------------------------------------------------------------- REIN services
 
-# Brief: The last lines a REIN service printed (docker logs), without terminal colors
+# Brief: The last 200 lines a REIN service printed (docker logs), without terminal colors. ?requests=0
+# leaves out the requests it answered, which the polling between the services fills the log with
 @app.route("/api/rein/logs/<service>")
 def rein_logs(service):
     need(service in SERVICES, f"service is one of {', '.join(SERVICES)}")
-    out = subprocess.run([*SUDO, "docker", "logs", "--timestamps", "--tail", "200", service], capture_output=True, text=True, timeout=10)
+    quiet = request.args.get("requests") == "0"
+    out = subprocess.run([*SUDO, "docker", "logs", "--timestamps", "--tail", "5000" if quiet else "200", service],
+                         capture_output=True, text=True, timeout=10)
     rows = []
     for line in (out.stdout + out.stderr).splitlines():
         ts, _, text = line.partition(" ")
         text = re.sub(r"\x1b\[[0-9;]*m", "", text).strip()
-        if text:
+        if text and not (quiet and ACCESS.search(text)):
             rows.append({"ts": ts, "text": text})
-    return jsonify(sorted(rows, key=lambda r: r["ts"]))
+    return jsonify(sorted(rows, key=lambda r: r["ts"])[-200:])
 
+
+# Brief: The models that translate the requests, which of them fit this machine's VRAM and the one in
+# use ("chosen"), as `rein model --json` tells them
+@app.route("/api/models")
+def models():
+    out = subprocess.run([*REIN_CLI, "model", "--json"], capture_output=True, text=True, timeout=30)
+    try:
+        return jsonify(json.loads(out.stdout)), 200 if out.returncode == 0 else 503
+    except ValueError:
+        abort(502, (out.stderr or "rein model failed").strip()[-500:])
+
+
+# Brief: Puts a model in use (rein model <id>): one that runs on this machine is started, the others stopped
+@app.route("/api/models/<mid>", methods=["POST"])
+def use_model(mid):
+    return job(f"Model {mid}", ["model", name(mid, MODEL, "model")], lock=model_lock, command=REIN_CLI)
 
 
 @app.route("/api/<service>/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
