@@ -1,6 +1,5 @@
-# REIN console and its API on 127.0.0.1:4180. Adjust User and the paths to this machine
-# Install: sudo cp rein-console.service /etc/systemd/system/ && sudo systemctl daemon-reload
-#          sudo systemctl enable --now rein-console
+# REIN console and its API on 127.0.0.1:4180. `rein setup` installs it with this machine's user and
+# paths; `rein up` and `rein down` start and stop it
 [Unit]
 Description=REIN console (127.0.0.1:4180)
 After=network-online.target docker.service
