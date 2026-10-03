@@ -1,2 +1,2 @@
 #! /bin/bash
-export $(cat .env | xargs) && python3 app.py
+export $(cat .env | tr -d '\r' | xargs) && python3 app.py "$@"

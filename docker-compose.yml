@@ -10,6 +10,8 @@ services:
     tty: true
     env_file:
       - ./deployer/.env
+    environment:
+      - ONOS_KARAF=${ONOS_KARAF:-docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -20,7 +22,27 @@ services:
       dockerfile: Dockerfile
     container_name: supervisor
     network_mode: "host"
+    environment:
+      - SUPERVISOR_MODE=${SUPERVISOR_MODE:-threshold}
+      - LLM_URL=${LLM_URL:-}
+      - ONOS_KARAF=${ONOS_KARAF:-docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf}
     stdin_open: true
     tty: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  profiler:
+    image: rein_profiler
+    build:
+      context: ./profiler
+    container_name: profiler
+    network_mode: "host"
+    environment:
+      - MODELS_CONFIG=/config/models.yaml
+      - PROFILER_DB=/state/profiler.sqlite
+    volumes:
+      - ./llm/models.yaml:/config/models.yaml:ro
+      - profiler-state:/state
+
+volumes:
+  profiler-state:

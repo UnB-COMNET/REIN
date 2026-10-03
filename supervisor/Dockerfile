@@ -1,14 +1,14 @@
-FROM python:3.13.0-slim
+FROM python:3.13-slim-bullseye
 WORKDIR /supervisor
+
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY app/ /supervisor/app/
 COPY setup.py /supervisor/setup.py
 COPY requirements.txt /supervisor/requirements.txt
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.0.0.tgz -o docker.tgz \
-    && tar xzvf docker.tgz \
-    && mv docker/docker /usr/bin/docker \
-    && rm -rf docker docker.tgz
+COPY .env /supervisor/.env
+COPY entrypoint.sh /supervisor/entrypoint.sh
+RUN chmod +x /supervisor/entrypoint.sh
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir -e .
 EXPOSE 5151
-CMD ["python", "-m", "flask", "--app", "app.routes", "run", "--port", "5151", "--host", "0.0.0.0"]
+ENTRYPOINT ["/supervisor/entrypoint.sh"]

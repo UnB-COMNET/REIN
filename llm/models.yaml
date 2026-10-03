@@ -1,0 +1,36 @@
+# Brief: The models the profiler can translate with, largest first. The application picks one by
+# itself (profiler/app/llm.py): the first whose server answers; else the first REIN can start on this
+# machine (local) whose budget fits its free VRAM, which `rein up` then starts (llm/compose.yml).
+# Below the smallest budget no model runs, and the chat takes the intent written in Nile.
+# budget_gb is the VRAM a model takes once loaded: weights plus vLLM and its cache.
+# llm_status_url: the llm-status service (REIN/llm) of a separate GPU machine, when the models run
+# there; it then tells the GPU's memory and each model's state.
+llm_status_url: null
+
+models:
+  - id: qwen3.6
+    label: Qwen3.6 35B-A3B
+    model: nvidia/Qwen3.6-35B-A3B-NVFP4
+    base_url: http://gpu.mfcaetano.lan:8000/v1
+    quantization: NVFP4
+    budget_gb: 25
+    pinned: true
+    # The lab's server, used wherever it answers. It also serves the supervisor: never slept, and
+    # never sent a grammar (a Lark grammar crashed its EngineCore on 2026-09-28)
+    shared: true
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}
+  - id: llama
+    label: Llama 3.2 3B Instruct
+    model: casperhansen/llama-3.2-3b-instruct-awq
+    base_url: http://127.0.0.1:8001/v1
+    quantization: AWQ 4-bit
+    budget_gb: 4
+    local: true
+  # Ultra-lite, for a 4 GB card: 1.5 GB of weights
+  - id: lite
+    label: Qwen2.5 1.5B Instruct
+    model: Qwen/Qwen2.5-1.5B-Instruct-AWQ
+    base_url: http://127.0.0.1:8002/v1
+    quantization: AWQ 4-bit
+    budget_gb: 3
+    local: true

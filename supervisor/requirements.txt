@@ -1,5 +1,6 @@
 Flask==3.0.3
 Flask-Cors==5.0.0
 requests
+# The best-path drift mode runs the deployer's own SCIP model.
 numpy
 ortools

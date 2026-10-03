@@ -1,0 +1,649 @@
+#!/usr/bin/env python3
+# Brief: Runs REIN on this machine: the LFT testbed, the REIN services (docker compose) and the console.
+#   ./rein setup                  once: LFT next to REIN, the images, deployer/.env, the console's Python
+#                                 packages, sudo without a password for lft and docker, the console service,
+#                                 and the rein command (/usr/local/bin/rein, a link to this file)
+#   rein up [--topology T]        the testbed (only when none is running; T is a preset or a topology
+#                                 file), the services and the console; ends with the console's address
+#   rein down [--keep-testbed]    the console, the services and the testbed
+#   rein status                   what is up
+#   rein model [ID]               the models and which fit this machine's VRAM; with an ID, uses that one
+# rein up also starts the model in use: the one chosen with rein model while it fits, else one whose
+# server answers, else the largest of llm/models.yaml that fits (llm/compose.yml). When none fits,
+# no model runs and the chat takes Nile.
+# up and down show one line per task, as docker compose does: what it is doing while it runs, then a
+# check and how long it took. What the commands print is kept and shown only when one fails.
+#   rein logs SERVICE [-f]        deployer, supervisor, collector, profiler or console
+# LFT_DIR (default: ../lft) is where LFT is, LFT_BRANCH the branch setup clones, LFT_BIN its lft.
+
+import argparse
+import base64
+import getpass
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from contextlib import contextmanager
+from pathlib import Path
+
+REIN = Path(__file__).resolve().parent       # through the /usr/local/bin/rein link too
+COMMAND = Path("/usr/local/bin/rein")
+LFT_DIR = Path(os.environ.get("LFT_DIR", REIN.parent / "lft"))
+LFT_REPO = "https://github.com/UnB-COMNET/lft.git"
+LFT_BRANCH = os.environ.get("LFT_BRANCH", "feat/topology-runtime")   # dash-experiments once its PR is merged
+SUDO = [] if os.geteuid() == 0 else ["sudo"]
+USER = os.environ.get("SUDO_USER") or getpass.getuser()
+HOME = Path.home() / ".rein-console"          # the console's log and pid when it runs without systemd
+UNIT = Path("/etc/systemd/system/rein-console.service")
+CONSOLE = "http://127.0.0.1:4180"
+# What up waits for and status shows: each one's address that answers once it is up
+SERVICES = {"deployer": "http://127.0.0.1:5000/", "supervisor": "http://127.0.0.1:5151/metrics",
+            "collector": "http://127.0.0.1:8123/ping",   # its database: what the console's Monitoramento reads
+            "profiler": "http://127.0.0.1:5300/health", "console": CONSOLE + "/"}
+ONOS = "http://127.0.0.1:8181/onos/v1/devices"
+PROFILER = os.environ.get("PROFILER_URL", "http://127.0.0.1:5300")
+ENV = HOME / "rein.env"                       # the share of the GPU of the model rein starts, for llm/compose.yml
+MODEL = HOME / "model"                        # the id of the model chosen with rein model
+MODEL_WAIT_S = 1800                           # a model's first start downloads its image and its weights
+PRESETS = ("diamond", "rnp", "dash", "dash-debug", "diamond-video")
+# The testbed's video servers and clients, and their folders in LFT's docker/ (lft-pydash-server fetches ~720 MB)
+VIDEO_IMAGES = {"lft-dash-video": "dash_video_server", "lft-dash-live": "dash_live_server", "lft-pydash-server": "pydash_server",
+                "lft-dash-client": "dash_video_client", "lft-pydash-client": "pydash_client"}
+TOPOLOGY = "diamond-video"
+
+
+# ------------------------------------------------------------------ helpers
+
+def step(title: str) -> None:
+    print(f"\n==> {title}", flush=True)
+
+
+# Brief: Runs a command, showing it first; stops rein when it fails (unless check=False)
+def run(*argv, check=True, **kwargs):
+    print("$ " + " ".join(str(a) for a in argv), flush=True)
+    result = subprocess.run([str(a) for a in argv], **kwargs)
+    if check and result.returncode:
+        sys.exit(f"*** failed: {' '.join(str(a) for a in argv)}")
+    return result
+
+
+# Brief: lft's path: LFT_BIN, LFT's .venv (dependencies.sh installs it there) or the one on the PATH
+def lft_bin():
+    for candidate in (os.environ.get("LFT_BIN"), LFT_DIR / ".venv" / "bin" / "lft", shutil.which("lft")):
+        if candidate and Path(candidate).exists():
+            return str(candidate)
+    return None
+
+
+# Brief: docker compose on one of REIN's files, with ENV when rein has written it
+def compose_argv(*args, file: str = "docker-compose.yml") -> list:
+    return [*SUDO, "docker", "compose", *(["--env-file", ENV] if ENV.exists() else []), "-f", REIN / file, *args]
+
+
+def compose(*args):
+    return run(*compose_argv(*args))
+
+
+# Brief: Writes a file only root can write (sudo tee), when its content changes
+def write_root(path: Path, text: str) -> bool:
+    current = subprocess.run([*SUDO, "cat", str(path)], capture_output=True, text=True).stdout
+    if current == text:
+        return False
+    subprocess.run([*SUDO, "tee", str(path)], input=text, text=True, stdout=subprocess.DEVNULL, check=True)
+    return True
+
+
+def answers(url: str, auth: str = None) -> bool:
+    request = urllib.request.Request(url)
+    if auth:
+        request.add_header("Authorization", "Basic " + base64.b64encode(auth.encode()).decode())
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            return response.status < 400
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def wait(url: str, timeout_s: float = 180) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if answers(url):
+            return True
+        time.sleep(2)
+    return False
+
+
+# Brief: The testbed's containers, from `lft topology status` ([] when lft cannot tell)
+def testbed() -> list:
+    out = subprocess.run([*SUDO, lft_bin(), "topology", "status", "--json"], capture_output=True, text=True)
+    return json.loads(out.stdout)["containers"] if out.returncode == 0 else []
+
+
+# Brief: The total and free memory of this machine's GPU in GB, (0, 0) without an NVIDIA GPU.
+# REIN_VRAM_TOTAL_GB and REIN_VRAM_FREE_GB, when set, stand for the measurement
+def vram() -> tuple:
+    if os.environ.get("REIN_VRAM_FREE_GB"):
+        free = float(os.environ["REIN_VRAM_FREE_GB"])
+        return float(os.environ.get("REIN_VRAM_TOTAL_GB") or free), free
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total,memory.free", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10).stdout
+        total, free = (round(float(mib) / 1024, 1) for mib in out.splitlines()[0].split(","))   # the first GPU, in MiB
+        return total, free
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return 0.0, 0.0
+
+
+# Brief: The profiler's GET /models for this machine's VRAM as it is now: the GPU, each model's state and
+# whether it fits, plus "chosen", the model in use: the one picked with rein model while it fits, else
+# the profiler's default. None when the profiler does not answer, or is an older one without a default
+def models():
+    total, free = vram()
+    try:
+        with urllib.request.urlopen(f"{PROFILER}/models?total_gb={total:g}&free_gb={free:g}", timeout=10) as response:
+            info = json.load(response)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    if "selected" not in info:
+        return None
+    picked = MODEL.read_text().strip() if MODEL.exists() else None
+    info["chosen"] = picked if any(m["id"] == picked and m["fits"] for m in info["models"]) else info["selected"]
+    return info
+
+
+# Brief: "4 switches (1 off), 2 hosts" of the testbed's containers
+def summary(containers: list) -> str:
+    switches = [c for c in containers if c["kind"] == "switch"]
+    off = sum(c["state"] == "paused" for c in switches)
+    hosts = sum(c["kind"] == "host" and c["state"] == "running" for c in containers)
+    return f"{len(switches)} switches{f' ({off} off)' if off else ''}, {hosts} hosts"
+
+
+# Brief: What a line of lft --json's progress says ({"step", "of", "title"}); None for any other line
+def lft_step(text: str):
+    try:
+        return json.loads(text).get("title")
+    except (ValueError, AttributeError):
+        return None
+
+
+# Brief: What a line of docker compose's progress says: "building deployer", "deployer started".
+# A container being recreated carries its old id in front of its name for a moment
+def compose_step(text: str):
+    if "Pulling" in text:
+        return "pulling the image"
+    found = re.search(r"Container (?:[0-9a-f]{12}_)?(\S+)\s+(\w+)|(?:^#\d+ \[(?!internal)|build service )([\w-]+)", text)
+    if not found:
+        return None
+    return f"{found[1]} {found[2].lower()}" if found[1] else f"building {found[3]}"
+
+
+def console_pid():
+    try:
+        pid = int((HOME / "console.pid").read_text())
+        os.kill(pid, 0)
+        return pid
+    except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
+        return None
+
+
+# ------------------------------------------------------------------ progress, in docker compose's manner
+
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+LIVE = sys.stdout.isatty()                     # redrawn in place on a terminal; one line per finished task elsewhere
+COLOR = LIVE and "NO_COLOR" not in os.environ
+ICONS = {"done": ("32", "✔"), "failed": ("31", "✘")}
+
+
+def paint(code: str, text: str) -> str:
+    return f"\033[{code}m{text}\033[0m" if COLOR else text
+
+
+# Brief: A task that did not succeed: what to show in its line, and what the command printed.
+# fatal=False lets the tasks after it run (a service that does not answer)
+class Failed(Exception):
+    def __init__(self, message: str, output=(), fatal: bool = True):
+        super().__init__(message)
+        self.output, self.fatal = list(output), fatal
+
+
+# Brief: One line of the board: icon, task, what it is doing (cut to fit) and the time at the right
+def line(icon: str, name: str, detail: str, clock: str = "", pad: int = 10, code: str = "2") -> str:
+    width = min(shutil.get_terminal_size((80, 24)).columns, 96)
+    room = max(width - pad - len(clock) - 7, 8)
+    detail = detail if len(detail) <= room else detail[:room - 1] + "…"
+    return f" {icon} {paint('1', name.ljust(pad))}  {paint(code, detail.ljust(room))} {paint('2', clock)}".rstrip()
+
+
+# Brief: The tasks of a command, drawn as docker compose draws its own
+# Params:
+#   String verb: What the header says, e.g. "Running"
+#   list names: The tasks, in the order they run
+class Board:
+    def __init__(self, verb: str, names: list):
+        self.verb, self.names, self.rows, self.drawn, self.failed = verb, names, [], 0, None
+        self.pad = max(len(name) for name in names)
+        self.lock, self.over = threading.Lock(), threading.Event()
+        self.thread = threading.Thread(target=self._animate, daemon=True)
+
+    def __enter__(self):
+        if LIVE:
+            sys.stdout.write("\033[?25l")   # no cursor while the lines are redrawn
+            self.thread.start()
+        return self
+
+    def __exit__(self, kind, error, trace):
+        for row in self.rows:
+            if row["state"] == "running":   # Ctrl+C
+                row.update(state="failed", detail="interrupted", took=time.time() - row["start"])
+        self.over.set()
+        if LIVE:
+            self.thread.join()
+            self._draw(0)
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+        return False
+
+    # Brief: Runs a task of the board; the block gets say(detail) to tell what it is doing, and what it
+    # says last stays in the line. Failed marks the line and, when fatal, stops the command
+    @contextmanager
+    def task(self, name: str):
+        row = {"name": name, "detail": "", "state": "running", "start": time.time(), "took": 0.0}
+        with self.lock:
+            self.rows.append(row)
+        try:
+            yield lambda detail: row.update(detail=detail)
+            row["state"] = "done"
+        except Failed as error:
+            row.update(state="failed", detail=str(error))
+            self.failed = self.failed or error
+            if error.fatal:
+                raise
+        finally:
+            row["took"] = time.time() - row["start"]
+            if not LIVE:
+                print(self._line(row, 0), flush=True)
+
+    def _line(self, row: dict, tick: int) -> str:
+        running = row["state"] == "running"
+        icon = paint("36", SPINNER[tick % len(SPINNER)]) if running else paint(*ICONS[row["state"]])
+        took = time.time() - row["start"] if running else row["took"]
+        return line(icon, row["name"], row["detail"], f"{took:.1f}s", self.pad, "31" if row["state"] == "failed" else "2")
+
+    def _draw(self, tick: int) -> None:
+        with self.lock:
+            done = sum(row["state"] == "done" for row in self.rows)
+            lines = [f"{paint('34', '[+]')} {self.verb} {done}/{len(self.names)}"] + [self._line(row, tick) for row in self.rows]
+            sys.stdout.write((f"\033[{self.drawn}A" if self.drawn else "") + "".join(f"\r\033[2K{text}\n" for text in lines))
+            sys.stdout.flush()
+            self.drawn = len(lines)
+
+    def _animate(self) -> None:
+        tick = 0
+        while not self.over.wait(0.08):
+            self._draw(tick)
+            tick += 1
+
+
+# Brief: Runs a command without showing what it prints
+# Params:
+#   list argv: The command
+#   on_line: Called with each line it writes to stderr (where lft and docker compose report progress)
+# Return:
+#   (int exit code, String stdout, list of the stderr lines)
+def quiet(argv: list, on_line=None) -> tuple:
+    proc = subprocess.Popen([str(a) for a in argv], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
+    out, lines = [], []
+    reader = threading.Thread(target=lambda: out.append(proc.stdout.read()))
+    reader.start()
+    for text in proc.stderr:
+        lines.append(text.rstrip("\n"))
+        if on_line:
+            on_line(lines[-1])
+    reader.join()
+    return proc.wait(), out[0], lines
+
+
+# Brief: Asks for the sudo password before the board starts, where the question can be seen (on a
+# terminal only: the console runs rein with no one to answer)
+def sudo_ready() -> None:
+    if SUDO and sys.stdin.isatty() and subprocess.run(["sudo", "-n", "true"], capture_output=True).returncode:
+        subprocess.run(["sudo", "-v"], check=True)
+
+
+# Brief: Ends a command whose board had a failure: what the failed command printed, then exit 1
+def leave(board: Board) -> None:
+    for text in board.failed.output[-15:]:
+        print(paint("2", f"   {text}"))
+    sys.exit(1)
+
+
+# ------------------------------------------------------------------ commands
+
+def setup(args) -> None:
+    step(f"LFT in {LFT_DIR}")
+    if not LFT_DIR.exists():
+        run("git", "clone", "-b", LFT_BRANCH, LFT_REPO, LFT_DIR)
+    if not lft_bin():   # system packages, the venv with lft, and the ONOS, Open vSwitch and iperf images
+        run(*SUDO, "./dependencies.sh", cwd=LFT_DIR)
+    print(f"lft: {lft_bin()}")
+
+    step("Video images (LFT's docker/)")
+    for image, folder in VIDEO_IMAGES.items():
+        if subprocess.run([*SUDO, "docker", "image", "inspect", image], capture_output=True).returncode:
+            run(*SUDO, "docker", "build", "-t", image, LFT_DIR / "docker" / folder)
+        else:
+            print(f"{image}: already built")
+
+    step("deployer/.env")
+    env = REIN / "deployer" / ".env"
+    if env.exists():
+        print("kept as it is")
+    else:
+        env.write_text("ONOSUSER=onos\nONOSPASS=rocks\n")   # the credentials of the ONOS image
+        print("created with ONOS's default credentials")
+
+    step("REIN images (deployer, supervisor, profiler)")
+    compose("build")
+
+    step("The console's Python packages")
+    if subprocess.run(["python3", "-c", "import flask, requests"], capture_output=True).returncode:
+        run(*SUDO, "apt-get", "install", "-y", "python3-flask", "python3-requests")
+    else:
+        print("flask and requests: installed")
+
+    step(f"sudo without a password for lft and docker ({USER})")
+    if USER == "root" or subprocess.run(["sudo", "-n", "-u", USER, "sudo", "-n", "true"], capture_output=True).returncode == 0:
+        print("already allowed")
+    else:   # the console runs `sudo -n lft` and `sudo -n docker`
+        rule = f"{USER} ALL=(root) NOPASSWD: {lft_bin()}, {shutil.which('docker')}\n"
+        write_root(Path("/etc/sudoers.d/rein"), rule)
+        run(*SUDO, "chmod", "440", "/etc/sudoers.d/rein")
+        run(*SUDO, "visudo", "-cf", "/etc/sudoers.d/rein")
+
+    step("The console's systemd service")
+    unit = (REIN / "console" / "api" / "rein-console.service").read_text()
+    app = REIN / "console" / "api"
+    for key, value in (("User", USER), ("WorkingDirectory", app), ("ExecStart", f"/usr/bin/python3 {app / 'app.py'}")):
+        unit = re.sub(rf"^{key}=.*$", f"{key}={value}", unit, flags=re.M)
+    unit = re.sub(r"LFT_BIN=\S+", f"LFT_BIN={lft_bin()}", unit)
+    if write_root(UNIT, unit):
+        run(*SUDO, "systemctl", "daemon-reload")
+    run(*SUDO, "systemctl", "enable", "rein-console")
+
+    step(f"The rein command ({COMMAND})")
+    if COMMAND.resolve() == Path(__file__).resolve():
+        print("already installed")
+    else:
+        run(*SUDO, "ln", "-sfn", Path(__file__).resolve(), COMMAND)
+    print("\nSetup done. Start REIN with: rein up")
+
+
+# Brief: Starts the console when it is not answering: its systemd service, or a process of its own
+def start_console() -> None:
+    if answers(CONSOLE + "/"):
+        return
+    if UNIT.exists():
+        code, _, err = quiet([*SUDO, "systemctl", "start", "rein-console"])
+        if code:
+            raise Failed("systemctl start rein-console failed", err)
+        return
+    HOME.mkdir(parents=True, exist_ok=True)
+    with open(HOME / "console.log", "a") as log:
+        proc = subprocess.Popen(["python3", str(REIN / "console" / "api" / "app.py")], stdout=log, stderr=subprocess.STDOUT,
+                                start_new_session=True, env={**os.environ, "LFT_BIN": lft_bin()})
+    (HOME / "console.pid").write_text(str(proc.pid))
+
+
+# Brief: Puts a model in use, one at a time. One asleep on a GPU machine apart is woken by its
+# llm-status, which sleeps the others. One that runs here and is not up is started and waited for
+# until it answers, after stopping the other models REIN started
+# Params:
+#   say: Called with what is being done
+#   dict chosen: The model, one of info["models"] that fits
+#   dict info: models()
+def use_model(say, chosen: dict, info: dict) -> None:
+    name, container = chosen["id"], f"vllm-{chosen['id']}"
+    if chosen["state"] == "sleeping":
+        say(f"waking {name}")
+        try:
+            urllib.request.urlopen(urllib.request.Request(f"{PROFILER}/models/{name}/load", method="POST"), timeout=300)
+        except urllib.error.HTTPError as error:
+            raise Failed(json.load(error).get("error") or f"{name} did not wake up", fatal=False)
+        except (urllib.error.URLError, OSError):
+            raise Failed(f"{name} did not wake up (rein logs profiler)", fatal=False)
+    elif chosen["state"] != "awake":
+        others = [m["id"] for m in info["models"] if m.get("local") and m["state"] == "awake"]
+        if others:
+            say(f"stopping {', '.join(others)}")
+            code, _, err = quiet(compose_argv("--profile", "*", "stop", *others, file="llm/compose.yml"))
+            if code:
+                raise Failed(f"{', '.join(others)} did not stop", err, fatal=False)
+        total = info["gpu"]["total_gb"] or chosen["budget_gb"]
+        ENV.write_text(f"LLM_GPU_FRACTION={min(chosen['budget_gb'] / total, 0.95):.2f}\n")
+        say(f"starting {name}")
+        code, _, err = quiet(compose_argv("--profile", name, "up", "-d", name, file="llm/compose.yml"),
+                             lambda text: compose_step(text) and say(compose_step(text)))
+        if code:
+            raise Failed(f"{name} did not start; the chat takes Nile", err, fatal=False)
+        say(f"loading {name}; the first time downloads its weights")
+        deadline = time.time() + MODEL_WAIT_S
+        while not any(m["id"] == name and m["state"] == "awake" for m in (models() or {"models": []})["models"]):
+            if quiet([*SUDO, "docker", "inspect", "-f", "{{.State.Running}}", container])[1].strip() != "true":
+                raise Failed(f"{name} stopped while loading", quiet([*SUDO, "docker", "logs", "--tail", "15", container])[2], fatal=False)
+            if time.time() > deadline:
+                raise Failed(f"{name} is still loading (sudo docker logs {container})", fatal=False)
+            time.sleep(5)
+    say(f"{name} ({chosen['label']}, {chosen['quantization']})")
+
+
+# Brief: The Model task of rein up: puts in use the model chosen for this machine, when there is one
+def start_model(say) -> None:
+    info = models()
+    if not info:
+        raise Failed("the profiler does not tell the models (rein logs profiler)", fatal=False)
+    chosen = next((m for m in info["models"] if m["id"] == info["chosen"]), None)
+    if not chosen:
+        need = min(m["budget_gb"] for m in info["models"] if m.get("local"))
+        say(f"none: {info['gpu']['free_gb']:g} GB of VRAM free, {need:g} GB needed; write the intents in Nile in the chat")
+        return
+    use_model(say, chosen, info)
+
+
+def up(args) -> None:
+    if not lft_bin() or not (REIN / "deployer" / ".env").exists():
+        sys.exit(f"*** run {REIN / 'rein'} setup first")
+    sudo_ready()
+    HOME.mkdir(parents=True, exist_ok=True)
+    board = Board("Running", ["Testbed", "Services", "Deployer", "Supervisor", "Collector", "Profiler", "Model", "Console"])
+    try:
+        with board:
+            with board.task("Testbed") as say:
+                running = testbed()
+                if any(c["kind"] == "switch" and c["state"] in ("running", "paused") for c in running) and not args.topology:
+                    say(f"{summary(running)}, kept")
+                else:
+                    topology = args.topology or TOPOLOGY
+                    where = ["--preset", topology] if topology in PRESETS else ["--path", Path(topology).resolve()]
+                    say(f"building {Path(topology).stem}")
+                    code, out, err = quiet([*SUDO, lft_bin(), "topology", "create", *where, "--detach", "--disable-fwd", "--json"],
+                                           lambda text: lft_step(text) and say(lft_step(text)))
+                    if code:   # with --json lft answers {"ok": false, "error"} on stdout
+                        raise Failed(lft_step(out.replace('"error"', '"title"')) or "lft topology create failed", err)
+                    say(f"{Path(topology).stem}: {summary(testbed())}")
+            with board.task("Services") as say:
+                say("docker compose up")
+                code, _, err = quiet(compose_argv("up", "-d", "--build"), lambda text: compose_step(text) and say(compose_step(text)))
+                if code:
+                    raise Failed("docker compose up failed", err)
+                say("deployer, supervisor, collector and profiler started")
+            for name, url in SERVICES.items():
+                with board.task(name.capitalize()) as say:
+                    address = urllib.parse.urlsplit(url).netloc
+                    say(f"waiting for {address}")
+                    if name == "console":
+                        start_console()
+                    if not wait(url):
+                        raise Failed(f"{address} does not answer (rein logs {name})", fatal=False)
+                    say(address)
+                if name == "profiler":
+                    with board.task("Model") as say:
+                        start_model(say)
+    except Failed:
+        pass
+    if board.failed:
+        leave(board)
+    print(f"\nREIN console: {paint('1', CONSOLE)}")
+
+
+def down(args) -> None:
+    sudo_ready()
+    # a model rein up started on this machine goes too; one that answers from elsewhere is never touched
+    local = compose_argv("--profile", "*", file="llm/compose.yml")
+    model = subprocess.run([*local, "ps", "-aq"], capture_output=True, text=True).stdout.split()
+    board = Board("Stopping", ["Console", "Services", *(["Model"] if model else []), *([] if args.keep_testbed else ["Testbed"])])
+    try:
+        with board:
+            with board.task("Console") as say:
+                if UNIT.exists():
+                    quiet([*SUDO, "systemctl", "stop", "rein-console"])
+                if console_pid():
+                    os.kill(console_pid(), 15)
+                    (HOME / "console.pid").unlink()
+                say("stopped")
+            with board.task("Services") as say:
+                say("docker compose down")
+                code, _, err = quiet(compose_argv("down"), lambda text: compose_step(text) and say(compose_step(text)))
+                if code:
+                    raise Failed("docker compose down failed", err)
+                say("deployer, supervisor, collector and profiler removed")
+            if model:
+                with board.task("Model") as say:
+                    say("docker compose down")
+                    code, _, err = quiet([*local, "down"], lambda text: compose_step(text) and say(compose_step(text)))
+                    if code:
+                        raise Failed("the model did not stop", err, fatal=False)
+                    say("stopped; its weights stay cached")
+            if not args.keep_testbed:
+                with board.task("Testbed") as say:
+                    say("lft utils clean")
+                    code, out, err = quiet([*SUDO, lft_bin(), "utils", "clean"])
+                    if code:
+                        raise Failed("lft utils clean failed", err)
+                    removed = re.search(r"removed (\d+)", out)
+                    say(f"{removed[1]} containers removed" if removed else "nothing was running")
+    except Failed:
+        pass
+    if board.failed:
+        leave(board)
+    if args.keep_testbed:
+        print("\nThe testbed keeps running (rein down removes it)")
+
+
+def status(args) -> None:
+    containers = testbed() if lft_bin() else []
+    rows = [("Testbed", bool(containers), summary(containers) if containers else "none (rein up)"),
+            ("ONOS", answers(ONOS, "onos:rocks"), urllib.parse.urlsplit(ONOS).netloc),
+            *((name.capitalize(), answers(url), urllib.parse.urlsplit(url).netloc) for name, url in SERVICES.items())]
+    info = models()
+    chosen = info and next((m for m in info["models"] if m["id"] == info["chosen"]), None)
+    if chosen:
+        rows.append(("Model", chosen["state"] == "awake", f"{chosen['id']} ({chosen['label']}, {chosen['quantization']})"))
+    for name, ok, detail in rows:
+        print(line(paint(*ICONS["done" if ok else "failed"]), name, detail if ok or name == "Testbed" else "down"))
+    if info and not chosen:
+        print(line(paint("2", "–"), "Model", "none fits this machine's VRAM: write the intents in Nile in the chat"))
+
+
+# Brief: Ends rein model with an error: {"ok": false, "error"} on stdout with --json, as lft --json does
+def refuse(error: str, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({"ok": False, "error": error}))
+        sys.exit(1)
+    sys.exit(f"*** {error}")
+
+
+# Brief: rein model: the models and which of them fit this machine's VRAM; with an id, puts that one in
+# use and keeps the choice for the next rein up. --json prints models() instead (what is being done
+# goes to stderr), for the console
+def model(args) -> None:
+    info = models()
+    if not info:
+        refuse("the profiler does not answer (rein up)", args.json)
+    if args.id:
+        chosen = next((m for m in info["models"] if m["id"] == args.id), None)
+        if not chosen or not chosen["fits"]:
+            refuse(f"{args.id} cannot be used on this machine: {chosen['reason']}" if chosen
+                   else f"no model {args.id} ({', '.join(m['id'] for m in info['models'])})", args.json)
+        HOME.mkdir(parents=True, exist_ok=True)
+        if args.json:
+            try:
+                use_model(lambda detail: print(detail, file=sys.stderr, flush=True), chosen, info)
+            except Failed as failed:
+                refuse(str(failed), True)
+        else:
+            sudo_ready()
+            board = Board("Switching", ["Model"])
+            with board, board.task("Model") as say:
+                use_model(say, chosen, info)
+            if board.failed:
+                leave(board)
+        MODEL.write_text(args.id + "\n")
+        info = models() or info
+    if args.json:
+        print(json.dumps(info))
+        return
+    gpu = info["gpu"]
+    print(f"GPU: {gpu['total_gb']:g} GB, {gpu['free_gb']:g} GB free" if gpu["total_gb"] else "GPU: none")
+    pad = max(len(m["id"]) for m in info["models"])
+    for m in info["models"]:
+        used = m["id"] == info["chosen"] and m["state"] == "awake"
+        state = "in use" if used else "ready" if m["state"] == "awake" else "fits" if m["fits"] else m["reason"]
+        icon = paint(*ICONS["done"]) if used else paint("2", "·") if m["fits"] else paint(*ICONS["failed"])
+        print(line(icon, m["id"], state, pad=pad))
+
+
+def logs(args) -> None:
+    if args.service != "console":
+        run(*SUDO, "docker", "logs", "--tail", "200", *(["-f"] if args.follow else []), args.service, check=False)
+    elif UNIT.exists():
+        run(*SUDO, "journalctl", "-u", "rein-console", "-n", "200", *(["-f"] if args.follow else ["--no-pager"]), check=False)
+    else:
+        run("tail", "-n", "200", *(["-f"] if args.follow else []), HOME / "console.log", check=False)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="rein", description="Run REIN: the LFT testbed, the REIN services and the console")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("setup", help="Install what REIN needs (once per machine)").set_defaults(func=setup)
+    p = commands.add_parser("up", help="Start the testbed, the services and the console")
+    p.add_argument("--topology", help=f"A preset ({', '.join(PRESETS)}) or a topology file; builds a new testbed")
+    p.set_defaults(func=up)
+    p = commands.add_parser("down", help="Stop the console, the services and the testbed")
+    p.add_argument("--keep-testbed", action="store_true", help="Leave the testbed running")
+    p.set_defaults(func=down)
+    commands.add_parser("status", help="Show what is up").set_defaults(func=status)
+    p = commands.add_parser("model", help="Show the models, or put one in use")
+    p.add_argument("id", nargs="?", help="The model to use; it has to fit this machine's VRAM")
+    p.add_argument("--json", action="store_true", help="Print the models as JSON")
+    p.set_defaults(func=model)
+    p = commands.add_parser("logs", help="Show a service's logs")
+    p.add_argument("service", choices=("deployer", "supervisor", "collector", "profiler", "console"))
+    p.add_argument("-f", "--follow", action="store_true", help="Keep printing")
+    p.set_defaults(func=logs)
+    args = parser.parse_args()
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        sys.exit(130)
+
+
+if __name__ == "__main__":
+    main()
