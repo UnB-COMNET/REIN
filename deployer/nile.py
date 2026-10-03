@@ -15,23 +15,32 @@ _parser = Lark(GRAMMAR, parser="lalr")
 # Brief: What Onos.compile() executes, looked up from the most to the least specific key:
 # "<op> <function>('<first arg>')", "<op> <function>", "<op>". "chat" marks what the
 # profiler may offer; "scope" is the target form compile() needs for that operation.
+CLIENT = "for endpoint('<client ip>')"
 CAPABILITIES = {
-    "add service('cdn-qoe')": {"executable": True, "chat": True,
-                               "scope": "for endpoint('<client ip>')",
-                               "reason": "picks the best CDN server for the client and installs the path"},
-    "add service":            {"executable": False, "reason": "unknown service; see the executable ones in /capabilities"},
-    "remove service":         {"executable": False, "reason": "removing a service is not implemented"},
-    "add middlebox":          {"executable": False, "reason": "no middlebox exists in this testbed"},
-    "remove middlebox":       {"executable": False, "reason": "no middlebox exists in this testbed"},
-    "set bandwidth('max')":   {"executable": False, "reason": "tested on diamond: its metered flows have the priority of the "
-                                                             "cdn-qoe flows, which win (the meter saw 0 bytes)"},
-    "set bandwidth":          {"executable": False, "reason": "only a 'max' bandwidth has code in compile()"},
-    "set quota":              {"executable": False, "reason": "quotas are not implemented"},
-    "unset":                  {"executable": False, "reason": "unset is not implemented"},
-    "allow":                  {"executable": False, "reason": "ACL rules are not verified on the testbed"},
-    "block":                  {"executable": False, "reason": "ACL rules are not verified on the testbed"},
-    "start":                  {"executable": False, "reason": "time windows (start/end) are ignored by compile()"},
+    "add service('cdn-qoe')":    {"executable": True, "chat": True, "scope": CLIENT,
+                                  "reason": "picks the best CDN server for the client and installs the path"},
+    "remove service('cdn-qoe')": {"executable": True, "chat": True, "scope": CLIENT, "reason": "removes the client's path"},
+    "add service":               {"executable": False, "reason": "unknown service; see the executable ones in /capabilities"},
+    "remove service":            {"executable": False, "reason": "unknown service; see the executable ones in /capabilities"},
+    "add middlebox":             {"executable": False, "reason": "no middlebox exists in this testbed"},
+    "remove middlebox":          {"executable": False, "reason": "no middlebox exists in this testbed"},
+    "set bandwidth('max')":      {"executable": True, "chat": True, "scope": CLIENT,
+                                  "reason": "caps what reaches the client: bandwidth('max', '<number>', 'bps|kbps|mbps|gbps')"},
+    "unset bandwidth('max')":    {"executable": True, "chat": True, "scope": CLIENT, "reason": "lifts the client's cap"},
+    "set bandwidth":             {"executable": False, "reason": "a minimum needs queues; only a 'max' bandwidth is enforced"},
+    "unset bandwidth":           {"executable": False, "reason": "only a 'max' bandwidth is enforced"},
+    "set quota":                 {"executable": False, "reason": "quotas are not implemented"},
+    "unset quota":               {"executable": False, "reason": "quotas are not implemented"},
+    "block protocol":            {"executable": True, "chat": True, "scope": CLIENT,
+                                  "reason": "drops it to and from the client: protocol('tcp|udp|icmp|ssh|http|https')"},
+    "allow protocol":            {"executable": True, "chat": True, "scope": CLIENT, "reason": "lifts a block on the protocol"},
+    "block":                     {"executable": False, "reason": "only protocol(...) is enforced: traffic and service names need DPI"},
+    "allow":                     {"executable": False, "reason": "only protocol(...) is enforced: traffic and service names need DPI"},
+    "start":                     {"executable": False, "reason": "time windows (start/end) are ignored by compile()"},
 }
+# The protocols block/allow enforce: IP protocol number, and a TCP port for the ones known by name
+PROTOCOLS = {"tcp": (6, None), "udp": (17, None), "icmp": (1, None), "ssh": (6, 22), "http": (6, 80), "https": (6, 443)}
+UNITS = {"bps": 0.001, "kbps": 1, "mbps": 1000, "gbps": 1000000}   # to kbit/s, the unit of ONOS meters
 
 
 # Brief: Checks an intent before parse_nile ever sees it
@@ -51,13 +60,7 @@ def validate(intent: str):
         start, end = (f"{t.children[0]}({t.children[1]})" for t in window[0].children)
         return _unsupported(f"start {start} end {end}", CAPABILITIES["start"]["reason"])
 
-    op = str(action.children[0])
-    for item in action.children[1:]:
-        # acl/chain items carry their function as a token; qos items are named by the rule
-        if item.data in ("acl", "chain"):
-            fn, args = str(item.children[0]), [str(a) for a in item.children[1:]]
-        else:
-            fn, args = str(item.data), [str(a) for a in item.children]
+    for op, fn, args in _items(action):
         label = f"{op} {fn}({', '.join(args)})"
         keys = (f"{op} {fn}({args[0]})", f"{op} {fn}", op)
         cap = next((CAPABILITIES[k] for k in keys if k in CAPABILITIES), {"executable": False, "reason": "not supported"})
@@ -65,7 +68,40 @@ def validate(intent: str):
             return _unsupported(label, cap["reason"])
         if cap.get("scope") and not _client_endpoint(scope):
             return _unsupported(label, f"needs {cap['scope']}")
+        if fn == "protocol" and args[0].strip("'").lower() not in PROTOCOLS:
+            return _unsupported(label, f"unknown protocol; one of {', '.join(PROTOCOLS)}")
+        if (op, fn) == ("set", "bandwidth") and not rate_kbps(args):
+            return _unsupported(label, f"needs a rate of at least 1 kbps, in {', '.join(UNITS)}")
     return None
+
+
+# Brief: The kbit/s of bandwidth('max', '<number>', '<unit>'), None when it is not a rate
+def rate_kbps(args: list):
+    value, unit = (a.strip("'").lower() for a in args[1:])
+    if unit not in UNITS or not re.fullmatch(r"\d+(\.\d+)?", value):
+        return None
+    return round(float(value) * UNITS[unit]) or None
+
+
+# Brief: A valid intent's client and action items
+# Params:
+#   String intent: Nile intent that passed validate()
+# Return:
+#   (String client ip or None, list of (op, function, [values without quotes]))
+def actions(intent: str) -> tuple:
+    _, scope, action, *_ = _parser.parse(intent).children
+    return _client_endpoint(scope), [(op, fn, [a.strip("'") for a in args]) for op, fn, args in _items(action)]
+
+
+# Brief: (op, function, [args]) per action item; acl/chain items carry their function as a token,
+# qos items are named by the rule
+def _items(action):
+    op = str(action.children[0])
+    for item in action.children[1:]:
+        if item.data in ("acl", "chain"):
+            yield op, str(item.children[0]), [str(a) for a in item.children[1:]]
+        else:
+            yield op, str(item.data), [str(a) for a in item.children]
 
 
 # Brief: The client IP of a for endpoint('<ipv4>') scope, else None
