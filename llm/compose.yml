@@ -1,11 +1,13 @@
-# Brief: Llama and Gemma vLLM servers plus llm-status, for the GPU VM (gpu.mfcaetano.lan, 32 GB).
-# The Qwen3.6 server on :8000 already exists and is shared with the supervisor: nothing here touches it.
-# Budgets are in models.yaml (gpu-memory-utilization = budget / 32 GB). Bring the models up one at a
-# time, putting each to sleep before the next, so every server finds its budget free at startup:
-#   docker compose up -d llm-status llama
-#   curl -X POST 'http://localhost:8001/sleep?level=1'   # optional: frees Llama's memory
-#   docker compose --profile gemma up -d gemma           # needs 12 GB free: not while Qwen is loaded
-# Then set llm_status_url: http://gpu.mfcaetano.lan:5500 in models.yaml on the REIN VM.
+# Brief: The vLLM servers REIN can start, one per profile, plus llm-status. `rein up` starts the one the
+# profiler picked for this machine's VRAM (models.yaml):
+#   LLM_GPU_FRACTION=0.75 docker compose --profile lite up -d lite
+# LLM_GPU_FRACTION is the model's budget over the GPU's memory; LLM_BIND the address the server listens
+# on (127.0.0.1; 0.0.0.0 on a GPU machine that serves other machines).
+# The lab's Qwen3.6 server (gpu.mfcaetano.lan:8000) is shared with the supervisor: nothing here touches it.
+# On a GPU machine apart from REIN's, llm-status tells REIN that machine's memory and models, and
+# swaps them: choosing one wakes it and sleeps the others (never a pinned one):
+#   LLM_BIND=0.0.0.0 docker compose --profile llama --profile status up -d
+# then set llm_status_url and the models' base_url to that machine in models.yaml, without `local`.
 
 x-vllm: &vllm
   image: vllm/vllm-openai:${VLLM_TAG:-v0.29.0}
@@ -25,21 +27,24 @@ services:
   llama:
     <<: *vllm
     container_name: vllm-llama
+    profiles: [llama]
     command: >
-      --model casperhansen/llama-3.2-3b-instruct-awq --host 0.0.0.0 --port 8001
-      --max-model-len 8192 --gpu-memory-utilization 0.125 --enable-sleep-mode
+      --model casperhansen/llama-3.2-3b-instruct-awq --host ${LLM_BIND:-127.0.0.1} --port 8001
+      --max-model-len 8192 --gpu-memory-utilization ${LLM_GPU_FRACTION:-0.125} --enable-sleep-mode
 
-  gemma:
+  # Ultra-lite: 1.5 GB of weights, for a 4 GB card
+  lite:
     <<: *vllm
-    container_name: vllm-gemma
-    profiles: [gemma]
+    container_name: vllm-lite
+    profiles: [lite]
     command: >
-      --model google/gemma-4-12B-it-qat-w4a16-ct --host 0.0.0.0 --port 8002
-      --max-model-len 8192 --gpu-memory-utilization 0.375 --enable-sleep-mode
+      --model Qwen/Qwen2.5-1.5B-Instruct-AWQ --host ${LLM_BIND:-127.0.0.1} --port 8002
+      --max-model-len 8192 --gpu-memory-utilization ${LLM_GPU_FRACTION:-0.75} --enable-sleep-mode
 
   llm-status:
     build: .
     container_name: llm-status
+    profiles: [status]
     network_mode: host
     environment:
       - MODELS_CONFIG=/app/models.yaml

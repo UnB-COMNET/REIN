@@ -182,6 +182,12 @@ class State(TypedDict, total=False):
     status: str         # "deployed" or "cancelled" when the thread ends
 
 
+# Brief: Whether a request is already an intent in Nile: it then skips the model and goes to the operator
+# as written; the deployer checks its syntax on deploy
+def is_nile(text: str) -> bool:
+    return bool(re.match(r"\s*define\s+intent\b", text))
+
+
 def _ground_node(s: State) -> dict:
     return {"grounding": ground(s["text"], inventory.get()), "error": None}
 
@@ -203,8 +209,8 @@ def _confirm_node(s: State) -> Command:
     action, nile = decision.get("action"), decision.get("nile") or s["nile"]
     if action == "deploy" and not nile.startswith("ASK:"):
         return Command(goto="deploy", update={"nile": nile})
-    if action == "regenerate":
-        return Command(goto="generate")
+    if action == "regenerate" and s.get("model"):   # an intent sent in Nile was never grounded: from the start
+        return Command(goto="generate" if s.get("examples") is not None else "ground")
     if action == "answer":
         return Command(goto="ground", update={"text": f"{s['text']}\n{decision.get('text', '')}"})
     return Command(goto=END, update={"status": "cancelled"})
@@ -219,7 +225,9 @@ def _deploy_node(s: State) -> Command:
         return Command(goto="confirm", update={"error": {"status": 503, "error": "deployer", "detail": str(e)}})
     if r.status_code != 200:
         return Command(goto="confirm", update={"error": {"status": r.status_code, **body}})
-    flows = sum(len(c.get("output", {}).get("responses", [])) for c in body["controller_responses"].values())
+    # cdn-qoe answers with its controllers' responses, a policy at the client's switch with its rules
+    flows = len(body.get("rules", [])) + sum(len(c.get("output", {}).get("responses", []))
+                                             for c in body.get("controller_responses", {}).values())
     return Command(goto=END, update={"status": "deployed", "error": None,
                                      "result": {"server_ip": body.get("server_ip"), "path": body.get("path"), "flows": flows}})
 
@@ -234,7 +242,7 @@ def build(checkpointer):
     for name, node in (("ground", _ground_node), ("retrieve", _retrieve_node), ("generate", _generate_node),
                        ("confirm", _confirm_node), ("deploy", _deploy_node)):
         g.add_node(name, node)
-    g.add_edge(START, "ground")
+    g.add_conditional_edges(START, lambda s: "confirm" if is_nile(s["text"]) else "ground", ["confirm", "ground"])
     g.add_edge("ground", "retrieve")
     g.add_edge("retrieve", "generate")
     g.add_edge("generate", "confirm")

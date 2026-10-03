@@ -1,7 +1,11 @@
 # Brief: Profiler HTTP API (Flask). Chat steps and assurance events stream as Server-Sent Events.
-#   POST /profile                  {text, model?, thread_id?}          -> SSE until the operator must decide
+#   POST /profile                  {text, model?, thread_id?}          -> SSE until the operator must decide;
+#                                  a text already in Nile ("define intent ...") goes to the operator
+#                                  as written, with no model
 #   POST /profile/<thread>/resume  {action, nile?, text?}              -> SSE (see graph._confirm_node)
-#   GET  /models, POST /models/<id>/load|unload                        -> llm-status (or its stub)
+#   GET  /models[?total_gb=&free_gb=]                                  -> the GPU, each model's state, whether it
+#                                  fits the VRAM the caller measured, and the default one (llm.status);
+#                                  POST /models/<id>/load|unload -> llm-status
 #   GET  /events                                                       -> SSE of deploy/recalculate events
 #   GET  /intents, GET /health                                         -> deployed intents; live state of the IBN chain
 
@@ -33,14 +37,17 @@ app = Flask(__name__)
 @app.route("/profile", methods=["POST"])
 def profile():
     body = request.get_json(silent=True) or {}
-    model = body.get("model") or llm.CONFIG["models"][0]["id"]
     if not body.get("text"):
         return jsonify(error="text is required"), 400
-    state = llm.status()["models"].get(model, {}).get("state")
-    if state != "awake":
-        return jsonify(error="model not loaded", model=model, state=state), 409
+    nile = body["text"].strip() if graph.is_nile(body["text"]) else None
+    status = llm.status()
+    model = body.get("model") or status["selected"]
+    if not nile:
+        state = status["models"].get(model, {}).get("state")
+        if state != "awake":   # no model on this machine, or the one asked for is not loaded
+            return jsonify(error="no model" if model is None else "model not loaded", model=model, state=state), 409
     thread = body.get("thread_id") or uuid.uuid4().hex
-    return _stream({"text": body["text"], "model": model, "error": None, "result": None, "status": None}, thread)
+    return _stream({"text": body["text"], "model": model, "nile": nile, "error": None, "result": None, "status": None}, thread)
 
 
 # Brief: Delivers the operator's decision to a thread waiting at confirm
@@ -54,10 +61,11 @@ def resume(thread):
 # Brief: GPU and per-model state for the model cards
 @app.route("/models", methods=["GET"])
 def models():
-    status = llm.status()
-    keys = ("id", "label", "quantization", "budget_gb", "pinned")
-    return jsonify(gpu=status["gpu"], models=[{**{k: m.get(k) for k in keys}, **status["models"].get(m["id"], {"state": "down"})}
-                                             for m in llm.CONFIG["models"]])
+    status = llm.status(request.args.get("total_gb", 0, type=float), request.args.get("free_gb", 0, type=float))
+    keys = ("id", "label", "quantization", "budget_gb", "pinned", "local")
+    return jsonify(gpu=status["gpu"], selected=status["selected"],
+                   models=[{**{k: m.get(k) for k in keys}, **status["models"].get(m["id"], {"state": "down"})}
+                           for m in llm.CONFIG["models"]])
 
 
 # Brief: Wakes or sleeps a model through llm-status (409 with its reason when refused)
@@ -66,8 +74,9 @@ def model_action(model_id, action):
     if action not in ("load", "unload"):
         return jsonify(error="unknown action"), 404
     if not llm.CONFIG.get("llm_status_url"):
-        return jsonify(error="llm-status is not deployed yet; the stub is read-only"), 409
-    r = requests.post(f"{llm.CONFIG['llm_status_url']}/models/{model_id}/{action}", timeout=120)
+        return jsonify(error="the models of this machine are started by rein up"), 409
+    r = requests.post(f"{llm.CONFIG['llm_status_url']}/models/{model_id}/{action}", timeout=300)
+    llm._status.clear()   # the states changed
     return Response(r.content, r.status_code, mimetype="application/json")
 
 
@@ -93,9 +102,9 @@ def health():
             ok = False
         return {"ok": ok, "ms": round(1000 * (time.time() - start))}
 
-    model = llm.CONFIG["models"][0]
+    model = llm.MODELS.get(llm.status()["selected"])   # None: no model on this machine
     return jsonify(profiler={"ok": True, "ms": 0},
-                   llm=probe(model["base_url"] + "/models"),
+                   llm=probe(model["base_url"] + "/models") if model else {"ok": False, "ms": 0},
                    deployer=probe(inventory.DEPLOYER_URL + "/"),
                    onos=probe(ONOS_URL + "/devices", auth=(os.environ.get("ONOSUSER", "onos"), os.environ.get("ONOSPASS", "rocks"))),
                    supervisor=probe(SUPERVISOR_URL + "/metrics"))

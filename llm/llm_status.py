@@ -1,7 +1,9 @@
 # Brief: llm-status (runs on the GPU VM): GPU memory and per-model state for the REIN console, and
-# wake/sleep of the vLLM servers on the operator's request. It never unloads anything by itself.
+# wake/sleep of the vLLM servers on the operator's request. One model is awake at a time besides the
+# pinned ones: loading one sleeps the others, so their memory counts as free for it.
 #   GET  /status                 -> {gpu: {total_gb, used_gb, free_gb}, models: {id: {state, budget_gb, fits, reason, kv_cache_pct, pinned}}}
-#   POST /models/<id>/load       -> wake up (409 with the reason when it does not fit or is not running)
+#   POST /models/<id>/load       -> sleep the others and wake it up (409 with the reason when it does not
+#                                   fit or is not running)
 #   POST /models/<id>/unload     -> sleep level 1 (409 for pinned models)
 
 import os
@@ -51,15 +53,19 @@ def kv_cache_pct(model: dict):
     return round(100 * float(m.group(1)), 1) if m else None
 
 
+# Brief: The awake models that loading `mid` sleeps: every other one that is not pinned
+def _others(mid: str) -> list:
+    return [m for other, m in MODELS.items() if other != mid and not m.get("pinned") and state(m) == "awake"]
+
+
 @app.route("/status")
 def status():
     g, models = gpu(), {}
     for mid, m in MODELS.items():
         st = state(m)
-        fits = st == "awake" or m["budget_gb"] <= g["free_gb"]
-        reason = None if fits else f"needs {m['budget_gb']} GB, {g['free_gb']} GB free"
-        if st == "down":
-            reason = reason or "not running on the GPU VM"
+        room = g["free_gb"] + sum(o["budget_gb"] for o in _others(mid))
+        fits = st == "awake" or (st == "sleeping" and m["budget_gb"] <= room)
+        reason = None if fits else "not running on the GPU VM" if st == "down" else f"needs {m['budget_gb']} GB, {room:g} GB free"
         models[mid] = {"state": st, "budget_gb": m["budget_gb"], "fits": fits, "reason": reason,
                        "kv_cache_pct": kv_cache_pct(m) if st == "awake" else None, "pinned": bool(m.get("pinned"))}
     return jsonify(gpu=g, models=models)
@@ -73,9 +79,12 @@ def load(mid):
     if st == "down":
         return jsonify(error=f"{mid} is not running on the GPU VM"), 409
     if st == "sleeping":
-        free = gpu()["free_gb"]
-        if m["budget_gb"] > free:
-            return jsonify(error=f"{mid} needs {m['budget_gb']} GB and {free} GB are free: unload another model"), 409
+        others = _others(mid)
+        room = gpu()["free_gb"] + sum(o["budget_gb"] for o in others)
+        if m["budget_gb"] > room:
+            return jsonify(error=f"{mid} needs {m['budget_gb']} GB and {room:g} GB are free"), 409
+        for o in others:
+            requests.post(_root(o) + "/sleep", params={"level": 1}, timeout=120).raise_for_status()
         requests.post(_root(m) + "/wake_up", timeout=120).raise_for_status()
     return jsonify(id=mid, state="awake")
 

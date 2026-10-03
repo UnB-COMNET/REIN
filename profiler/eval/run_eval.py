@@ -1,6 +1,6 @@
 # Brief: Evaluation: models x {zero-shot, fixed few-shot, RAG, RAG + constrained decoding, RAG + regenerate}
 # on held-out NEAT pairs and the REIN phrases, scored with the deployer's own validator.
-# Usage: python eval/run_eval.py [--models qwen3.6,llama,gemma] [--n 200] [--workers 4]
+# Usage: python eval/run_eval.py [--models qwen3.6,llama,lite] [--n 200] [--workers 4]
 
 import argparse
 import collections
