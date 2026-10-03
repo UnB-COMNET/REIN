@@ -10,7 +10,7 @@ COPY classes/ /deployer/classes/
 COPY services/ /deployer/services/
 COPY app.py /deployer/app.py
 COPY metrics.py /deployer/metrics.py
-COPY nile.py nile.lark /deployer/
+COPY nile.py nile.lark edge.py /deployer/
 COPY .env /deployer/.env
 COPY requirements.txt /deployer/requirements.txt
 COPY entrypoint.sh /deployer/entrypoint.sh

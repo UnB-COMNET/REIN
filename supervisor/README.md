@@ -9,6 +9,7 @@ Monitors QoS KPIs from path deployed by the deployer and requests recalculation 
 3. Every 10s, the supervisor measures end-to-end delay by summing per-edge RTTs from the ONOS link-latencies app (plus `2 × access_delay_ms` for client/server access links) and computes a moving-average throughput from the byte counter of this client's own flow rule (matched by `IPV4_SRC`/`IPV4_DST`) on the server's access switch — not the switch port's aggregate counter, so co-tenants sharing that link don't dilute the measurement
 4. The measurements go to the drift rule selected by `SUPERVISOR_MODE`
 5. After a recalculate request, the loop pauses until the deployer sends a new path via `/supervise`. If the deployer cannot be reached the loop keeps ticking, so a deployer that is down for one cycle does not leave the client unmonitored
+6. When the client's intent is removed (`remove service('cdn-qoe')`), the deployer calls `DELETE /supervise/<client_ip>` and the client's loop stops
 
 ## Layout
 
@@ -33,6 +34,7 @@ Add a function to `app/drift.py` with the signature `(client_ip, path, kpis, sou
 |--------|------|-------------|
 | GET | `/` | Health check |
 | POST | `/supervise` | Receive calculated path from deployer |
+| DELETE | `/supervise/<client_ip>` | Stop monitoring a client (404 if it was not monitored) |
 | GET | `/active_links` | Deduplicated `(PoP_A, PoP_B)` edges across all clients' active paths |
 | GET | `/access_links` | Each client's own first-hop edge, keyed by `client_ip` |
 | GET | `/metrics` | Snapshot of counters and timings |

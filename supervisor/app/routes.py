@@ -73,6 +73,14 @@ def supervise():
     return make_response({"status": "ok", "message": "Path received, monitoring started"}, 200)
 
 
+# Brief: Stops monitoring a client, when the deployer removes its intent
+@app.route("/supervise/<client_ip>", methods=["DELETE"])
+def unsupervise(client_ip):
+    if not supervisor.forget(client_ip):
+        return make_response({"error": "not monitored"}, 404)
+    return make_response({"status": "ok"}, 200)
+
+
 # Brief: Returns deduplicated (PoP_A, PoP_B) edges from all clients' currently active paths
 @app.route("/active_links", methods=["GET"])
 def get_active_links():

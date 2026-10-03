@@ -67,6 +67,12 @@ class IntentMonitor:
             self._timer.cancel()
             self._timer = None
 
+    # Brief: Stops for good: a cycle already running finds no path on its next tick
+    def close(self) -> None:
+        with self._lock:
+            self._path = None
+        self.stop()
+
     # Brief: The path being monitored, or None. Public so the supervisor can read
     # it without reaching into this monitor's lock.
     def path(self):

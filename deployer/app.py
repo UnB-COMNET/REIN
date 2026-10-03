@@ -24,11 +24,12 @@ _args, _ = _parser.parse_known_args()
 os.environ["DEPLOYER_VERBOSE"] = "1" if _args.verbose else "0"
 VERBOSE = _args.verbose
 
+import edge
 import metrics as _metrics
 import nile
-from classes.onos import Onos
+from classes.onos import _CLIENT_SERVER_ASSIGNMENTS, Onos
 from classes.topology import Topology
-from services import cdn_qoe
+from services import cdn_qoe, cdn_qoe_installer
 
 install_aliases()
 
@@ -58,16 +59,18 @@ def _extract_client_ip(intent: str):
 # can restart a client's iperf3 against its newly (re)calculated server, instead of
 # polling /deploy/server_for. No-ops silently if that listener isn't running.
 IPERF_NOTIFY_URL = os.environ.get("IPERF_NOTIFY_URL", "http://127.0.0.1:5152/server_changed")
+SUPERVISOR_URL = "http://127.0.0.1:5151"
 
 
 # Brief: Re-reads the ONOS graph and deploys under the lock. The graph is rebuilt on every
 # (re)deploy because hosts can be created at runtime
 # Params:
 #   dict intent_req: {"intent": "<Nile>"}
+#   install: What installs it, given intent_req (None: the controllers, through compile())
 # Return:
 #   dict response with "status": 503 if ONOS is down, 422 for an endpoint ONOS has not
-#   discovered (instead of failing inside compile()), else the controllers' answer
-def _deploy(intent_req):
+#   discovered (instead of failing inside compile()), else install's answer
+def _deploy(intent_req, install=None):
     with _deploy_lock:
         try:
             topo.make_network_graph()
@@ -77,7 +80,38 @@ def _deploy(intent_req):
         if client_ip and client_ip not in topo.nodes["hosts"]:
             return {"status": 422, "error": "unsupported", "operation": "endpoint('{}')".format(client_ip),
                     "reason": "{} is not a host known to ONOS".format(client_ip)}
-        return topo.notify(intent_req)
+        return (install or topo.notify)(intent_req)
+
+
+# Brief: Installs the policies the client's switch enforces (edge.py); runs inside _deploy
+def _enforce(intent: str, client_ip: str, items: list) -> dict:
+    try:
+        rules = edge.apply(onos, topo.nodes["hosts"], client_ip, items, intent)
+    except Exception as e:
+        return {"status": 500, "error": "onos", "detail": str(e)}
+    return {"status": 200, "intent": intent, "rules": rules}
+
+
+# Brief: remove service('cdn-qoe'): the client's path, its supervision and its entry in /intents
+def _remove_path(intent: str, client_ip: str) -> dict:
+    with _deploy_lock:
+        server_ip = _server_by_client.pop(client_ip, None)
+        _intents_by_client.pop(client_ip, None)
+        _path_by_client.pop(client_ip, None)
+        _CLIENT_SERVER_ASSIGNMENTS.pop(client_ip, None)
+        try:
+            cdn_qoe_installer.remove_old_flows(onos, client_ip, server_ip, cdn_qoe.DEVICE_MAP)
+        except Exception as e:
+            return {"status": 503, "error": "onos", "detail": str(e)}
+    try:
+        requests.delete(f"{SUPERVISOR_URL}/supervise/{client_ip}", timeout=3)
+    except requests.RequestException:
+        pass   # the supervisor may be down; its recalculate then gets a 404
+    return {"status": 200, "intent": intent, "server_ip": server_ip}
+
+
+def _reply(res: dict):
+    return make_response(res, res["status"])
 
 
 # Brief: Keeps the client's server and path and appends a deploy/recalculate event
@@ -129,6 +163,12 @@ def deploy():
 
     if VERBOSE:
         print("Request: {}".format(json.dumps(req, indent=4)))
+    client_ip, items = nile.actions(req["intent"])
+    op, fn = items[0][:2]   # validate() leaves one kind of operation per intent
+    if (op, fn) in edge.OPERATIONS:
+        return _reply(_deploy(req, lambda r: _enforce(r["intent"], client_ip, items)))
+    if (op, fn) == ("remove", "service"):
+        return _reply(_remove_path(req["intent"], client_ip))
     res = _deploy(req)
 
     # Extract client IP from intent string for per-client recalculation
@@ -165,7 +205,7 @@ def recalculate():
     client_ip  = body.get("client_ip")
     intent_req = _intents_by_client.get(client_ip) if client_ip else None
 
-    if intent_req is None:
+    if intent_req is None and not client_ip:
         intent_req = next(reversed(_intents_by_client.values()), None)  # fallback: most recent
 
     if intent_req is None:
@@ -214,12 +254,12 @@ def capabilities():
     return make_response({"capabilities": [{"operation": k, **v} for k, v in nile.CAPABILITIES.items()]}, 200)
 
 
-# Brief: The intent deployed for each client and the server currently assigned to it
+# Brief: The intents in place: each client's cdn-qoe path, with its server, and the policies at its switch
 @app.route("/intents", methods=["GET"])
 def intents():
     return make_response({"intents": [
         {"client_ip": ip, "intent": req["intent"], "server_ip": _server_by_client.get(ip), "path": _path_by_client.get(ip)}
-        for ip, req in _intents_by_client.items()]}, 200)
+        for ip, req in _intents_by_client.items()] + edge.listing()}, 200)
 
 
 # Brief: Deploy/recalculate events newer than ?after=<id>, oldest first (the profiler polls it)
@@ -255,17 +295,13 @@ def reset_metrics():
 
 @app.route("/delete_all", methods=["DELETE"])
 def delete_all():
-    """ Deletes all flow rules. Useful for a quick reset when running different experiments """
-    print("PRINTING INSTALLED INTENTS")
-    print(topo.installed_intents)
-    intent = "define intent stnIntent: for group('students') add middlebox('dpi')"
-
-    controller_responses = topo.get_intent(intent)
-    print("CONTROLLER RESPONSES")
-    print(controller_responses)
-    for controller_response in controller_responses:
-        onos.revoke_policies(controller_response["output"]["responses"])
-
+    """ Removes every intent in place: the cdn-qoe paths and the policies at the clients' switches """
+    failed = [r for r in (_remove_path(req["intent"], ip) for ip, req in list(_intents_by_client.items())) if r["status"] != 200]
+    with _deploy_lock:
+        edge.clear_all(onos)
+        topo.installed_intents.clear()
+    if failed:
+        return {"error": "onos", "detail": failed[0]["detail"]}, 503
     return {"message": "Deleted all installed flow rules!"}, 200
 
 
