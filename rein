@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # Brief: Runs REIN on this machine: the LFT testbed, the REIN services (docker compose) and the console.
 #   ./rein setup                  once: LFT next to REIN, the images, deployer/.env, the console's Python
-#                                 packages, sudo without a password for lft and docker, the console service,
-#                                 and the rein command (/usr/local/bin/rein, a link to this file)
+#                                 packages, the NVIDIA Container Toolkit where there is an NVIDIA GPU, sudo
+#                                 without a password for lft and docker, the console service, and the rein
+#                                 command (/usr/local/bin/rein, a link to this file)
 #   rein up [--topology T]        the testbed (only when none is running; T is a preset or a topology
 #                                 file), the services and the console; ends with the console's address
 #   rein down [--keep-testbed]    the console, the services and the testbed
@@ -37,7 +38,7 @@ REIN = Path(__file__).resolve().parent       # through the /usr/local/bin/rein l
 COMMAND = Path("/usr/local/bin/rein")
 LFT_DIR = Path(os.environ.get("LFT_DIR", REIN.parent / "lft"))
 LFT_REPO = "https://github.com/UnB-COMNET/lft.git"
-LFT_BRANCH = os.environ.get("LFT_BRANCH", "feat/topology-runtime")   # dash-experiments once its PR is merged
+LFT_BRANCH = os.environ.get("LFT_BRANCH", "main")
 SUDO = [] if os.geteuid() == 0 else ["sudo"]
 USER = os.environ.get("SUDO_USER") or getpass.getuser()
 HOME = Path.home() / ".rein-console"          # the console's log and pid when it runs without systemd
@@ -47,12 +48,26 @@ CONSOLE = "http://127.0.0.1:4180"
 SERVICES = {"deployer": "http://127.0.0.1:5000/", "supervisor": "http://127.0.0.1:5151/metrics",
             "collector": "http://127.0.0.1:8123/ping",   # its database: what the console's Monitoramento reads
             "profiler": "http://127.0.0.1:5300/health", "console": CONSOLE + "/"}
+if not (REIN / "collector").is_dir():   # the collector module is not in this checkout
+    del SERVICES["collector"]
 ONOS = "http://127.0.0.1:8181/onos/v1/devices"
 PROFILER = os.environ.get("PROFILER_URL", "http://127.0.0.1:5300")
 ENV = HOME / "rein.env"                       # the share of the GPU of the model rein starts, for llm/compose.yml
 MODEL = HOME / "model"                        # the id of the model chosen with rein model
 MODEL_WAIT_S = 1800                           # a model's first start downloads its image and its weights
 PRESETS = ("diamond", "rnp", "dash", "dash-debug", "diamond-video")
+# What lets containers use the GPU, from NVIDIA's apt repository, then Docker told of it (which restarts Docker)
+NVIDIA_TOOLKIT = """set -e
+apt-get install -y curl gpg
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \\
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \\
+  > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+apt-get install -y nvidia-container-toolkit
+nvidia-ctk runtime configure --runtime=docker
+systemctl restart docker
+"""
 # The testbed's video servers and clients, and their folders in LFT's docker/ (lft-pydash-server fetches ~720 MB)
 VIDEO_IMAGES = {"lft-dash-video": "dash_video_server", "lft-dash-live": "dash_live_server", "lft-pydash-server": "pydash_server",
                 "lft-dash-client": "dash_video_client", "lft-pydash-client": "pydash_client"}
@@ -353,6 +368,14 @@ def setup(args) -> None:
     step("REIN images (deployer, supervisor, profiler)")
     compose("build")
 
+    step("GPU for the language models")
+    if not shutil.which("nvidia-smi"):
+        print("no NVIDIA GPU (nvidia-smi not found): no model runs here and the chat takes the intents in Nile")
+    elif "nvidia" in subprocess.run([*SUDO, "docker", "info", "--format", "{{json .Runtimes}}"], capture_output=True, text=True).stdout:
+        print("NVIDIA Container Toolkit: installed")
+    else:
+        run(*SUDO, "sh", "-c", NVIDIA_TOOLKIT)
+
     step("The console's Python packages")
     if subprocess.run(["python3", "-c", "import flask, requests"], capture_output=True).returncode:
         run(*SUDO, "apt-get", "install", "-y", "python3-flask", "python3-requests")
@@ -451,8 +474,9 @@ def start_model(say) -> None:
         raise Failed("the profiler does not tell the models (rein logs profiler)", fatal=False)
     chosen = next((m for m in info["models"] if m["id"] == info["chosen"]), None)
     if not chosen:
-        need = min(m["budget_gb"] for m in info["models"] if m.get("local"))
-        say(f"none: {info['gpu']['free_gb']:g} GB of VRAM free, {need:g} GB needed; write the intents in Nile in the chat")
+        gpu, need = info["gpu"], min((m["budget_gb"] for m in info["models"] if m.get("local")), default=0)
+        say(f"none: {gpu['free_gb']:g} GB of VRAM free, {need:g} GB needed, the chat takes Nile" if gpu["total_gb"]
+            else "none: no NVIDIA GPU, the chat takes Nile")
         return
     use_model(say, chosen, info)
 
@@ -462,7 +486,7 @@ def up(args) -> None:
         sys.exit(f"*** run {REIN / 'rein'} setup first")
     sudo_ready()
     HOME.mkdir(parents=True, exist_ok=True)
-    board = Board("Running", ["Testbed", "Services", "Deployer", "Supervisor", "Collector", "Profiler", "Model", "Console"])
+    board = Board("Running", ["Testbed", "Services", *(name.capitalize() for name in SERVICES if name != "console"), "Model", "Console"])
     try:
         with board:
             with board.task("Testbed") as say:
@@ -483,7 +507,7 @@ def up(args) -> None:
                 code, _, err = quiet(compose_argv("up", "-d", "--build"), lambda text: compose_step(text) and say(compose_step(text)))
                 if code:
                     raise Failed("docker compose up failed", err)
-                say("deployer, supervisor, collector and profiler started")
+                say("the services started")
             for name, url in SERVICES.items():
                 with board.task(name.capitalize()) as say:
                     address = urllib.parse.urlsplit(url).netloc
@@ -523,7 +547,7 @@ def down(args) -> None:
                 code, _, err = quiet(compose_argv("down"), lambda text: compose_step(text) and say(compose_step(text)))
                 if code:
                     raise Failed("docker compose down failed", err)
-                say("deployer, supervisor, collector and profiler removed")
+                say("the services removed")
             if model:
                 with board.task("Model") as say:
                     say("docker compose down")

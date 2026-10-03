@@ -41,7 +41,7 @@ services:
       - MODELS_CONFIG=/config/models.yaml
       - PROFILER_DB=/state/profiler.sqlite
     volumes:
-      - ./llm/models.yaml:/config/models.yaml:ro
+      - ./llm:/config:ro   # models.yaml and, when this machine has one, models.local.yaml
       - profiler-state:/state
 
 volumes:

@@ -9,11 +9,30 @@ import requests
 import yaml
 from openai import OpenAI
 
-# One file for the profiler and llm-status: REIN/llm/models.yaml (mounted into the container)
+# REIN/llm/models.yaml (the llm folder is mounted into the container): the models REIN starts on this machine
 CONFIG_PATH = os.environ.get("MODELS_CONFIG",
                              os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "llm", "models.yaml"))
-with open(CONFIG_PATH) as f:
-    CONFIG = yaml.safe_load(f)
+
+
+# Brief: The models file with this machine's own over it: models.local.yaml, next to it and kept out of
+# git. Its models come first and replace those of the same id, e.g. one that another machine serves
+# Params:
+#   String path: Path of models.yaml
+# Return:
+#   dict {llm_status_url, models}
+def load(path: str) -> dict:
+    with open(path) as f:
+        config = yaml.safe_load(f)
+    local = path[:-len(".yaml")] + ".local.yaml"
+    if os.path.exists(local):
+        with open(local) as f:
+            own = yaml.safe_load(f) or {}
+        ids = {m["id"] for m in own.get("models") or []}
+        config = {**config, **own, "models": (own.get("models") or []) + [m for m in config["models"] if m["id"] not in ids]}
+    return config
+
+
+CONFIG = load(CONFIG_PATH)
 MODELS = {m["id"]: m for m in CONFIG["models"]}
 
 _clients = {}
