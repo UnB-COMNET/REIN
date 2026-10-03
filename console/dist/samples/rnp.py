@@ -1,14 +1,16 @@
 # Topology settings: ("PoP-Name", num_clients, num_servers)
+# Hosts where the LFT rnp runner places them with its default seed (1): clients in BA and RJ,
+# servers in AM, GO, SE and SP
 POPS = (
-    ["PoP-AC", 0, 0], ["PoP-AL", 0, 0], ["PoP-AM", 0, 0], 
-    ["PoP-AP", 0, 0], ["PoP-BA", 0, 0], 
+    ["PoP-AC", 0, 0], ["PoP-AL", 0, 0], ["PoP-AM", 0, 1], 
+    ["PoP-AP", 0, 0], ["PoP-BA", 1, 0], 
     ["PoP-CE", 0, 0], ["PoP-DF", 0, 0], ["PoP-ES", 0, 0], 
-    ["PoP-GO", 0, 0], ["PoP-MA", 0, 0], ["PoP-MG", 0, 0], 
+    ["PoP-GO", 0, 1], ["PoP-MA", 0, 0], ["PoP-MG", 0, 0], 
     ["PoP-MS", 0, 0], ["PoP-MT", 0, 0], ["PoP-PA", 0, 0], 
     ["PoP-PB", 0, 0], ["PoP-PE", 0, 0], ["PoP-PI", 0, 0], 
-    ["PoP-PR", 0, 0], ["PoP-RJ", 0, 0], ["PoP-RN", 0, 0], 
+    ["PoP-PR", 0, 0], ["PoP-RJ", 1, 0], ["PoP-RN", 0, 0], 
     ["PoP-RO", 0, 0], ["PoP-RR", 0, 0], ["PoP-RS", 0, 0], 
-    ["PoP-SC", 0, 0], ["PoP-SE", 0, 0], ["PoP-SP", 0, 0], 
+    ["PoP-SC", 0, 0], ["PoP-SE", 0, 1], ["PoP-SP", 0, 1], 
     ["PoP-TO", 0, 0]
 )
 

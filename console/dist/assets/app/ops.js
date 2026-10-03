@@ -71,8 +71,8 @@
     ];
     if (server) rows.push(['Servidor iperf3', `sudo docker exec -d ${n.id} bash -lc "iperf3 -s -p 5201 --idle-timeout 5 </dev/null >/tmp/iperf3-5201.log 2>&1"`], ['Log do servidor', `sudo docker exec ${n.id} tail -f /tmp/iperf3-5201.log`]);
     else rows.push(['Cliente iperf3', `sudo docker exec ${n.id} iperf3 -c ${peer?.ip || '192.168.0.1'} -p 5201 -t 60 -i 1 -b 35M --fq-rate 35M --forceflush -J > results/iperf/manual/${n.id}.json`]);
-    if (R.hasVideo(n)) rows.push(['Cliente DASH', `sudo docker exec ${n.id} /usr/local/bin/dash-client -y -hostname ${peer?.ip || '192.168.0.1'} -scheme http`]);
-    rows.push(['No REPL do LFT', `traffic ${server ? 'ping' : 'iperf'} ${n.id} ${peer?.id || 'ds0'}${server ? '' : ' -t 30 -b 35M'}`]);
+    if (R.hasVideo(n)) rows.push(['Cliente DASH', `sudo docker exec ${n.id} ${n.image === 'lft-pydash-client' ? 'pydash-play' : 'dash-play'} ${peer?.ip || '192.168.0.1'} 60`]);
+    rows.push(['Pelo LFT', server ? `sudo lft traffic start --tool ping --client ${peer?.id || 'cl0'} --server ${n.id} --duration 30` : `sudo lft traffic start --client ${n.id} --server ${peer?.id || 'ds0'} --duration 30 --rate 35M`]);
     return rows;
   };
   R.cliList = rows => `<div class="cli">${rows.map(([t, c]) => `<div class="cli-row"><span>${esc(t)}</span><code>${esc(c)}</code><button type="button" class="ico cli-copy" data-copy-text="${esc(c)}" aria-label="Copiar comando">${R.icon('i-copy')}</button></div>`).join('')}</div>`;
@@ -204,7 +204,7 @@
       const a = x.n - 1, b = x.n;
       const iv = `${String(a.toFixed(2)).padStart(6)}-${b.toFixed(2).padEnd(6)}`;
       if (x.tool === 'iperf3') {
-        if (pol.blocked) x.lines.client.push(`[  5] ${iv} sec  0.00 Bytes  0.00 bits/sec    3   1.41 KBytes   (ACL do ONOS: ${x.proto.toUpperCase()} bloqueado)`);
+        if (pol.blocked) x.lines.client.push(`[  5] ${iv} sec  0.00 Bytes  0.00 bits/sec    3   1.41 KBytes   (${x.proto.toUpperCase()} bloqueado no switch do cliente)`);
         else x.lines.client.push(`[  5] ${iv} sec  ${(x.rateNow / 8).toFixed(2)} MBytes  ${x.rateNow.toFixed(1)} Mbits/sec    ${x.proto === 'udp' ? Math.round(x.rateNow * 86) : Math.random() < .08 ? 1 : 0}    ${Math.round(160 + x.rateNow * 4)} KBytes`);
         x.lines.server.push(`[  5] ${iv} sec  ${(x.rateNow / 8).toFixed(2)} MBytes  ${x.rateNow.toFixed(1)} Mbits/sec`);
       } else {
@@ -220,22 +220,18 @@
   }, 1000);
 
   // ---------------------------------------------------------------- deployer services (what it executes)
-  // From deployer/classes/onos.py: cdn-qoe and llm pick server and path; set bandwidth('max')
-  // installs DROP meters on every switch; allow/block go to ONOS's ACL app with an ipProto;
-  // add/remove middlebox steer through a fixed middlebox address.
+  // From deployer/nile.py (GET /capabilities): cdn-qoe picks server and path; set bandwidth('max') and
+  // block/allow protocol are rules at the target's own switch (deployer/edge.py).
   R.SERVICES = [
     { id: 'cdn-qoe', name: 'CDN-QoE', ic: 'i-play', tone: 'blue', what: 'Escolhe o servidor DASH de menor RTT e o caminho de maior vazão até o cliente. O supervisor pede novo caminho quando a latência passa do limite.', status: 'ok' },
-    { id: 'llm', name: 'Roteamento por LLM', ic: 'i-chat', tone: 'orange', what: 'Como o CDN-QoE, mas o servidor e o caminho vêm do modelo em gpu.mfcaetano.lan:8000.', status: 'ok' },
-    { id: 'bandwidth', name: 'Limite de banda', ic: 'i-bolt', tone: 'teal', what: 'Instala um meter OpenFlow com banda DROP em cada switch para o tráfego do alvo. Só o limite máximo está implementado.', status: 'ok' },
-    { id: 'acl', name: 'Bloqueio e liberação', ic: 'i-shield', tone: 'graphite', what: 'Regras no app ACL do ONOS (org.onosproject.acl) por protocolo IP: TCP, UDP ou ICMP.', status: 'ok' },
-    { id: 'middlebox', name: 'Middlebox', ic: 'i-modules', tone: 'ink', what: 'Desvia o tráfego por um DPI, honeypot ou quarentena. O deployer usa o endereço fixo 192.168.1.4.', status: 'warn' },
+    { id: 'bandwidth', name: 'Limite de banda', ic: 'i-bolt', tone: 'teal', what: 'Um meter OpenFlow com banda DROP no switch do alvo limita o que chega a ele. Um novo limite substitui o anterior.', status: 'ok' },
+    { id: 'acl', name: 'Bloqueio e liberação', ic: 'i-shield', tone: 'graphite', what: 'Descarta o protocolo nos dois sentidos, no switch do alvo: TCP, UDP, ICMP, ou SSH, HTTP e HTTPS pela porta TCP. Liberar desfaz o bloqueio.', status: 'ok' },
   ];
   R.serviceNile = (sid, v, id) => {
     const ep = `endpoint('${v.ip}')`;
-    if (sid === 'cdn-qoe' || sid === 'llm') return `define intent ${id}: for ${ep} add service('${sid}')`;
+    if (sid === 'cdn-qoe') return `define intent ${id}: for ${ep} add service('${sid}')`;
     if (sid === 'bandwidth') return `define intent ${id}: for ${ep} set bandwidth('max', '${v.mbps}', 'mbps')`;
     if (sid === 'acl') return `define intent ${id}: for ${ep} ${v.action} protocol('${v.proto}')`;
-    if (sid === 'middlebox') return `define intent ${id}: for ${ep} add middlebox('${v.box}')`;
     return '';
   };
 })();

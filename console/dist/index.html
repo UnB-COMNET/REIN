@@ -148,7 +148,7 @@
     </section>
 
     <section class="page" data-page="monitor" aria-labelledby="m-title">
-      <div class="page-head"><h1 id="m-title" tabindex="-1">Monitoramento</h1><p>O que o observer vê em cada fluxo com intent.</p></div>
+      <div class="page-head"><h1 id="m-title" tabindex="-1">Monitoramento</h1><p>O que o collector mede para cada cliente.</p></div>
       <div class="page-scroll" data-slot="observer"></div>
     </section>
 
@@ -197,11 +197,19 @@
       <label class="frow"><span class="flabel">Nome</span><span class="fctl"><input name="name" required pattern="(cl|ds)[0-9]+" autocomplete="off" spellcheck="false"><small>cl para cliente, ds para servidor</small></span></label>
       <label class="frow"><span class="flabel">Switch</span><span class="fctl"><select name="sw" aria-label="Switch"></select></span></label>
       <label class="frow"><span class="flabel">Endereço</span><span class="fctl"><input name="ip" inputmode="decimal" autocomplete="off"><small>/24 na rede 192.168.0.0</small></span></label>
-      <label class="frow"><span class="flabel">Imagem</span><span class="fctl"><select name="image" aria-label="Imagem Docker"><option value="lft-dash-video">lft-dash-video</option><option value="lft-dash-client">lft-dash-client</option><option value="pydash">pydash</option><option value="lft-iperf:latest">lft-iperf:latest</option><option value="networkstatic/iperf3">networkstatic/iperf3</option><option value="nginx:alpine">nginx:alpine</option><option value="ubuntu:22.04">ubuntu:22.04</option><option value="__other">Outra imagem…</option></select><small data-image-hint></small></span></label>
+      <label class="frow"><span class="flabel">Imagem</span><span class="fctl"><select name="image" aria-label="Imagem Docker"><option value="lft-dash-video">lft-dash-video</option><option value="lft-dash-live">lft-dash-live</option><option value="lft-pydash-server">lft-pydash-server</option><option value="lft-dash-client">lft-dash-client</option><option value="lft-pydash-client">lft-pydash-client</option><option value="lft-iperf">lft-iperf</option><option value="__other">Outra imagem…</option></select><small data-image-hint></small></span></label>
       <label class="frow" data-custom-image hidden><span class="flabel">Nome da imagem</span><span class="fctl"><input name="custom" placeholder="registry/imagem:tag" autocomplete="off" spellcheck="false"></span></label>
     </div>
     <div class="fcli"><span class="flabel">O que o testbed executa</span><pre data-host-cli></pre></div>
     <div class="sheet-foot"><button class="btn btn-danger" type="button" data-host-remove hidden>Remover host</button><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar host</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet sheet-sm" data-sheet="newtopo" aria-labelledby="nt-title">
+  <form class="sheet-in" data-newtopo-form>
+    <div class="sheet-head"><div><h2 id="nt-title">Nova topologia</h2><p>O testbed atual sai, e o LFT sobe o ONOS com a rede escolhida. Leva cerca de um minuto.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="presets" role="radiogroup" aria-label="Topologia" data-presets></div>
+    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-topo-clean>Limpar a topologia</button><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar</button></div>
   </form>
 </dialog>
 

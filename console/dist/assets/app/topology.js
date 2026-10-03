@@ -130,6 +130,21 @@
   const pipeW = cap => cap > 0 ? Math.min(16, 4 + 2.4 * Math.log2(1 + cap / 2)) : 0;
   let loads = new Map();
   const shownVal = new Map();
+  // A link's heat as it fills, u from 0 to 1: green, yellow at half, orange, red when full
+  const heat = (u, a = 1) => `hsl(${Math.max(0, u < .5 ? 140 - 180 * u : u < .8 ? 50 - 83 * (u - .5) : 25 - 125 * (u - .8)).toFixed(0)} 85% 46% / ${a})`;
+  // Beads along d, denser as u grows, one way or the other (sign). Quantised so the animation only
+  // restarts when the traffic really changes
+  function beads(key, d, u, sign, glow = '') {
+    const q = Math.round(u * 20) / 20, gap = Math.round(34 - 22 * q);
+    const b = path(key, 'beads', 'beads', d);
+    const sig = `${gap}:${sign}:${glow}`;
+    if (b.__sig === sig) return;
+    b.__sig = sig;
+    b.style.setProperty('--g', `${gap}px`);
+    b.style.animationDuration = `${(gap / 40).toFixed(2)}s`;
+    b.style.animationDirection = sign > 0 ? 'normal' : 'reverse';
+    b.style.setProperty('--glow', glow);
+  }
   function flowDir() {
     const dir = new Map();
     Object.values(M.routes).forEach(r => { if (!r.path) return; r.path.slice(1).forEach((q, i) => { const l = R.between(r.path[i], q); if (l && !dir.has(l.id)) dir.set(l.id, l.a === r.path[i] ? 1 : -1); }); });
@@ -142,20 +157,20 @@
     // Hosts with a traffic session starting or running are operating too
     const busy = new Set(R.traffic.sessions.filter(x => x.status === 'running' || x.status === 'starting').flatMap(x => [x.client, x.server]));
     Object.values(M.routes).forEach(r => { if (!r.path) return; R.pathLinks(r.path).forEach(l => onRoute.add(l.id)); accessOn.add(r.path[0]); accessOn.add(r.path.at(-1)); r.path.forEach(id => nodeOn.add(id)); });
-    const dir = flowDir(), scale = M.nodes.length > 14 ? .55 : stage.classList.contains('is-compact') ? .75 : 1;
-    R.hosts().forEach(h => { if (R.node(h.sw)) path(`a:${h.id}`, 'access', `wire access${accessOn.has(h.id) ? ' on-route' : ''}`, dOf(curve(h.sw, h.id, h.id, true))); });
+    // Measured direction first, the route's where nothing was measured
+    const dir = new Map([...flowDir(), ...R.linkDir()]), hostFlow = R.hostFlow(), scale = M.nodes.length > 14 ? .55 : stage.classList.contains('is-compact') ? .75 : 1;
+    R.hosts().forEach(h => {
+      if (!R.node(h.sw)) return;
+      const d = dOf(curve(h.sw, h.id, h.id, true)), f = hostFlow.get(h.id);
+      path(`a:${h.id}`, 'access', `wire access${accessOn.has(h.id) ? ' on-route' : ''}`, d);
+      if (f) beads(`ab:${h.id}`, d, Math.min(1, f.load / (M.defaults.rate || 35)), f.dir);   // an access link has no cap of its own
+    });
     M.links.forEach(l => {
       const st = R.linkState(l), d = dOf(curve(l.a, l.b, l.id));
-      const cap = l.now.down ? 0 : l.now.rate, load = loads.get(l.id) || 0, u = cap ? Math.min(1, load / cap) : 0;
-      if (cap) path(`p:${l.id}`, 'pipes', `pipe${onRoute.has(l.id) ? ' on-route' : ''}${st !== 'ok' ? ` ${st}` : ''}`, d, { 'stroke-width': (pipeW(cap) * scale).toFixed(1) });
-      path(`l:${l.id}`, 'links', `wire${onRoute.has(l.id) ? ' on-route' : ''}${st !== 'ok' ? ` ${st}` : ''}${openKey === `l:${l.id}` ? ' is-hot' : ''}${R.node(l.a)?.pending || R.node(l.b)?.pending ? ' pending' : ''}`, d);
-      if (load > .3 && dir.has(l.id)) {
-        // Quantised so the animation only restarts when the traffic really changes
-        const q = Math.round(u * 20) / 20, gap = Math.round(34 - 22 * q);
-        const b = path(`b:${l.id}`, 'beads', 'beads', d);
-        const sig = `${gap}:${dir.get(l.id)}`;
-        if (b.__sig !== sig) { b.__sig = sig; b.style.setProperty('--g', `${gap}px`); b.style.animationDuration = `${(gap / 40).toFixed(2)}s`; b.style.animationDirection = dir.get(l.id) > 0 ? 'normal' : 'reverse'; }
-      }
+      const cap = l.now.down ? 0 : l.now.rate, load = loads.get(l.id) || 0, u = cap ? Math.min(1, load / cap) : 0, hot = cap && load > .3;
+      if (cap) path(`p:${l.id}`, 'pipes', `pipe${onRoute.has(l.id) ? ' on-route' : ''}${st !== 'ok' ? ` ${st}` : ''}`, d, { 'stroke-width': (pipeW(cap) * scale).toFixed(1), style: hot ? `stroke: ${heat(u, .16 + .3 * u)}` : '' });
+      path(`l:${l.id}`, 'links', `wire${onRoute.has(l.id) ? ' on-route' : ''}${hot ? ' loaded' : ''}${st !== 'ok' ? ` ${st}` : ''}${openKey === `l:${l.id}` ? ' is-hot' : ''}${R.node(l.a)?.pending || R.node(l.b)?.pending ? ' pending' : ''}`, d, { style: hot ? `--heat: ${heat(u)}` : '' });
+      if (hot && dir.has(l.id)) beads(`b:${l.id}`, d, u, dir.get(l.id), heat(u, .9));
       path(`h:${l.id}`, 'hits', 'wire-hit', d, { 'data-link': l.id, 'data-keep-pop': '' });
     });
     els.forEach((e, k) => { if (e.__gen !== gen && !k.startsWith('x:')) { e.remove(); els.delete(k); } });
@@ -200,6 +215,7 @@
         const t = `${cur < 10 ? R.fmt1(cur) : R.fmt(cur)}<small> / ${R.fmt(cap)} Mb/s</small>`;
         if (el.firstChild.innerHTML !== t) el.firstChild.innerHTML = t;
         el.lastChild.firstChild.style.width = `${Math.min(100, cur / cap * 100).toFixed(1)}%`;
+        el.lastChild.firstChild.style.background = cur > .3 ? heat(Math.min(1, cur / cap)) : '';
       });
       if (busy) tickNumbers();
     });
@@ -318,7 +334,7 @@
   }
   const center = () => [stage.clientWidth / 2, stage.clientHeight / 2];
   const local = e => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  const onCanvas = t => !t.closest('[data-node], .pill, .wire-hit, .zoom, .topo-head h1');
+  const onCanvas = t => !t.closest('[data-node], .pill, .wire-hit, .zoom, .topo-head h1, .tpanel');
 
   const pointers = new Map();
   let pan = null, pinch = null;
@@ -645,7 +661,7 @@
     const at = (c, fromA, r) => { const a = sc(fromA ? c.a : c.b); for (let k = 1; k <= 48; k++) { const p = sc(bez(c, fromA ? k / 48 : 1 - k / 48)); if (Math.hypot(p[0] - a[0], p[1] - a[1]) >= r) return p; } return sc(bez(c, .5)); };
     const add = (i, c, fromA) => out.push({ i, p: at(c, fromA, radius(i.node)) });
     const ofNode = nid => R.ifaces(nid).forEach(i => {
-      if (i.link) { const l = R.link(i.link); add(i, curve(l.a, l.b, l.id), l.a === nid); return; }
+      if (i.link) { const l = R.link(i.link); if (l) add(i, curve(l.a, l.b, l.id), l.a === nid); return; }   // the interfaces may still be the previous topology's
       const h = R.node(nid).kind === 'host' ? R.node(nid) : R.node(i.peerNode);
       if (h && R.node(h.sw)) add(i, curve(h.sw, h.id, h.id, true), i.node === h.sw);
     });
@@ -722,7 +738,7 @@
   const sheet = $('[data-sheet="host"]'), form = $('[data-host-form]');
   const hostCli = () => {
     const f = form.elements, img = f.image.value === '__other' ? (f.custom.value.trim() || 'ubuntu:22.04') : f.image.value, id = f.name.value.trim() || 'cl?', sw = f.sw.value;
-    return [`docker run -d --name=${id} --network=none --cap-add=NET_ADMIN --entrypoint sleep ${img} infinity`, `ip link add ${id}${sw} type veth peer name ${sw}${id}`, `ip link set ${id}${sw} netns ${id}; ip link set ${sw}${id} netns ${sw}`, `ip -n ${id} addr add ${f.ip.value.trim() || '192.168.0.x'}/24 dev ${id}${sw}`, `docker exec ${sw} ovs-vsctl add-port ${sw} ${sw}${id}`, `# no REPL do LFT: create ${f.role.value === 'Servidor' ? 'server' : 'host'} ${id} ${f.ip.value.trim()} · connect ${id} ${sw}`];
+    return [`docker run -d --name=${id} --network=none --cap-add=NET_ADMIN --entrypoint sleep ${img} infinity`, `ip link add ${id}${sw} type veth peer name ${sw}${id}`, `ip link set ${id}${sw} netns ${id}; ip link set ${sw}${id} netns ${sw}`, `ip -n ${id} addr add ${f.ip.value.trim() || '192.168.0.x'}/24 dev ${id}${sw}`, `docker exec ${sw} ovs-vsctl add-port ${sw} ${sw}${id}`, `# pelo LFT: sudo lft host add ${id} --switch ${sw} --ip ${f.ip.value.trim() || '192.168.0.x'} --image ${img}${f.role.value === 'Servidor' ? ' --server' : ''}`];
   };
   const paintHostCli = () => { $('[data-host-cli]').textContent = hostCli().map(c => (c.startsWith('#') ? c : `$ ${c}`)).join('\n'); };
   function openHostSheet(id = null, sw = null) {
@@ -747,7 +763,7 @@
     sheet.showModal();
   }
   R.openHostSheet = openHostSheet;
-  const hint = () => { const img = form.elements.image.value; $('[data-image-hint]').textContent = img === 'lft-iperf:latest' ? 'Imagem iperf3 do LFT (docker/iperf)' : R.IMAGES.find(([k]) => k === img)?.[1] || 'Qualquer imagem presente em docker images.'; };
+  const hint = () => { const img = form.elements.image.value; $('[data-image-hint]').textContent = R.IMAGES.find(([k]) => k === img)?.[1] || 'Uma imagem de CONSOLE_IMAGES, presente em docker images.'; };
   form.addEventListener('input', paintHostCli);
   form.addEventListener('click', e => {
     const b = e.target.closest('[data-role]');
@@ -838,24 +854,21 @@
   let svc = 'cdn-qoe', svcVals = {}, svcIntent = null;
   const hostOpts = (sel, clientsOnly) => (clientsOnly ? R.clientsList() : R.hosts()).map(h => `<option value="${h.ip}"${h.ip === sel ? ' selected' : ''}>${h.id} · ${h.ip}</option>`).join('');
   function paintSvc() {
-    svcList.innerHTML = R.SERVICES.map(s => { const live = M.intents.filter(i => i.state === 'deployed' && (R.nileInfo(i.nile).kind === s.id || (s.id === 'acl' && R.nileInfo(i.nile).kind === 'acl'))).length; return `<button type="button" class="svc-item" data-svc="${s.id}" aria-current="${s.id === svc}"><span class="sq ${s.tone}">${R.icon(s.ic)}</span><span><b>${s.name}</b><em>${s.status === 'warn' ? 'Requer middlebox' : live ? `${live} ativa${live > 1 ? 's' : ''}` : 'Disponível'}</em></span></button>`; }).join('');
+    svcList.innerHTML = R.SERVICES.map(s => { const live = M.intents.filter(i => i.state === 'deployed' && (R.nileInfo(i.nile).kind === s.id || (s.id === 'acl' && R.nileInfo(i.nile).kind === 'acl'))).length; return `<button type="button" class="svc-item" data-svc="${s.id}" aria-current="${s.id === svc}"><span class="sq ${s.tone}">${R.icon(s.ic)}</span><span><b>${s.name}</b><em>${live ? `${live} ativa${live > 1 ? 's' : ''}` : 'Disponível'}</em></span></button>`; }).join('');
     const s = R.SERVICES.find(x => x.id === svc), v = svcVals;
     const clients = R.clientsList();
     v.ip ||= clients[0]?.ip || R.hosts()[0]?.ip || '';
-    v.mbps ||= 10; v.action ||= 'block'; v.proto ||= 'udp'; v.box ||= 'dpi';
+    v.mbps ||= 10; v.action ||= 'block'; v.proto ||= 'udp';
     const target = (label = 'Cliente', clientsOnly = true) => `<label class="frow"><span class="flabel">${label}</span><span class="fctl"><select data-v="ip" aria-label="${label}">${hostOpts(v.ip, clientsOnly)}</select></span></label>`;
     const seg = (key, opts, label) => `<div class="frow"><span class="flabel">${label}</span><div class="seg" role="group" aria-label="${label}">${opts.map(([val, t]) => `<button type="button" data-sv="${key}" data-val="${val}" aria-pressed="${v[key] === val}">${t}</button>`).join('')}</div></div>`;
     let fields = '';
-    if (svc === 'cdn-qoe' || svc === 'llm') fields = target();
+    if (svc === 'cdn-qoe') fields = target();
     if (svc === 'bandwidth') fields = target('Alvo', false) + `<label class="frow"><span class="flabel">Limite máximo</span><span class="fctl unitf"><input type="number" min="1" step="1" value="${v.mbps}" data-v="mbps" aria-label="Limite em Mb/s"><em>Mb/s</em></span></label>`;
-    if (svc === 'acl') fields = target('Alvo', false) + seg('action', [['block', 'Bloquear'], ['allow', 'Liberar']], 'Ação') + seg('proto', [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP']], 'Protocolo');
-    if (svc === 'middlebox') fields = target('Alvo', false) + seg('box', [['dpi', 'DPI'], ['honeypot', 'Honeypot'], ['quarantine', 'Quarentena']], 'Função');
+    if (svc === 'acl') fields = target('Alvo', false) + seg('action', [['block', 'Bloquear'], ['allow', 'Liberar']], 'Ação') + seg('proto', [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], 'Protocolo');
     const nile = R.serviceNile(svc, v, `q${M.intents.length + 1}`);
     const live = M.intents.filter(i => ['deployed', 'checking'].includes(i.state) && R.nileInfo(i.nile).kind === (svc === 'acl' ? 'acl' : svc));
     const it = svcIntent && M.intents.find(i => i.id === svcIntent);
-    const warn = svc === 'middlebox' && !R.hosts().some(h => h.ip === '192.168.1.4');
     svcForm.innerHTML = `<header class="svc-head"><span class="sq lg ${s.tone}">${R.icon(s.ic)}</span><div><h3>${s.name}</h3><p>${s.what}</p></div></header>
-      ${warn ? `<p class="banner warn">${R.icon('i-help')}Nenhum host usa 192.168.1.4 nesta topologia; o deployer vai recusar. Crie um host com esse endereço antes.</p>` : ''}
       <div class="fgrid">${fields}</div>
       <div class="code"><div class="code-head"><span>Nile gerada</span><button type="button" class="code-copy" data-copy-text="${R.esc(nile)}">${R.icon('i-copy')}<span>Copiar</span></button></div><pre class="nile">${R.highlight(nile)}</pre></div>
       ${it ? `<div class="svc-status st-${it.state}">${it.state === 'checking' ? '<i class="spinner"></i>Verificando no deployer' : it.state === 'deployed' ? `${R.icon('i-check')}${it.id} implantada às ${it.when}: ${R.esc(it.effect || '')}` : it.state === 'rejected' ? `${R.icon('i-x')}Recusada (${it.code || 422}): ${R.esc(it.error)}` : ''}</div>` : ''}
@@ -887,21 +900,37 @@
   // ------------------------------------------------------------ traffic between hosts
   const trSheet = $('[data-sheet="traffic"]'), trForm = $('[data-traffic-form]');
   let tr = {};
+  // DASH: the client's image is the player, the server's image the video (LFT's docker/)
+  const PLAYERS = { 'lft-dash-client': 'dash-play', 'lft-pydash-client': 'pydash-play' };
+  const VIDEOS = { 'lft-dash-video': 'o vídeo de teste (7 qualidades, 60 s em loop)', 'lft-dash-live': 'a transmissão ao vivo (5 qualidades)', 'lft-pydash-server': 'o Big Buck Bunny (6 qualidades)' };
+  const trHosts = kind => R.hosts().filter(h => tr.tool !== 'dash' || (kind === 'server' ? R.DASH_SERVERS : R.DASH_CLIENTS).has(h.image));
+  // What a DASH session plays, and the images no host runs yet
+  function dashWhat() {
+    const c = R.node(tr.client), s = R.node(tr.server);
+    if (!c || !s) return `Nenhum ${!s ? 'servidor' : 'cliente'} DASH no testbed: adicione um host com ${[...(!s ? R.DASH_SERVERS : R.DASH_CLIENTS)].join(', ')}.`;
+    if (c.image === 'lft-pydash-client' && s.image !== 'lft-pydash-server') return 'O pydash só toca o lft-pydash-server.';
+    return `${c.id} toca ${VIDEOS[s.image]} com o ${PLAYERS[c.image]}, que escolhe a qualidade pela vazão.`;
+  }
+  const dashMissing = () => {
+    const have = new Set(R.hosts().map(h => h.image)), missing = [...R.DASH_SERVERS, ...R.DASH_CLIENTS].filter(i => !have.has(i));
+    return missing.length ? `Nenhum host usa ${missing.join(', ').replace(/, ([^,]+)$/, ' ou $1')} ainda; crie um em Adicionar host para tocá-lo aqui.` : '';
+  };
   const trCli = () => {
     const c = R.node(tr.client), s = R.node(tr.server);
     if (!c || !s) return '';
     const file = tr.tool === 'iperf3' ? `${tr.out}/${c.id}-${s.id}.json` : `${tr.out}/${c.id}.jsonl`;
     return tr.tool === 'iperf3'
       ? [`# servidor, em segundo plano, log em /tmp/iperf3-${tr.port}.log`, `sudo docker exec -d ${s.id} bash -lc "iperf3 -s -p ${tr.port} --idle-timeout 5 </dev/null >/tmp/iperf3-${tr.port}.log 2>&1"`, '# cliente, JSON no diretório de resultados', `mkdir -p ${tr.out} && sudo docker exec ${c.id} iperf3 -c ${s.ip} -p ${tr.port} ${tr.dir === 'down' ? '-R ' : ''}${tr.proto === 'udp' ? '-u ' : ''}-t ${tr.duration || 86400} -i 1 -b ${tr.rate}M --fq-rate ${tr.rate}M --forceflush -J > ${file}`, `# acompanhar: sudo docker exec ${s.id} tail -f /tmp/iperf3-${tr.port}.log`].join('\n')
-      : [`# cliente DASH (neubot dash-client) contra o servidor ${s.id}`, `mkdir -p ${tr.out} && sudo docker exec ${c.id} /usr/local/bin/dash-client -y -hostname ${s.ip} -scheme http > ${file}`, `# acesso no servidor: sudo docker exec ${s.id} tail -f /var/log/nginx/access.log`].join('\n');
+      : [`sudo lft traffic start --tool dash --client ${c.id} --server ${s.id} --duration ${tr.duration} --out ${tr.out}`, `# no cliente, uma linha JSON por segmento em ${file}: ${PLAYERS[c.image] || 'dash-play'} ${s.ip} ${tr.duration}`, `# acesso no servidor: sudo docker exec ${s.id} tail -f /var/log/nginx/access.log`].join('\n');
   };
   function paintTr() {
-    const hosts = R.hosts().map(h => `<option value="${h.id}">${h.id} · ${h.ip}</option>`).join('');
     const iperf = tr.tool === 'iperf3';
+    ['server', 'client'].forEach(k => { if (!trHosts(k).some(h => h.id === tr[k])) tr[k] = trHosts(k)[0]?.id; });
+    const opts = k => trHosts(k).map(h => `<option value="${h.id}">${h.id} · ${iperf ? h.ip : h.image}</option>`).join('');
     $('[data-traffic-fields]', trForm).innerHTML = `
       <div class="frow"><span class="flabel">Ferramenta</span><div class="seg" role="group" aria-label="Ferramenta"><button type="button" data-tv="tool" data-val="iperf3" aria-pressed="${iperf}">iperf3</button><button type="button" data-tv="tool" data-val="dash" aria-pressed="${!iperf}">DASH</button></div></div>
-      <label class="frow"><span class="flabel">${iperf ? 'Servidor (iperf3 -s)' : 'Servidor DASH'}</span><span class="fctl"><select data-t="server" aria-label="Servidor">${hosts}</select></span></label>
-      <label class="frow"><span class="flabel">${iperf ? 'Cliente (iperf3 -c)' : 'Cliente DASH'}</span><span class="fctl"><select data-t="client" aria-label="Cliente">${hosts}</select></span></label>
+      <label class="frow"><span class="flabel">${iperf ? 'Servidor (iperf3 -s)' : 'Servidor DASH'}</span><span class="fctl"><select data-t="server" aria-label="Servidor">${opts('server')}</select>${iperf ? '' : `<small>${R.esc(dashMissing())}</small>`}</span></label>
+      <label class="frow"><span class="flabel">${iperf ? 'Cliente (iperf3 -c)' : 'Cliente DASH'}</span><span class="fctl"><select data-t="client" aria-label="Cliente">${opts('client')}</select>${iperf ? '' : '<small data-tr-what></small>'}</span></label>
       ${iperf ? `<div class="frow"><span class="flabel">Sentido</span><div class="seg" role="group" aria-label="Sentido"><button type="button" data-tv="dir" data-val="down" aria-pressed="${tr.dir === 'down'}">Servidor → cliente</button><button type="button" data-tv="dir" data-val="up" aria-pressed="${tr.dir === 'up'}">Cliente → servidor</button></div></div>
       <div class="frow"><span class="flabel">Protocolo</span><div class="seg" role="group" aria-label="Protocolo"><button type="button" data-tv="proto" data-val="tcp" aria-pressed="${tr.proto === 'tcp'}">TCP</button><button type="button" data-tv="proto" data-val="udp" aria-pressed="${tr.proto === 'udp'}">UDP</button></div></div>
       <label class="frow"><span class="flabel">Taxa alvo</span><span class="fctl unitf"><input type="number" min="0.1" step="0.1" value="${tr.rate}" data-t="rate" aria-label="Taxa em Mb/s"><em>Mb/s</em></span></label>
@@ -913,6 +942,8 @@
   }
   function paintTrCli() {
     $('[data-traffic-cli]', trForm).textContent = trCli();
+    const what = $('[data-tr-what]', trForm);
+    if (what) what.textContent = dashWhat();
     const f = $('[data-tr-file]', trForm);
     if (f) f.textContent = `Arquivo: ${tr.tool === 'iperf3' ? `${tr.out}/${tr.client}-${tr.server}.json` : `${tr.out}/${tr.client}.jsonl`}`;
   }
@@ -943,16 +974,21 @@
   // The sessions, on the canvas; each opens its tools' output
   const tpanel = $('[data-tpanel]');
   const mmss = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  // No repaint while a button of the panel is pressed: replaced between press and release, it loses the click
+  let pressing = false, stale = false;
   function paintPanel() {
+    if (pressing) { stale = true; return; }
     const list = R.traffic.sessions.slice(0, 5);
     tpanel.hidden = !list.length;
     if (!list.length) return;
     tpanel.innerHTML = `<header><b>Tráfego</b><span>${R.traffic.sessions.filter(x => x.status === 'running').length} em curso</span><button type="button" class="ico" data-tp-new aria-label="Iniciar tráfego">${R.icon('i-plus')}</button></header>${list.map(x => {
       const on = x.status === 'running', t = x.t0 ? (Date.now() - x.t0) / 1000 : 0;
       const from = x.tool === 'dash' || x.reverse ? x.server : x.client, to = x.tool === 'dash' || x.reverse ? x.client : x.server;
-      return `<div class="tp-row st-${x.status}"><span class="tp-ic">${x.status === 'starting' ? '<i class="spinner"></i>' : R.icon(x.tool === 'dash' ? 'i-play' : 'i-traffic')}</span><span class="tp-main"><b>${from} → ${to}</b><em>${x.tool}${x.tool === 'iperf3' ? ` ${x.proto.toUpperCase()}` : ''} · ${on ? `${R.fmt1(x.rateNow)} Mb/s · ${mmss(t)}` : x.status === 'starting' ? 'iniciando' : `salvo em ${x.file}`}</em></span><button type="button" class="ico" data-tp-log="${x.id}" aria-label="Ver log">${R.icon('i-terminal')}</button>${on || x.status === 'starting' ? `<button type="button" class="ico" data-tp-stop="${x.id}" aria-label="Parar">${R.icon('i-stop')}</button>` : `<button type="button" class="ico" data-tp-drop="${x.id}" aria-label="Remover da lista">${R.icon('i-x')}</button>`}</div>`;
+      return `<div class="tp-row st-${x.status}"><span class="tp-ic">${x.status === 'starting' ? '<i class="spinner"></i>' : R.icon(x.tool === 'dash' ? 'i-play' : 'i-traffic')}</span><span class="tp-main"><b>${from} → ${to}</b><em>${x.tool}${x.tool === 'iperf3' ? ` ${x.proto.toUpperCase()}` : ''} · ${on ? `${R.fmt1(x.rateNow)} Mb/s · ${mmss(t)}` : x.status === 'starting' ? 'iniciando' : x.status === 'failed' ? 'não alcançou o servidor' : `salvo em ${x.file}`}</em></span><button type="button" class="ico" data-tp-log="${x.id}" aria-label="Ver log">${R.icon('i-terminal')}</button>${on || x.status === 'starting' ? `<button type="button" class="ico" data-tp-stop="${x.id}" aria-label="Parar">${R.icon('i-stop')}</button>` : `<button type="button" class="ico" data-tp-drop="${x.id}" aria-label="Remover da lista">${R.icon('i-x')}</button>`}</div>`;
     }).join('')}`;
   }
+  tpanel.addEventListener('pointerdown', () => { pressing = true; });
+  addEventListener('pointerup', () => { if (!pressing) return; pressing = false; if (stale) setTimeout(() => { stale = false; paintPanel(); }); });
   tpanel.addEventListener('click', e => {
     if (e.target.closest('[data-tp-new]')) { openTraffic(); return; }
     const lg = e.target.closest('[data-tp-log]'); if (lg) { openLog(lg.dataset.tpLog); return; }
@@ -1000,11 +1036,11 @@
   const popAdd = $('[data-pop="add"]'), addBtn = $('[data-tool="add"]');
   addBtn.addEventListener('click', () => {
     if (R.pop.current?.key === 'add') { R.pop.close(); return; }
-    popAdd.innerHTML = `<div class="mlist">${[['switch', 'i-switch', 'Switch…', 'Open vSwitch com links'], ['host', 'i-laptop', 'Host…', 'Container ligado a um switch'], ['traffic', 'i-traffic', 'Tráfego…', 'iperf3 ou DASH entre hosts']].map(([k, ic, t, d]) => `<button type="button" role="menuitem" data-add="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join('')}</div>`;
+    popAdd.innerHTML = `<div class="mlist">${[['switch', 'i-switch', 'Switch…', 'Open vSwitch com links'], ['host', 'i-laptop', 'Host…', 'Container ligado a um switch'], ['traffic', 'i-traffic', 'Tráfego…', 'iperf3 ou DASH entre hosts'], ['topology', 'i-topo', 'Nova topologia…', 'Diamante, RNP ou vazia']].map(([k, ic, t, d]) => `<button type="button" role="menuitem" data-add="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join('')}</div>`;
     const r = addBtn.getBoundingClientRect();
     R.pop.open(popAdd, r.left + r.width / 2, r.bottom - 6, { trigger: addBtn, key: 'add' });
   });
-  popAdd.addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (!b) return; R.pop.close(true); ({ switch: openSwitchSheet, host: () => openHostSheet(), traffic: () => openTraffic() })[b.dataset.add](); });
+  popAdd.addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (!b) return; R.pop.close(true); ({ switch: openSwitchSheet, host: () => openHostSheet(), traffic: () => openTraffic(), topology: openNewTopology })[b.dataset.add](); });
   $('[data-tool="services"]').addEventListener('click', () => openServices());
   $('[data-tool="traffic"]').addEventListener('click', () => openTraffic());
   $('[data-tool="onos"]').href = R.env.onos.gui;
@@ -1051,30 +1087,72 @@
     if (R.pop.current?.key === 'conn') { R.pop.close(); return; }
     const running = R.traffic.sessions.filter(x => x.status === 'running').length;
     popConn.innerHTML = `<div class="pop-head"><div><h2>Testbed ${R.env.testbed}</h2><p class="pop-sub"><span class="dot"></span>LFT, ${R.switches().length} switches, ${R.hosts().length} hosts, ${running} fluxo${running === 1 ? '' : 's'} de teste</p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
+      <div class="look-row conn-fwd"><span><b>Encaminhamento reativo</b><em>Desligado, só passa tráfego onde um intent instalou o caminho.</em></span><button class="toggle" type="button" role="switch" aria-checked="${R.fwd.active}" data-fwd aria-label="Encaminhamento reativo do ONOS"></button></div>
       ${kvRows([['ONOS', `${location.hostname}:8181 · OpenFlow 6653`, true], ['Deployer', `${location.hostname}:5000`, true], ['Supervisor', `${location.hostname}:5151`, true], ['Intent profiler', `${location.hostname}:5300`, true], ['Console API', `${location.hostname}:4180`, true], ['Resultados', `${R.env.results}/iperf, ${R.env.results}/dash`, true]])}
-      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], ['Karaf do ONOS', R.env.onos.karaf], ['Túnel para esta máquina', `ssh -p 13508 -L 4180:127.0.0.1:4180 -L 8181:127.0.0.1:8181 ${R.env.testbed}.mfcaetano.cc`]])}
+      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], ['Karaf do ONOS', R.env.onos.karaf]])}
       <div class="pop-actions"><a class="btn" href="${R.env.onos.gui}" target="_blank" rel="noreferrer">${R.icon('i-external')}GUI2 do ONOS</a></div>`;
     const r = connBtn.getBoundingClientRect();
     R.pop.open(popConn, r.left + r.width / 2, r.bottom - 6, { trigger: connBtn, key: 'conn' });
+    R.fwd.refresh().then(paintFwd);
   });
-  popConn.addEventListener('click', e => { if (e.target.closest('[data-close]')) R.pop.close(); });
+  const paintFwd = () => { const t = $('[data-fwd]', popConn); if (t) { t.setAttribute('aria-checked', String(R.fwd.active)); t.removeAttribute('aria-busy'); } };
+  popConn.addEventListener('click', e => {
+    if (e.target.closest('[data-close]')) { R.pop.close(); return; }
+    const t = e.target.closest('[data-fwd]');
+    if (t && !t.hasAttribute('aria-busy')) { t.setAttribute('aria-busy', 'true'); R.fwd.set(!R.fwd.active).then(paintFwd); }
+  });
 
   const file = $('[data-import]');
   $('[data-tool="import"]').addEventListener('click', () => file.click());
-  file.addEventListener('change', async () => {
-    const f = file.files[0];
-    if (!f) return;
+  // Builds a topology file as the testbed (online) or the emulated network, and shows it
+  function importTopology(text, name) {
     try {
-      const s = R.importPy(await f.text(), f.name);
+      const s = R.importPy(text, name);
       const parts = [s.throughput && 'vazão', s.rtt && 'RTT', s.loss && 'perda'].filter(Boolean);
       R.notify({ source: 'Topologia importada', text: `${s.switches} switches, ${s.hosts} hosts, ${s.links} links. ${parts.length ? `Por link: ${parts.join(', ')}.` : 'Links com os valores padrão do CONFIG.'}`, tone: 'ok' });
-      if (s.geo === s.switches && !mapMode) setMap(true);
+      if (s.switches && s.geo === s.switches && !mapMode) setMap(true);
       else if (s.geo < s.switches && mapMode) setMap(false);
     } catch (err) {
       R.notify({ source: 'Não foi possível importar', text: err.message, tone: 'down' });
     }
+  }
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (f) importTopology(await f.text(), f.name);
     file.value = '';
   });
+
+  // A new topology: a preset (the console's samples, built like any imported file), an empty one
+  // (only ONOS), or none at all (every testbed container goes)
+  const ntSheet = $('[data-sheet="newtopo"]'), ntForm = $('[data-newtopo-form]'), cleanBtn = $('[data-topo-clean]');
+  const PRESETS = [['diamond', 'i-topo', 'Diamante', '4 PoPs; servidor de vídeo em ES, cliente em SP'], ['rnp', 'i-map', 'RNP', 'O backbone da RNP; 2 clientes e 4 servidores de vídeo'], ['empty', 'i-plus', 'Vazia', 'Só o ONOS; você cria os switches e os hosts']];
+  const EMPTY = 'POPS = ()\nADJACENCY_MATRIX = ()\nCONFIG = {"pops": POPS, "adjacency_matrix": ADJACENCY_MATRIX, "throughput": "35mbit", "delay": "10ms", "jitter": "1ms"}\n';
+  let preset = 'diamond';
+  const paintPresets = () => { $('[data-presets]', ntForm).innerHTML = PRESETS.map(([k, ic, t, d]) => `<button type="button" role="radio" aria-checked="${k === preset}" data-preset="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join(''); };
+  function openNewTopology() {
+    preset = 'diamond';
+    paintPresets();
+    delete cleanBtn.dataset.armed;
+    cleanBtn.textContent = 'Limpar a topologia';
+    ntSheet.showModal();
+  }
+  ntForm.addEventListener('click', e => {
+    if (e.target.closest('[data-close-sheet]')) { ntSheet.close(); return; }
+    const b = e.target.closest('[data-preset]');
+    if (b) { preset = b.dataset.preset; paintPresets(); return; }
+    if (e.target.closest('[data-topo-clean]')) {
+      if (!cleanBtn.dataset.armed) { cleanBtn.dataset.armed = '1'; cleanBtn.textContent = 'Remover todos os containers?'; return; }
+      ntSheet.close();
+      R.cleanTopology();
+    }
+  });
+  ntForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    ntSheet.close();
+    const text = preset === 'empty' ? EMPTY : await (await fetch(`samples/${preset}.py`)).text();
+    importTopology(text, `${preset === 'empty' ? 'vazia' : preset}.py`);
+  });
+  ntSheet.addEventListener('click', e => { if (e.target === ntSheet) ntSheet.close(); });
   $('[data-tool="export"]').addEventListener('click', () => {
     const blob = new Blob([R.exportPy()], { type: 'text/x-python' });
     const a = document.createElement('a');

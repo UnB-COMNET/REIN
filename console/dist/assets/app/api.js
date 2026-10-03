@@ -13,7 +13,9 @@
     job: R.job, apply: R.apply, addHost: R.addHost, updateHost: R.updateHost, removeHost: R.removeHost, addSwitch: R.addSwitch,
     setSwitchPower: R.setSwitchPower, removeSwitch: R.removeSwitch, importPy: R.importPy, exportPy: R.exportPy, profile: R.profile,
     answer: R.answer, proposeIntent: R.proposeIntent, intentAct: R.intentAct, ifaces: R.ifaces, linkLoad: R.linkLoad,
+    linkDir: R.linkDir, hostFlow: R.hostFlow,
     start: R.traffic.start, stop: R.traffic.stop, loadOn: R.traffic.loadOn,
+    cleanTopology: R.cleanTopology, fwdRefresh: R.fwd.refresh, fwdSet: R.fwd.set,
   };
   const when = f => (...a) => (api.online ? f : orig[f.orig])(...a);
   const online = (name, f) => { f.orig = name; return when(f); };
@@ -84,6 +86,7 @@
   // ---------------------------------------------------------------- jobs: what lft runs, step by step
   // lft's step titles (profissa_lft.testbed), as the console words them
   const STEP_PT = [
+    [/^Starting ONOS/, () => 'Subindo o ONOS, os switches e os links (cerca de 40 s)'],
     [/^Shaping (\S+) in (\S+)/, m => `Filas tc de ${m[1]} em ${m[2]}`],
     [/^Setting (\S+) (up|down) in (\S+)/, m => `${m[1]} ${m[2]} em ${m[3]}`],
     [/^Starting (\S+) from (\S+)/, m => `Criando o container ${m[1]} (${m[2]})`],
@@ -104,6 +107,14 @@
     [/^Capturing (\S+) in (\S+)/, m => `tcpdump em ${m[1]} (${m[2]})`],
     [/^iperf3 server in (\S+)/, m => `Servidor iperf3 em ${m[1]}`],
     [/^(\S+) client in (\S+)/, m => `Cliente ${m[1]} em ${m[2]}`],
+    // rein model: what it tells while it puts a model in use
+    [/^stopping (.+)/, m => `Parando ${m[1]}`],
+    [/^waking (\S+)/, m => `Acordando ${m[1]}`],
+    [/^(?:starting |vllm-)(\S+)/, m => `Iniciando ${m[1]}`],
+    [/^pulling the image/, () => 'Baixando a imagem'],
+    [/^loading (\S+);/, m => `Carregando ${m[1]}`],
+    [/^(\S+) (?:stopped while loading|did not start)/, m => `${m[1]} não iniciou (docker logs vllm-${m[1]})`],
+    [/^(\S+) is still loading/, m => `${m[1]} ainda carrega (docker logs vllm-${m[1]})`],
   ];
   const stepText = t => { for (const [re, f] of STEP_PT) { const m = t.match(re); if (m) return f(m); } return t; };
 
@@ -124,19 +135,20 @@
     if (!el) { el = document.createElement('div'); el.className = 'job'; el.dataset.job = j.id; hud.prepend(el); }
     const done = j.status !== 'running', total = Math.max(j.total, j.steps.length, 1), cur = j.steps.at(-1);
     const out = [...j.log].reverse().find(([k]) => k === 'out')?.[1]; // before lft's first step (a topology build), its latest line
+    const flow = !done && !j.steps.length; // no steps told: how long it takes is not known
     el.classList.toggle('is-done', done);
     el.classList.toggle('is-err', !!j.error);
     el.innerHTML = `<div class="job-h"><span class="job-ic">${done ? (j.error ? R.icon('i-x') : R.icon('i-check')) : '<i class="spinner"></i>'}</span><b>${esc(j.title)}</b><em>${done ? (j.error ? 'falhou' : 'pronto') : j.steps.length ? `${j.steps.length}/${total}` : ''}</em></div>
-      <p class="job-s">${esc(done ? (j.error || j.doneText || 'Concluído.') : cur ? cur.text : out || 'Enviando ao testbed')}</p>
-      <div class="job-bar"><i style="width:${(done ? 100 : Math.max(0, j.steps.length - 1) / total * 100).toFixed(1)}%"></i></div>
+      <p class="job-s">${esc(done ? (j.error || j.doneText || 'Concluído.') : cur ? cur.text : out ? stepText(out) : j.first || 'Enviando ao testbed')}</p>
+      <div class="job-bar${flow ? ' is-flow' : ''}"><i style="width:${(done ? 100 : Math.max(0, j.steps.length - 1) / total * 100).toFixed(1)}%"></i></div>
       <pre class="job-log">${j.log.slice(-60).map(([k, t]) => (k === 'cmd' ? `<span>$ ${esc(t)}</span>` : esc(t))).join('\n')}</pre>`;
     const pre = el.querySelector('.job-log');
     pre.scrollTop = pre.scrollHeight;
   }
   // Runs one API call that answers {job} and follows its events; the promise gets lft's result
-  function realJob({ title, nodes = [], doneText = '' }, method, url, body, raw = false) {
+  function realJob({ title, nodes = [], doneText = '', first = '' }, method, url, body, raw = false) {
     ensureHud();
-    const j = { id: `j${Date.now()}${Math.random().toString(36).slice(2, 5)}`, title, doneText, steps: [], total: 0, log: [], status: 'running' };
+    const j = { id: `j${Date.now()}${Math.random().toString(36).slice(2, 5)}`, title, doneText, first, steps: [], total: 0, log: [], status: 'running' };
     nodes.forEach(id => R.emit('provision', { id, on: true }));
     paintJob(j);
     api.busy++;
@@ -156,8 +168,8 @@
         refreshIfaces();
         return final.result;
       } catch (err) {
-        j.status = 'failed'; j.error = err.message;
-        R.notify({ source: title, text: err.message, tone: 'down' });
+        j.status = 'failed'; j.error = stepText(err.message);
+        R.notify({ source: title, text: j.error, tone: 'down' });
         api.poll?.();
         throw err;
       } finally {
@@ -233,6 +245,22 @@
     return summary;
   });
 
+  // Every testbed container goes, ONOS included (lft utils clean); the state lft returns is empty
+  R.cleanTopology = online('cleanTopology', () => realJob({ title: 'Limpando o testbed', nodes: M.nodes.map(n => n.id), doneText: 'Nenhum container do testbed no ar' }, 'POST', '/api/testbed/clean')
+    .then(() => R.log('Testbed', 'Topologia removida: os containers do testbed saíram, o ONOS também.'), () => {}));
+  // ONOS reactive forwarding, read from and set in ONOS itself
+  R.fwd.refresh = online('fwdRefresh', async () => {
+    try { R.fwd.active = (await req('GET', '/api/onos/fwd')).active; } catch { /* ONOS may be down */ }
+    return R.fwd.active;
+  });
+  R.fwd.set = online('fwdSet', async on => {
+    try {
+      R.fwd.active = (await req('PUT', '/api/onos/fwd', { active: on })).active;
+      R.log('ONOS', `Encaminhamento reativo ${R.fwd.active ? 'ligado: qualquer par de hosts se alcança' : 'desligado: só passa tráfego onde um intent instalou o caminho'}.`);
+    } catch (err) { R.notify({ source: 'ONOS', text: err.message, tone: 'down' }); }
+    return R.fwd.active;
+  });
+
   // ---------------------------------------------------------------- interfaces and link load
   async function refreshIfaces() {
     try {
@@ -244,6 +272,11 @@
   R.ifaces = online('ifaces', id => api.ifaces.get(id) || orig.ifaces(id));
   // What crosses each link, from the counters of both ends (lft link stats)
   R.linkLoad = online('linkLoad', () => new Map(M.links.map(l => [l.id, l.now.down ? 0 : api.load.get(l.id) || 0])));
+  // Which way it goes, from the same counters: 1 is a to b (ab, what a sends to b), or switch to host
+  const moving = s => Math.max(s.ab ?? s.rx ?? 0, s.ba ?? s.tx ?? 0) > .3;
+  R.linkDir = online('linkDir', () => new Map(Object.entries(api.stats?.links || {}).filter(([, s]) => moving(s)).map(([id, s]) => [id, (s.ab || 0) >= (s.ba || 0) ? 1 : -1])));
+  R.hostFlow = online('hostFlow', () => new Map(Object.entries(api.stats?.hosts || {}).filter(([, s]) => moving(s))
+    .map(([id, s]) => [id, { load: Math.max(s.rx || 0, s.tx || 0), dir: (s.rx || 0) >= (s.tx || 0) ? 1 : -1 }])));
   async function refreshStats() {
     try {
       const st = await req('GET', '/api/stats');
@@ -283,7 +316,7 @@
   }
   R.traffic.stop = online('stop', async id => {
     const sess = sessions.find(x => x.id === id);
-    if (!sess || sess.status === 'done' || sess.status === 'stopped') return;
+    if (!sess || ['done', 'stopped', 'failed'].includes(sess.status)) return;
     if (sess.status === 'starting') { sess.stopAsked = true; return; }
     try { await req('DELETE', `/api/traffic/${id}`); } catch (err) { R.notify({ source: 'Tráfego', text: err.message, tone: 'down' }); }
     sess.status = 'stopped';
@@ -310,9 +343,14 @@
       const rows = await req('GET', '/api/traffic');
       rows.forEach(r => {
         const sess = sessions.find(x => x.id === r.id);
-        if (!sess || sess.status === 'stopped') return;
+        if (!sess || sess.status !== 'running') return;
         sess.rateNow = r.rate_mbps || 0;
-        if (r.status !== 'running') { sess.status = r.status === 'stopped' ? 'stopped' : 'done'; R.log('Testbed', `Tráfego ${sess.client}↔${sess.server} terminou. Resultado em ${sess.file}.`); }
+        if (r.status !== 'running') {
+          sess.status = r.status === 'stopped' ? 'stopped' : r.error ? 'failed' : 'done';
+          const why = /unable to connect|timed out|unreachable/i.test(r.error || '') ? 'não há caminho até o servidor' : r.error;
+          if (r.error) R.notify({ source: 'Tráfego', text: `${sess.client} não alcançou ${sess.server}: ${why}. Ligue o encaminhamento reativo ou implante um intent para o cliente.`, tone: 'down' });
+          else R.log('Testbed', `Tráfego ${sess.client}↔${sess.server} terminou. Resultado em ${sess.file}.`);
+        }
       });
       R.emit('traffic', {});
     } catch { /* next time */ }
@@ -325,14 +363,21 @@
     const sws = (i.path || []).map(uf => R.switches().find(s => s.uf === uf)?.id).filter(Boolean).reverse();
     return server && client ? { client: client.id, server: server.id, path: [server.id, ...sws, client.id] } : null;
   };
-  // The deployer's intents become the console's routes and deployed intents
+  // What undoes an intent in the deployer: remove, unset, allow (none for an intent that is already one)
+  const UNDO = { add: 'remove', set: 'unset', block: 'allow' };
+  const undo = nile => nile.replace(/\b(add|set|block)(?=\s+(service|bandwidth|protocol)\()/, op => UNDO[op]);
+  // The deployer's intents become the console's routes and deployed intents; one it no longer has
+  // (replaced by a newer one for the same client, or undone) is revoked
   async function refreshIntents() {
     try {
       const { intents = [] } = await req('GET', '/api/deployer/intents');
+      const live = new Set(intents.map(i => i.intent));
+      M.intents.filter(x => x.state === 'deployed' && undo(x.nile) !== x.nile && !live.has(x.nile)).forEach(x => Object.assign(x, { state: 'revoked', revokedAt: R.hhmm() }));
       M.routes = {};
       intents.forEach(i => {
         const r = routeOf(i);
-        let it = M.intents.find(x => x.nile === i.intent && x.state === 'deployed');
+        let it = M.intents.find(x => x.nile === i.intent && (x.state === 'deployed' || x.unconfirmed));
+        if (it?.unconfirmed) Object.assign(it, { state: 'deployed', when: R.hhmm(), unconfirmed: false, error: null, effect: R.policyEffect(R.nileInfo(it.nile)) });
         if (!it) {
           const named = (i.intent.match(/define intent (\w+):/) || [])[1];
           it = { id: named && !M.intents.some(x => x.id === named) ? named : nileId(), ask: i.intent, nile: i.intent, state: 'deployed', when: R.hhmm(), client: r?.client, kind: R.nileInfo(i.intent).kind };
@@ -351,7 +396,6 @@
       const c = byIp(e.client_ip)?.id || e.client_ip, path = (e.path || []).join(', ');
       if (e.type === 'recalculate') {
         R.log('Supervisor', `Desvio para ${c}: ${String(e.reason || '').replace(/^\W+/, '')}`, 'warn');
-        api.lastDrift = R.hhmm();
         R.monitor?.marks.push({ ts: e.ts * 1000, label: 'Desvio', tone: 'warn' });
       }
       R.log('Deployer', e.status === 200 ? `Rota de ${c} ${e.type === 'recalculate' ? 'recalculada' : 'implantada'}: ${path}.` : `Falhou (${e.status}) para ${c}.`, e.status === 200 ? '' : 'down');
@@ -387,19 +431,36 @@
         R.emit('intent', { id: it.id });
         return false;
       }
-      if (ev === 'done') { const r = d.result || {}; Object.assign(it, { state: d.status === 'deployed' ? 'deployed' : d.status, when: R.hhmm(), flows: r.flows, effect: r.server_ip ? `servidor ${byIp(r.server_ip)?.id || r.server_ip}, caminho ${(r.path || []).join(', ')}` : '' }); R.log('Deployer', `${it.id} implantada. ${r.flows} fluxos${r.server_ip ? `, servidor ${byIp(r.server_ip)?.id || r.server_ip}` : ''}.`, 'ok', it.id); refreshIntents(); R.emit('intent', { id: it.id }); return false; }
+      if (ev === 'done') { const r = d.result || {}; Object.assign(it, { state: d.status === 'deployed' ? 'deployed' : d.status, when: R.hhmm(), flows: r.flows, effect: R.policyEffect(R.nileInfo(it.nile)) || (r.server_ip ? `servidor ${byIp(r.server_ip)?.id || r.server_ip}, caminho ${(r.path || []).join(', ')}` : '') }); R.log('Deployer', `${it.id} implantada. ${r.flows} fluxos${r.server_ip ? `, servidor ${byIp(r.server_ip)?.id || r.server_ip}` : ''}.`, 'ok', it.id); refreshIntents(); R.emit('intent', { id: it.id }); return false; }
       if (ev === 'error') { Object.assign(msg, { kind: 'text', text: `O profiler falhou: ${d.detail}` }); R.emit('chat', {}); return false; }
     });
+    // An approved intent always ends: a stream that failed or closed without an answer leaves it failed and
+    // unconfirmed, until the deployer's list shows whether it was applied (refreshIntents)
+    if (it.state === 'checking') {
+      Object.assign(it, { state: 'rejected', code: 500, unconfirmed: true, error: msg.kind === 'text' ? msg.text : 'o profiler encerrou sem resposta do deployer' });
+      R.log('Deployer', `${it.id} sem confirmação: ${it.error}`, 'down', it.id);
+      R.emit('intent', { id: it.id });
+      refreshIntents();
+    }
   }
+  // Why the chat has no model on this machine: the operator sends Nile, one is starting, or none fits its VRAM
+  const whyNile = R.whyNoModel;
+  R.whyNoModel = () => {
+    if (R.state.nile || !api.models) return whyNile();
+    if (api.switching) return `Iniciando ${api.switching}. Até lá, escreva a intent em Nile.`;
+    return api.models.models.some(m => m.fits) ? 'Nenhum modelo ativo: escolha um no menu ou escreva em Nile.' : 'Nenhum modelo cabe nesta máquina: escreva a intent em Nile.';
+  };
+  // A request already in Nile goes to the operator as written, with no model; anything else is translated
   R.profile = online('profile', async (text, source = 'Topologia') => {
-    const time = R.hhmm();
+    const time = R.hhmm(), direct = R.isNile(text);
     M.chat.push({ role: 'user', text, time, source });
-    const msg = { role: 'rein', kind: 'thinking', time, ask: text, steps: [['Contexto', 0, false], ['Exemplos', 0, false], [`Tradução com ${R.state.model}`, 0, false]] };
+    if (!direct && !R.state.model) { M.chat.push({ role: 'rein', kind: 'text', time, text: R.noModel() }); R.emit('chat', { text, source }); return; }
+    const msg = { role: 'rein', kind: 'thinking', time, ask: text, direct, steps: direct ? [] : [['Contexto', 0, false], ['Exemplos', 0, false], [`Tradução com ${R.state.model}`, 0, false]] };
     M.chat.push(msg);
     R.emit('chat', { text, source });
-    const it = { id: nileId(), ask: text, nile: '', state: 'pending', when: null, client: null, kind: 'other' };
+    const it = { id: nileId(), ask: text, nile: '', state: 'pending', when: null, client: null, kind: 'other', direct };
     try { await profileStream(msg, '/api/profiler/profile', { text, model: R.state.model }, it); }
-    catch (err) { Object.assign(msg, { kind: 'text', text: err.status === 409 ? `O modelo ${R.state.model} não está carregado. Escolha outro ou carregue-o no menu de modelos.` : `O profiler não respondeu: ${err.message}` }); R.emit('chat', {}); }
+    catch (err) { Object.assign(msg, { kind: 'text', text: err.status === 409 ? (R.state.model ? `O modelo ${R.state.model} não está carregado.` : R.noModel()) : `O profiler não respondeu: ${err.message}` }); R.emit('chat', {}); }
   });
   R.answer = online('answer', async (msgIndex, value, source = 'Intents') => {
     const m = M.chat[msgIndex];
@@ -420,11 +481,15 @@
     if (!it) return;
     if (act === 'edit') { if (nileText) it.nile = nileText; R.emit('intent', { id }); return; }
     if (act === 'revoke') {
-      await req('DELETE', '/api/deployer/delete_all').catch(err => R.notify({ source: 'Deployer', text: err.message, tone: 'down' }));
-      M.intents.filter(i => i.state === 'deployed').forEach(i => { i.state = 'revoked'; i.revokedAt = R.hhmm(); });
-      M.routes = {};
-      R.log('Deployer', 'Intents revogadas: o deployer remove todos os fluxos de uma vez.', '', id);
+      if (undo(it.nile) !== it.nile) {
+        try { await req('POST', '/api/deployer/deploy', { intent: undo(it.nile) }); }
+        catch (err) { R.notify({ source: 'Deployer', text: `${id} não foi revogada: ${err.message}`, tone: 'down' }); return; }
+      }
+      Object.assign(it, { state: 'revoked', revokedAt: R.hhmm() });
+      delete M.routes[id];
+      R.log('Deployer', `${id} revogada: ${undo(it.nile).match(/\b(remove|unset|allow)\s+\w+\([^)]*\)/)?.[0] || 'nada a desfazer no deployer'}.`, '', id);
       R.emit('change', { policy: id }); R.emit('intent', { id });
+      refreshIntents();
       return;
     }
     const msg = [...M.chat].reverse().find(m => m.intent === id) || {};
@@ -443,8 +508,9 @@
         const r = await fetch('/api/deployer/deploy', post('/api/deployer/deploy', { intent: it.nile }));
         const d = await r.json().catch(() => ({}));
         if (r.ok) {
-          const flows = Object.values(d.controller_responses || {}).reduce((t, c) => t + (c.output?.responses?.length || 0), 0);
-          Object.assign(it, { state: 'deployed', when: R.hhmm(), flows, effect: d.server_ip ? `servidor ${byIp(d.server_ip)?.id || d.server_ip}` : '' });
+          const flows = d.rules?.length ?? Object.values(d.controller_responses || {}).reduce((t, c) => t + (c.output?.responses?.length || 0), 0);
+          const effect = R.policyEffect(R.nileInfo(it.nile)) || (d.server_ip ? `servidor ${byIp(d.server_ip)?.id || d.server_ip}` : '');
+          Object.assign(it, { state: 'deployed', when: R.hhmm(), flows, effect });
           R.log('Deployer', `${it.id} implantada. ${flows} fluxos.`, 'ok', it.id);
           refreshIntents();
         } else Object.assign(it, { state: 'rejected', code: r.status, error: d.detail || d.error || `HTTP ${r.status}` });
@@ -455,40 +521,44 @@
   });
 
   // ---------------------------------------------------------------- models and monitoring
-  async function refreshModels() {
-    try { api.models = await req('GET', '/api/profiler/models'); R.state.model = api.models.models.find(m => m.id === R.state.model && m.state === 'awake')?.id || api.models.models.find(m => m.state === 'awake')?.id || R.state.model; } catch { /* keep */ }
+  // rein tells the models, which of them fit this machine's VRAM and the one in use (chosen): the chat
+  // translates with it once it answers, else with the default one; without either it takes Nile
+  function syncModels() {
+    const awake = id => api.models.models.some(m => m.id === id && m.state === 'awake');
+    R.state.model = R.state.nile || api.switching ? null : [api.models.chosen, api.models.selected].find(awake) || null;
+    R.emit('models', {});
   }
-  api.loadModel = async id => {
-    const m = api.models?.models.find(x => x.id === id);
-    if (!m || m.state === 'awake') return;
-    R.toast('Acordando o modelo:', `POST /api/profiler/models/${id}/load`);
-    try { await req('POST', `/api/profiler/models/${id}/load`); } catch (err) { R.notify({ source: `Modelo ${id}`, text: err.message, tone: 'down' }); }
-    refreshModels().then(() => R.emit('gpu', {}));
+  async function refreshModels() {
+    try { api.models = await req('GET', '/api/models'); syncModels(); } catch { /* keep */ }
+  }
+  // The model menu's choice. 'nile': the intents go as written, and the models stay as they are. A model:
+  // rein puts it in use, as a job, since one that runs on this machine has to start and load
+  api.useModel = id => {
+    R.setNile(id === 'nile');
+    const m = api.models.models.find(x => x.id === id);
+    if (!m || (id === api.models.chosen && m.state === 'awake')) return syncModels();
+    if (m.state !== 'awake') api.switching = id;
+    api.models.chosen = id;
+    syncModels();
+    realJob({ title: `Modelo ${id}`, doneText: `${id} em uso`, first: 'Trocando' }, 'POST', `/api/models/${id}`)
+      .then(() => R.log('Profiler', `Modelo de tradução: ${id} (${m.label}).`), () => {})
+      .finally(() => { api.switching = null; return refreshModels(); });
   };
-  // One monitoring sample: throughput at the client's access link (lft link stats), RTT of the route
-  // (its links' delay, from tc), the observer's counters (supervisor /metrics)
-  api.sample = (series, observer, flowId) => {
-    const r = M.routes[flowId] || Object.values(M.routes)[0];
-    const h = r && api.stats?.hosts?.[r.client];
-    const lat = r && !R.pathBroken(r.path) ? R.pathDelay(r.path) * 2 : 0;
-    series.push({ ts: Date.now(), thr: h ? Math.max(h.rx || 0, h.tx || 0) : 0, lat });
-    if (series.length > 7200) series.shift();
-    const m = api.supervisor;
-    if (m) Object.assign(observer, { onosToObserver: m.msgs_onos_to_observer, observerToDeployer: m.msgs_observer_to_deployer, detection: m.detection_time_s || 0, lastDrift: api.lastDrift || null });
-  };
+  // Monitoramento: what the collector module stored for a client, the switches of its path by dpid
+  api.monitor = (ip, path, range) => req('GET', `/api/monitor?range=${range}&path=${path.join(',')}${ip ? `&ip=${ip}` : ''}`);
   // The services' own logs for Módulos, as [time, text, tone]
   async function refreshLogs() {
     const tone = t => (/error|critical|✖|traceback/i.test(t) ? 'down' : /warn|⚠/i.test(t) ? 'warn' : '');
     await Promise.all(['profiler', 'deployer', 'supervisor'].map(async id => {
-      try { (api.logs ||= {})[id] = (await req('GET', `/api/rein/logs/${id}`)).map(r => [new Date(r.ts).toTimeString().slice(0, 8), r.text, tone(r.text)]); } catch { /* keep */ }
+      try { (api.logs ||= {})[id] = (await req('GET', `/api/rein/logs/${id}${R.state.quietLogs ? '?requests=0' : ''}`)).map(r => [new Date(r.ts).toTimeString().slice(0, 8), r.text, tone(r.text)]); } catch { /* keep */ }
     }));
+    R.emit('logs', {});
   }
-  async function refreshSupervisor() { try { api.supervisor = await req('GET', '/api/supervisor/metrics'); } catch { /* down */ } }
-  // The drifts the deployer already acted on: the last one's time, and marks on the charts
+  api.refreshLogs = refreshLogs;
+  // The drifts the deployer already acted on, as marks on the charts
   async function pastDrifts() {
     try {
       const drifts = (await req('GET', '/api/deployer/events?after=0')).events.filter(e => e.type === 'recalculate');
-      if (drifts.length) api.lastDrift = R.hhmm(new Date(drifts.at(-1).ts * 1000));
       drifts.filter(e => e.ts * 1000 > Date.now() - 3600e3).forEach(e => R.monitor?.marks.push({ ts: e.ts * 1000, label: 'Desvio', tone: 'warn' }));
     } catch { /* the deployer may be down */ }
   }
@@ -559,15 +629,15 @@
       api.experiments = await req('GET', '/api/experiments');
       (R.xRunners || []).forEach(r => { const e = api.experiments.find(x => x.name === r.id); if (e) Object.assign(r, { windows: e.windows ?? r.windows, win: e.window_s ?? r.win, modes: e.modes.length ? e.modes : r.modes }); });
     } catch { /* keep the catalog */ }
-    await Promise.all([refreshIntents(), refreshIfaces(), refreshModels(), refreshSupervisor(), refreshStats(), adoptSessions(), pastDrifts(), refreshLogs()]);
+    await Promise.all([refreshIntents(), refreshIfaces(), refreshModels(), refreshStats(), adoptSessions(), pastDrifts(), refreshLogs()]);
     watchAssurance();
     api.poll = async () => {
       if (api.busy) return; // a job is changing the testbed: its result brings the new state
       try { const s = await req('GET', '/api/testbed?sync=1'); if (!api.busy && JSON.stringify([s.nodes, s.links]) !== api.sig) loadState(s); } catch { /* next time */ }
     };
-    setInterval(() => { if (!document.hidden && (R.page === 'topologia' || R.page === 'monitor')) refreshStats(); }, 1000);
+    setInterval(() => { if (!document.hidden && R.page === 'topologia') refreshStats(); }, 1000);
     setInterval(() => { if (!document.hidden) refreshTraffic(); }, 2000);
-    setInterval(() => { if (!document.hidden) { api.poll(); refreshSupervisor(); } }, 5000);
+    setInterval(() => { if (!document.hidden) api.poll(); }, 5000);
     setInterval(() => { if (!document.hidden) { refreshIntents(); refreshIfaces(); refreshModels(); } }, 15000);
     setInterval(() => { if (!document.hidden && R.page === 'modulos') refreshLogs(); }, 5000);
   }

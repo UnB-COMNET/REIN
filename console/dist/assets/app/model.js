@@ -42,17 +42,19 @@
   };
 
   // ------------------------------------------------------------ network model
+  // The images LFT builds (docker/), as console/api/app.py allows them
   const IMAGES = [
-    ['lft-dash-video', 'Servidor DASH, conteúdo gerado com ffmpeg'],
-    ['lft-dash-client', 'Cliente DASH, player dash.js'],
-    ['pydash', 'Cliente DASH, algoritmo ABR em Python'],
-    ['networkstatic/iperf3', 'Servidor ou cliente iperf3'],
-    ['nginx:alpine', 'Servidor HTTP'],
-    ['ubuntu:22.04', 'Imagem base'],
+    ['lft-dash-video', 'Servidor DASH: vídeo de teste em 7 qualidades, 60 s em loop, e iperf3'],
+    ['lft-dash-live', 'Servidor DASH ao vivo: o ffmpeg codifica 5 qualidades em tempo real, e iperf3'],
+    ['lft-pydash-server', 'Servidor DASH: Big Buck Bunny em 6 qualidades, do DASH Dataset 2014, e iperf3'],
+    ['lft-dash-client', 'Cliente DASH: o dash-play escolhe a qualidade pela vazão medida; iperf3 e ping'],
+    ['lft-pydash-client', 'Cliente pydash, com R2A em Python, para o lft-pydash-server; iperf3 e ping'],
+    ['lft-iperf', 'Servidor ou cliente iperf3'],
   ];
   R.IMAGES = IMAGES;
-  const DASH_CLIENTS = new Set(['lft-dash-client', 'pydash']);
-  const DASH_SERVERS = new Set(['lft-dash-video']);
+  const DASH_CLIENTS = new Set(['lft-dash-client', 'lft-pydash-client']);
+  const DASH_SERVERS = new Set(['lft-dash-video', 'lft-dash-live', 'lft-pydash-server']);
+  Object.assign(R, { DASH_CLIENTS, DASH_SERVERS });
 
   const M = R.model = {
     name: 'diamond',
@@ -212,6 +214,9 @@
   };
   // Traffic crossing each link now, Mb/s: every intent flow fills its path's bottleneck, as the
   // DASH client and iperf do in the testbed. Links outside any path carry only control traffic.
+  // Which way traffic goes where it was measured (online: the link counters); offline the routes tell
+  R.linkDir = () => new Map();
+  R.hostFlow = () => new Map();
   R.linkLoad = () => {
     const load = new Map(M.links.map(l => [l.id, 0]));
     const seen = new Set();
@@ -243,13 +248,22 @@
     const t = String(nile || '');
     const ip = (t.match(/endpoint\('([^']+)'\)/) || [])[1] || null;
     let m;
-    if ((m = t.match(/add\s+service\('([^']+)'\)/))) return { kind: m[1] === 'llm' ? 'llm' : m[1] === 'cdn-qoe' ? 'cdn-qoe' : 'service', value: m[1], ip };
+    if ((m = t.match(/(add|remove)\s+service\('([^']+)'\)/))) return { kind: m[2] === 'cdn-qoe' ? 'cdn-qoe' : 'service', op: m[1], value: m[2], ip };
     if ((m = t.match(/(set|unset)\s+bandwidth\('(min|max)',\s*'([\d.]+)',\s*'(\w+)'\)/))) return { kind: 'bandwidth', op: m[1], dir: m[2], value: +m[3], unit: m[4], ip };
     if ((m = t.match(/(allow|block)\s+(protocol|service|traffic)\('([^']+)'\)/))) return { kind: 'acl', op: m[1], fn: m[2], value: m[3], ip };
     if ((m = t.match(/(add|remove)\s+middlebox\('([^']+)'\)/))) return { kind: 'middlebox', op: m[1], value: m[2], ip };
     if (/set\s+quota/.test(t)) return { kind: 'quota', ip };
     return { kind: 'other', ip };
   };
+  // What a policy at the target's switch does (deployer/edge.py), as the console shows it
+  R.PROTOCOLS = ['tcp', 'udp', 'icmp', 'ssh', 'http', 'https'];
+  R.policyEffect = n => n.kind === 'bandwidth' ? (n.op === 'set' ? `meter DROP de ${R.fmt(n.value)} ${n.unit === 'mbps' ? 'Mb/s' : n.unit} no switch do alvo` : 'limite removido')
+    : n.kind === 'acl' ? `${n.value.toUpperCase()} ${n.op === 'block' ? 'descartado nos dois sentidos, no switch do alvo' : 'liberado'}`
+    : n.kind === 'cdn-qoe' && n.op === 'remove' ? 'caminho e supervisão removidos' : '';
+  // The deployer keeps one policy per target and kind: a new one replaces it, unset and allow remove it
+  const policyKey = n => n.kind === 'bandwidth' ? `${n.ip} bandwidth` : n.kind === 'acl' ? `${n.ip} ${n.value.toLowerCase()}` : n.kind === 'cdn-qoe' ? `${n.ip} cdn-qoe` : null;
+  const supersede = (it, n) => M.intents.filter(i => i !== it && i.state === 'deployed' && policyKey(R.nileInfo(i.nile)) === policyKey(n))
+    .forEach(i => { Object.assign(i, { state: 'revoked', revokedAt: R.hhmm() }); delete M.routes[i.id]; });
   R.policyFor = (ip, proto = 'tcp') => {
     const out = { blocked: false, cap: 0 };
     if (!ip) return out;
@@ -390,6 +404,15 @@
     const run = ++flowSeq;
     const time = R.hhmm();
     M.chat.push({ role: 'user', text, time, source });
+    if (R.isNile(text)) {   // already an intent: it goes to approval as written, with no model
+      const info = R.nileInfo(text), id = `q${M.intents.length + 1}`;
+      M.intents.push({ id, ask: text, nile: text.trim(), state: 'pending', when: null, client: R.hosts().find(h => h.ip === info.ip)?.id, kind: info.kind, direct: true });
+      M.chat.push({ role: 'rein', kind: 'proposal', time, intent: id, direct: true, steps: [] });
+      R.emit('chat', { proposal: id });
+      R.emit('intent', { id });
+      return;
+    }
+    if (!R.state.model) { M.chat.push({ role: 'rein', kind: 'text', time, text: R.noModel() }); R.emit('chat', { text, source }); return; }
     const msg = { role: 'rein', kind: 'thinking', time, steps: [['Contexto', 0.2, false], ['Exemplos', 0.1, false], [`Tradução com ${R.state.model}`, 1.4, false]] };
     M.chat.push(msg);
     R.emit('chat', { text, source });
@@ -466,29 +489,33 @@
       R.emit('intent', { id });
       R.toast('Aprovação enviada. Na versão real:', `POST /api/profiler/profile/${id}/resume`);
       await R.wait(1000);
-      const n = R.nileInfo(it.nile), sws = R.switches().length;
+      const n = R.nileInfo(it.nile);
       const reject = (code, msg) => { it.state = 'rejected'; it.code = code; it.error = msg; R.log('Deployer', `Recusou ${id} (${code}): ${msg}`, 'down', id); };
-      if (n.kind === 'cdn-qoe' || n.kind === 'llm') {
+      if (n.kind === 'cdn-qoe' && n.op === 'remove') {
+        supersede(it, n); it.state = 'deployed'; it.when = R.hhmm(); it.flows = 0; it.effect = R.policyEffect(n);
+        R.log('Deployer', `${id} implantada: ${it.effect}.`, 'ok', id); save(); R.emit('change', { reroute: id });
+      } else if (n.kind === 'cdn-qoe') {
         const route = routeFor(it.client);
         if (!route) reject(500, 'nenhum servidor alcançável a partir do cliente.');
         else {
+          supersede(it, n);
           it.state = 'deployed'; it.when = R.hhmm(); it.flows = route.path.length + 2; it.effect = `servidor ${route.server}, caminho ${route.path.slice(1, -1).join(', ')}`;
           M.routes[id] = { client: it.client, server: route.server, path: route.path };
-          R.log('Deployer', `${id} implantada${n.kind === 'llm' ? ' pelo modo LLM' : ''}. ${it.flows} fluxos, servidor ${route.server}.`, 'ok', id);
+          R.log('Deployer', `${id} implantada. ${it.flows} fluxos, servidor ${route.server}.`, 'ok', id);
           save();
           R.emit('change', { reroute: id });
         }
-      } else if (n.kind === 'bandwidth') {
-        if (n.dir !== 'max' || n.op !== 'set') reject(422, `bandwidth('${n.dir}') ainda não é implementado; só o limite máximo.`);
-        else { it.state = 'deployed'; it.when = R.hhmm(); it.flows = sws * 2; it.effect = `meter DROP ${R.fmt(n.value)} Mb/s em ${sws} switches`; R.log('Deployer', `${id} implantada: ${sws} meters de ${R.fmt(n.value)} Mb/s.`, 'ok', id); save(); R.emit('change', { policy: id }); }
-      } else if (n.kind === 'acl') {
-        const ok = n.fn === 'protocol' ? ['tcp', 'udp', 'icmp'].includes(n.value.toLowerCase()) : n.fn === 'service' ? n.value === 'netflix' : false;
-        if (!ok) reject(422, n.fn === 'protocol' ? `protocol('${n.value}') não corresponde a um ipProto do ACL do ONOS (TCP, UDP, ICMP).` : `${n.fn}('${n.value}') não está no mapa de serviços do deployer.`);
-        else { it.state = 'deployed'; it.when = R.hhmm(); it.flows = 1; it.effect = `regra ${n.op === 'block' ? 'deny' : 'allow'} ${n.value.toUpperCase()} no app ACL`; R.log('Deployer', `${id} implantada: POST /acl/rules, ${n.op === 'block' ? 'deny' : 'allow'} ${n.value.toUpperCase()} para ${n.ip}.`, 'ok', id); save(); R.emit('change', { policy: id }); }
-      } else if (n.kind === 'middlebox') {
-        if (R.hosts().some(h => h.ip === '192.168.1.4')) { it.state = 'deployed'; it.when = R.hhmm(); it.flows = 4; it.effect = `desvio por ${n.value} em 192.168.1.4`; R.log('Deployer', `${id} implantada via middlebox ${n.value}.`, 'ok', id); save(); }
-        else reject(500, `middlebox('${n.value}') aponta para 192.168.1.4, que não existe nesta topologia.`);
-      } else reject(422, 'operação sem tradução para o ONOS no deployer atual.');
+      } else if (n.kind === 'bandwidth' || n.kind === 'acl') {
+        if (n.kind === 'bandwidth' && n.dir !== 'max') reject(422, `bandwidth('${n.dir}'): um mínimo precisa de filas; só o máximo é aplicado.`);
+        else if (n.kind === 'acl' && n.fn !== 'protocol') reject(422, `${n.fn}('${n.value}') exige DPI; só protocol(...) é aplicado.`);
+        else if (n.kind === 'acl' && !R.PROTOCOLS.includes(n.value.toLowerCase())) reject(422, `protocolo desconhecido; um de ${R.PROTOCOLS.join(', ')}.`);
+        else {
+          supersede(it, n);
+          Object.assign(it, { state: 'deployed', when: R.hhmm(), flows: { set: 1, block: 2 }[n.op] || 0, effect: R.policyEffect(n) });
+          R.log('Deployer', `${id} implantada: ${it.effect}.`, 'ok', id); save(); R.emit('change', { policy: id });
+        }
+      } else if (n.kind === 'middlebox') reject(422, 'não há middlebox neste testbed.');
+      else reject(422, 'operação sem tradução para o ONOS no deployer atual.');
       R.emit('intent', { id });
     }
   };
@@ -711,7 +738,7 @@
     let hosts = [];
     const popToSw = Object.fromEntries(nodes.map(n => [n.pop, n.id]));
     if (Array.isArray(env.HOSTS) && env.HOSTS.length) {
-      hosts = env.HOSTS.map(h => ({ id: String(h[0]), kind: 'host', sw: popToSw[h[1]] || h[1], role: /serv/i.test(h[2]) ? 'Servidor' : 'Cliente', image: h[3] || 'networkstatic/iperf3', ip: h[4] || '', x: 0, y: 0 }));
+      hosts = env.HOSTS.map(h => ({ id: String(h[0]), kind: 'host', sw: popToSw[h[1]] || h[1], role: /serv/i.test(h[2]) ? 'Servidor' : 'Cliente', image: h[3] || 'lft-iperf', ip: h[4] || '', x: 0, y: 0 }));
     } else {
       const servers = pops.reduce((s, p) => s + (+p[2] || 0), 0);
       let ds = 0, cl = 0;
@@ -752,6 +779,14 @@
   }
   R.save = save;
   R.resetTopology = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } seedDiamond(); R.emit('topology', { reset: true }); };
+  // No topology at all: every node and link goes (online, every testbed container)
+  R.cleanTopology = () => { Object.assign(M, { nodes: [], links: [], routes: {} }); save(); R.emit('topology', { reset: true }); R.log('Testbed', 'Topologia removida.'); };
+  // ONOS reactive forwarding; emulated, it is only a switch (the emulation routes every flow anyway)
+  R.fwd = {
+    active: false,
+    refresh: async () => R.fwd.active,
+    set: async on => { R.fwd.active = on; R.log('ONOS', `Encaminhamento reativo ${on ? 'ligado' : 'desligado'}.`); return on; },
+  };
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -761,7 +796,17 @@
     } catch { return false; }
   }
 
-  R.state = { model: 'qwen3.6', llamaAwake: false };
+  // model: the one that translates the requests (null: none, the chat takes Nile). nile: the operator
+  // chose to send the intents already in Nile, with no model; kept in this browser
+  // quietLogs: the services' logs are shown without the requests they answered
+  R.state = { model: 'qwen3.6', llamaAwake: false, nile: false, quietLogs: false };
+  try { R.state.nile = localStorage.getItem('rein.nile') === '1'; R.state.quietLogs = localStorage.getItem('rein.logs.quiet') === '1'; } catch { /* private mode */ }
+  if (R.state.nile) R.state.model = null;
+  R.setNile = on => { R.state.nile = on; try { localStorage.setItem('rein.nile', on ? '1' : '0'); } catch { /* private mode */ } };
+  R.isNile = text => /^\s*define\s+intent\b/.test(text);
+  // Why the chat has no model (api.js adds this machine's reasons), and what it answers to plain language then
+  R.whyNoModel = () => 'Nile direto: a intent vai como escrita, sem modelo.';
+  R.noModel = () => `${R.whyNoModel()} Exemplo: define intent q1: for endpoint('${R.clientsList()[0]?.ip || '192.168.0.2'}') add service('cdn-qoe')`;
   R.init = () => {
     if (!load()) seedDiamond();
     seedConversation();

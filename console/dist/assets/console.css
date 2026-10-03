@@ -24,7 +24,7 @@
 .pbtn:disabled { opacity: .45; }
 .pbtn.is-field { width: 100%; height: 32px; }
 .pmenu {
-  position: fixed; z-index: 200; min-width: 160px; max-height: min(420px, calc(100vh - 16px)); overflow-y: auto; padding: 5px;
+  position: fixed; inset: auto; margin: 0; border: 0; color: inherit; z-index: 200; min-width: 160px; max-height: min(420px, calc(100vh - 16px)); overflow-y: auto; padding: 5px;
   border-radius: 10px; background: rgba(246, 246, 248, .9); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8);
   box-shadow: 0 0 0 .5px rgba(0, 0, 0, .16), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 16px 40px -10px rgba(0, 0, 0, .32), 0 3px 8px rgba(0, 0, 0, .08);
   animation: pm-in .16s ease-out both; outline: none; scrollbar-width: thin;
@@ -120,6 +120,21 @@ a.tool:hover { text-decoration: none; }
 .mlist b { display: block; font-size: 13.5px; font-weight: 500; }
 .mlist em { display: block; font-style: normal; font-size: 12px; color: var(--secondary); }
 
+/* New topology: one of the presets, as a radio group */
+.presets { display: grid; gap: 8px; }
+.presets button { display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: center; padding: 11px 12px; border: 0; border-radius: 12px; background: var(--fill); text-align: left; box-shadow: inset 0 0 0 1px transparent; transition: background-color .2s, box-shadow .2s; }
+.presets button:hover { background: rgba(0, 0, 0, .06); }
+.presets button[aria-checked="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.presets button[aria-checked="true"] .mi-ic { background: var(--accent); color: #fff; }
+.presets b { display: block; font-size: 13.5px; font-weight: 500; }
+.presets em { display: block; margin-top: 1px; font-style: normal; font-size: 12px; color: var(--secondary); }
+
+/* Testbed popover: ONOS reactive forwarding */
+.conn-fwd { margin-bottom: 12px; padding-top: 0; border-top: 0; }
+.conn-fwd b { display: block; font-size: 13.5px; font-weight: 500; }
+.conn-fwd em { display: block; margin-top: 1px; font-style: normal; font-size: 12px; color: var(--secondary); }
+.conn-fwd .toggle[aria-busy="true"] { opacity: .5; }
+
 /* ---------------------------------------------------------------- activity: jobs that take time */
 .activity { position: fixed; left: calc(22px + var(--nav-w) + 34px); bottom: 42px; z-index: 70; display: grid; gap: 8px; width: 330px; pointer-events: none; }
 .job { pointer-events: auto; padding: 11px 13px 10px; border-radius: 14px; background: rgba(255, 255, 255, .88); -webkit-backdrop-filter: blur(28px) saturate(1.8); backdrop-filter: blur(28px) saturate(1.8); box-shadow: var(--shadow-2); cursor: pointer; animation: job-in .5s var(--spring) both; }
@@ -137,6 +152,10 @@ a.tool:hover { text-decoration: none; }
 .job-bar { height: 3px; margin-left: 27px; border-radius: 2px; background: rgba(0, 0, 0, .07); overflow: hidden; }
 .job-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .6s var(--spring); }
 .job.is-done .job-bar i { background: var(--green); }
+.job.is-err .job-bar i { background: var(--red); }
+.job-bar.is-flow i { width: 34% !important; animation: job-flow 1.6s cubic-bezier(.45, 0, .55, 1) infinite; }
+@keyframes job-flow { from { transform: translateX(-105%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .job-bar.is-flow i { width: 100% !important; animation: none; opacity: .35; } }
 .job-log { display: none; margin: 9px 0 2px; padding: 8px 10px; max-height: 150px; overflow: auto; border-radius: 9px; background: #1D1D1F; color: #E5E5EA; font: 10.5px/1.65 var(--mono); white-space: pre-wrap; word-break: break-all; }
 .job.is-open .job-log { display: block; }
 
@@ -220,6 +239,8 @@ pre.term { height: 380px; max-height: none; white-space: pre; word-break: normal
 .tp-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
 .tp-ic svg { width: 15px; height: 15px; }
 .tp-row.st-stopped .tp-ic, .tp-row.st-done .tp-ic { background: var(--fill); color: var(--secondary); }
+.tp-row.st-failed .tp-ic { background: var(--red-soft); color: var(--red-text); }
+.tp-row.st-failed .tp-main em { color: var(--red-text); }
 .tp-main { display: grid; min-width: 0; }
 .tp-main b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tp-main em { overflow: hidden; font-style: normal; font-size: 11.5px; color: var(--secondary); white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -250,6 +271,9 @@ pre.term { height: 380px; max-height: none; white-space: pre; word-break: normal
 .ap-empty { padding: 40px 0; text-align: center; color: var(--tertiary); }
 .st-revoked, .st-cancelled { background: var(--quaternary); }
 .chat-main.is-applied .suggest { display: none; }
+/* No model on this machine: the chat takes Nile, and says so above its examples */
+.suggest-note { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 9px; margin: 0 0 2px; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, .66); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .08); font-size: 13px; line-height: 1.45; color: var(--secondary); }
+.suggest-note svg { flex: none; width: 17px; height: 17px; margin-top: 1px; color: var(--accent); }
 .help { gap: 14px; }
 .help-body { display: grid; grid-template-columns: 206px minmax(0, 1fr); gap: 0; height: min(600px, calc(100dvh - 180px)); border-radius: 14px; background: var(--tile); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .07); overflow: hidden; }
 .help-toc { display: grid; align-content: start; gap: 2px; padding: 10px; border-right: .5px solid var(--sep); background: rgba(255, 255, 255, .35); }

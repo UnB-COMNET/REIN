@@ -257,7 +257,9 @@ input[type="range"]:disabled { opacity: .35; }
 .wire.on-route { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: none; }
 .wire.warn { stroke: var(--orange); stroke-width: 2.4; stroke-dasharray: .5 6; }
 .wire.down { stroke: var(--red); stroke-width: 2; stroke-dasharray: 6 6; opacity: .7; }
-.wire.is-hover:not(.on-route):not(.warn):not(.down) { stroke: #7F8A9B; }
+/* Traffic measured on the link: its heat (topology.js), from green to red as it fills */
+.wire.loaded { stroke: var(--heat); stroke-width: 2.5; stroke-dasharray: none; }
+.wire.is-hover:not(.on-route):not(.warn):not(.down):not(.loaded) { stroke: #7F8A9B; }
 .wire.is-hover, .wire.is-hot { stroke-width: 3.25; }
 .wire.access.is-hover { stroke-width: 1.5; }
 .wire-hit { fill: none; stroke: transparent; stroke-width: 22; pointer-events: stroke; cursor: pointer; }
@@ -265,7 +267,7 @@ input[type="range"]:disabled { opacity: .35; }
 .pipe { fill: none; stroke: rgba(60, 72, 95, .07); stroke-linecap: round; transition: stroke .4s, stroke-width .6s var(--spring); }
 .pipe.on-route { stroke: rgba(0, 113, 227, .10); }
 .pipe.warn { stroke: rgba(255, 149, 0, .12); }
-.beads { fill: none; stroke: #fff; stroke-width: 4.2; stroke-linecap: round; stroke-dasharray: 0 var(--g, 24px); animation: beads .6s linear infinite; opacity: 0; transition: opacity .8s ease; filter: drop-shadow(0 0 1.5px rgba(0, 80, 180, .45)); }
+.beads { fill: none; stroke: #fff; stroke-width: 4.2; stroke-linecap: round; stroke-dasharray: 0 var(--g, 24px); animation: beads .6s linear infinite; opacity: 0; transition: opacity .8s ease; filter: drop-shadow(0 0 2px var(--glow, rgba(0, 80, 180, .45))); }
 .stage.is-live .beads { opacity: 1; }
 @keyframes beads { to { stroke-dashoffset: calc(var(--g, 24px) * -1); } }
 .stage.stage.is-dense .beads { stroke-width: 3; }
@@ -494,6 +496,8 @@ input[type="range"]:disabled { opacity: .35; }
 .menu label:has(input:disabled) .m-title { color: var(--tertiary); }
 .menu label:has(input:disabled) .m-sub { color: var(--orange-text); }
 .menu label:has(input:focus-visible) { outline: 3px solid var(--accent-ring); }
+.menu .m-apart { position: relative; margin-top: 9px; }
+.menu .m-apart::before { content: ""; position: absolute; left: 10px; right: 10px; top: -5px; height: 1px; background: rgba(0, 0, 0, .08); }
 
 .sheet { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 24px; background: var(--glass-2); -webkit-backdrop-filter: blur(40px) saturate(1.6); backdrop-filter: blur(40px) saturate(1.6); color: var(--label); box-shadow: var(--shadow-2); }
 .sheet-sm { width: min(480px, calc(100vw - 32px)); }

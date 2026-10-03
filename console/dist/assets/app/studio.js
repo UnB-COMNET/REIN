@@ -50,9 +50,10 @@
   ];
   const baseLogs={Profiler:[['14:20:08','Index: 6.412 examples, 914 skeletons'],['14:20:09','Model qwen3.6 awake at gpu.mfcaetano.lan:8000'],['14:26:40','POST /profile thread q1, 3 steps, 1,7 s'],['14:28:10','q1 approved, sent to deployer']],Deployer:[['14:20:02','Grammar loaded from nile.lark'],['14:20:03','ONOS graph: 4 devices, 8 links'],['14:28:11',"POST /deploy q1 200: add service('cdn-qoe'), server ds0"],['14:28:12','6 flows installed']],Supervisor:[['14:20:05','SUPERVISOR_MODE=threshold'],['14:28:13','Monitor started for 192.168.0.2'],['14:31:04','Latency s0-s1 132 ms above limit','warn'],['14:31:05','POST /deploy/recalculate']]};
   let moduleId='profiler', moduleTab='overview', logQuery='', cyclePlaying=false;
+  const ACCESS=/"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) \S+ HTTP\/[\d.]+" \d{3}/; // a request, as Flask's server logs it
   const service=()=>SERVICES.find(x=>x.id===moduleId);
   function facts(s) {
-    if(s.id==='profiler')return [['Endereço','127.0.0.1:5300'],['Modelo',R.state.model],['RAG','NEAT: 256.913 pares, 914 esqueletos'],['Seeds REIN','data/seeds_rein.tsv'],['Decodificação restrita','Desligada'],['Endpoints','/profile (SSE), /profile/<thread>/resume, /models, /events']];
+    if(s.id==='profiler')return [['Endereço','127.0.0.1:5300'],['Modelo',R.state.model||'Nile direto'],['RAG','NEAT: 256.913 pares, 914 esqueletos'],['Seeds REIN','data/seeds_rein.tsv'],['Decodificação restrita','Desligada'],['Endpoints','/profile (SSE), /profile/<thread>/resume, /models, /events']];
     if(s.id==='deployer')return [['Endereço','127.0.0.1:5000'],['Intents instaladas',M.intents.filter(i=>i.state==='deployed').length],['Grafo do ONOS',`${R.switches().length} switches, ${M.links.length} links`],['Validação','Lark / nile.lark'],['Respostas','400: sintaxe / 422: não executável'],['Endpoints','/deploy, /deploy/recalculate, /capabilities, /intents, /metrics']];
     return [['Endereço','127.0.0.1:5151'],['Modo','threshold'],['Monitores',R.clientsList().map(c=>c.ip).join(', ')||'nenhum'],['Limite de RTT','200 ms'],['LLM','gpu.mfcaetano.lan:8000'],['Endpoints','/supervise, /metrics, /metrics/reset, /metrics/degrade']];
   }
@@ -60,15 +61,15 @@
     const fresh=M.events.filter(e=>e.source===s.source).slice(-12).map(e=>[e.time,e.text,e.tone]);
     const asks=s.id==='profiler'?M.chat.slice(5).filter(m=>m.role==='user').map(m=>[m.time,`POST /profile "${m.text.slice(0,80)}"`]):[];
     const live=R.api?.logs?.[s.id]; // the service's own log (docker logs) when the testbed is online
-    return (live||[...baseLogs[s.source],...fresh,...asks]).filter(row=>row.join(' ').toLocaleLowerCase().includes(logQuery.toLocaleLowerCase()));
+    return (live||[...baseLogs[s.source],...fresh,...asks]).filter(row=>!(R.state.quietLogs&&ACCESS.test(row[1]))&&row.join(' ').toLocaleLowerCase().includes(logQuery.toLocaleLowerCase()));
   }
   function logRows(s, previewOnly=false) {
     const rows=logs(s);return (previewOnly?rows.slice(-4):rows).map(([t,text,tone])=>`<div class="st-log-row" data-level="${tone==='warn'?'warn':tone==='down'?'error':'info'}"><time>${esc(t)}</time><span>${tone==='warn'?'Aviso':tone==='down'?'Erro':'Info'}</span><code>${esc(text)}</code></div>`).join('')||'<p class="st-empty">Nenhum registro corresponde à busca.</p>';
   }
   function modulePanel() {
     const s=service();
-    if(moduleTab==='logs')return `<div class="st-log-view"><div class="st-detail-toolbar"><label class="st-search">${icon('i-search')}<input type="search" data-log-search aria-label="Buscar no log" placeholder="Buscar no log" value="${esc(logQuery)}"></label><button class="st-button" data-module-action="copy-logs">${icon('i-copy')}Copiar log</button></div><div class="st-log-full" data-log-rows>${logRows(s)}</div><p class="st-small-note">Registros ilustrativos e eventos desta sessão.</p></div>`;
-    if(moduleTab==='config')return `<div class="st-configuration"><div class="st-detail-toolbar"><div><h3>Configuração do serviço</h3><p>Parâmetros disponíveis nesta demonstração.</p></div><button class="st-icon-button" data-module-action="copy-config" aria-label="Copiar configuração" title="Copiar configuração">${icon('i-copy')}</button></div><dl class="st-facts">${facts(s).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${s.id==='deployer'?`<h3 class="st-cap-heading">Capacidades</h3><ul class="st-capabilities">${[["add service('cdn-qoe')",'Executa','ok'],["set bandwidth('max', …)",'Em teste','warn'],['allow / block','Não executa','neutral'],['add middlebox','Não executa','neutral'],['start / end date','Não executa','neutral']].map(([a,b,c])=>`<li><code>${esc(a)}</code><span data-state="${c}">${c==='ok'?icon('i-check'):c==='warn'?icon('i-info'):icon('i-minus')}${b}</span></li>`).join('')}</ul>`:''}</div>`;
+    if(moduleTab==='logs')return `<div class="st-log-view"><div class="st-detail-toolbar"><label class="st-search">${icon('i-search')}<input type="search" data-log-search aria-label="Buscar no log" placeholder="Buscar no log" value="${esc(logQuery)}"></label><div class="st-toolbar-actions"><button class="st-button" data-module-action="quiet-logs" aria-pressed="${R.state.quietLogs}">${icon('i-sliders')}Ocultar requisições</button><button class="st-button" data-module-action="copy-logs">${icon('i-copy')}Copiar log</button></div></div><div class="st-log-full" data-log-rows>${logRows(s)}</div><p class="st-small-note">Registros ilustrativos e eventos desta sessão.</p></div>`;
+    if(moduleTab==='config')return `<div class="st-configuration"><div class="st-detail-toolbar"><div><h3>Configuração do serviço</h3><p>Parâmetros disponíveis nesta demonstração.</p></div><button class="st-icon-button" data-module-action="copy-config" aria-label="Copiar configuração" title="Copiar configuração">${icon('i-copy')}</button></div><dl class="st-facts">${facts(s).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${s.id==='deployer'?`<h3 class="st-cap-heading">Capacidades</h3><ul class="st-capabilities">${[["add | remove service('cdn-qoe')",'Executa','ok'],["set | unset bandwidth('max', …)",'Executa','ok'],['block | allow protocol(…)','Executa','ok'],['add middlebox','Não executa','neutral'],['start / end date','Não executa','neutral']].map(([a,b,c])=>`<li><code>${esc(a)}</code><span data-state="${c}">${c==='ok'?icon('i-check'):c==='warn'?icon('i-info'):icon('i-minus')}${b}</span></li>`).join('')}</ul>`:''}</div>`;
     return `<div class="st-overview"><section class="st-module-story"><span class="st-caption">${s.verb} a intenção</span><h3>${s.intro}</h3><p>${s.description}</p><dl class="st-module-facts">${facts(s).slice(1,3).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><button class="st-text-button" data-module-tab="config">Ver configuração ${icon('i-chevron-right')}</button></section><section class="st-recent"><div><h3>Atividade recente</h3><button class="st-icon-button" data-module-tab="logs" aria-label="Abrir log completo" title="Abrir log completo">${icon('i-chevron-right')}</button></div><div data-log-rows>${logRows(s,true)}</div><p class="st-small-note">Dados de demonstração</p></section></div>`;
   }
   function renderModules(animate=false) {
@@ -121,6 +122,13 @@
     if(action==='copy-address')copy(`127.0.0.1:${service().port}`,'Endereço copiado.');
     if(action==='copy-config')copy(JSON.stringify(Object.fromEntries(facts(service())),null,2),'Configuração copiada.');
     if(action==='copy-logs')copy(logs(service()).map(row=>row.slice(0,2).join('  ')).join('\n'),'Log copiado.');
+    if(action==='quiet-logs'){ // the logs without the requests each service answered; the choice is kept in this browser
+      R.state.quietLogs=!R.state.quietLogs;
+      try{localStorage.setItem('rein.logs.quiet',R.state.quietLogs?'1':'0');}catch{/* private mode */}
+      e.target.closest('[data-module-action]').setAttribute('aria-pressed',String(R.state.quietLogs));
+      $('[data-log-rows]',mods).innerHTML=logRows(service());
+      R.api?.refreshLogs?.();
+    }
   });
   mods.addEventListener('input',e=>{if(e.target.matches('[data-log-search]')){logQuery=e.target.value;$('[data-log-rows]',mods).innerHTML=logRows(service());}});
   mods.addEventListener('keydown',e=>{const tab=e.target.closest('[role="tab"]');if(!tab)return;const list=tab.closest('[role="tablist"]'),items=$$('[role="tab"]',list);let k=items.indexOf(tab);if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();k=e.key==='Home'?0:e.key==='End'?items.length-1:(k+(e.key==='ArrowRight'?1:-1)+items.length)%items.length;items[k].click();items[k].focus();});
@@ -130,7 +138,7 @@
       
       if(d.page==='modulos')renderModules(true);
     }
-    if(['log','chat','intent'].includes(type)&&R.page==='modulos'&&moduleTab!=='config') {const box=$('[data-log-rows]',mods);if(box)box.innerHTML=logRows(service(),moduleTab==='overview');}
+    if(['log','logs','chat','intent'].includes(type)&&R.page==='modulos'&&moduleTab!=='config') {const box=$('[data-log-rows]',mods);if(box)box.innerHTML=logRows(service(),moduleTab==='overview');}
   });
   R.reduced.addEventListener('change',()=>{motion?.revert();inspectMotion?.revert();signalMotion?.kill();stopCycle();const signal=$('[data-signal]',exp);if(G&&signal)G.set(signal,{clearProps:'transform'});});
   addEventListener('resize',()=>{if(R.page==='modulos')positionModuleIndicator(false);});

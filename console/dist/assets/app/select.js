@@ -56,7 +56,10 @@
       const group = o.parentElement.tagName === 'OPTGROUP' && o.parentElement.firstElementChild === o ? `<p class="pm-g">${R.esc(o.parentElement.label)}</p>` : '';
       return `${group}<div class="pm-i${o.disabled ? ' is-off' : ''}" role="option" data-i="${i}" aria-selected="${o.selected}" aria-disabled="${o.disabled}"><i class="pm-c">${o.selected ? '<svg viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9.5"/></svg>' : ''}</i><span>${R.esc(o.textContent.trim())}</span>${o.dataset.hint ? `<em>${R.esc(o.dataset.hint)}</em>` : ''}</div>`;
     }).join('');
-    document.body.append(menu);
+    // A popover, so it opens in the top layer, over a modal sheet too; inside that sheet, the rest being inert
+    menu.popover = 'manual';
+    (sel.closest('dialog[open]') || document.body).append(menu);
+    menu.showPopover();
     const r = b.getBoundingClientRect();
     menu.style.minWidth = `${Math.max(r.width + 24, 160)}px`;
     const item = menu.querySelector(`[data-i="${sel.selectedIndex}"]`);

@@ -99,8 +99,8 @@
   // ---------------------------------------------------------------- Fig. 3: the architecture
   function fig3() {
     const y = 136;
-    return `<svg viewBox="0 0 1560 460" class="pfig-svg" role="img" aria-label="Arquitetura: o console envia o pedido ao profiler, que usa o vLLM e entrega a Nile ao deployer; o deployer instala os fluxos no ONOS, que controla a rede emulada no LFT; o supervisor lê métricas do ONOS e pede nova rota ao deployer; a testbed-api liga o console à rede.">
-      ${laptop(110, y, 'Console :3000')}
+    return `<svg viewBox="0 0 1560 430" class="pfig-svg" role="img" aria-label="Arquitetura: o console envia o pedido ao profiler, que usa o vLLM e entrega a Nile ao deployer; o deployer instala os fluxos no ONOS, que controla a rede emulada no LFT; o supervisor lê métricas do ONOS e pede nova rota ao deployer.">
+      ${laptop(110, y, 'Console :4180')}
       ${arrow(200, y, 390)}${doc(292, 16, 'Pedido')}
       <g class="pf-pop"><circle cx="478" cy="${y}" r="82" fill="${INK}"/>${T(478, y - 4, 'Profiler', { size: 28, fill: '#fff' })}${T(478, y + 26, ':5300', { size: 21, fill: '#fff' })}</g>
       ${arrow(566, y, 736)}${doc(648, 16, 'Nile')}
@@ -116,8 +116,6 @@
       ${hex(960, y + 196, 56, GRAY, 'Supervisor', { size: 21 })}${T(960, y + 278, ':5151', { size: 21 })}
       <path d="M1098 ${y + 88}C1094 ${y + 170} 1060 ${y + 186} 1018 ${y + 192}" fill="none" stroke="${INK}" stroke-width="2.2" stroke-dasharray="9 7" class="pf-dash"/><path d="M1030 ${y + 181}l-13 12 16 5" fill="none" stroke="${INK}" stroke-width="2.2"/>${T(1104, y + 160, 'métricas', { size: 21, anchor: 'start', italic: true })}
       <path d="M904 ${y + 192}C862 ${y + 180} 832 ${y + 150} 826 ${y + 86}" fill="none" stroke="${INK}" stroke-width="2.2" stroke-dasharray="9 7" class="pf-dash"/><path d="M818 ${y + 98}l8-14 8 14" fill="none" stroke="${INK}" stroke-width="2.2"/>${T(804, y + 176, 'desvio', { size: 21, anchor: 'end', italic: true })}
-      <path d="M110 ${y + 124}V${y + 292}H1330V${y + 90}" fill="none" stroke="${INK}" stroke-width="2.2" stroke-dasharray="9 7" class="pf-dash"/><path d="M1322 ${y + 102}l8-12 8 12" fill="none" stroke="${INK}" stroke-width="2.2"/>
-      ${T(720, y + 318, 'testbed-api :5400 · links, hosts, tráfego e vídeo', { size: 21, italic: true })}
     </svg>`;
   }
 

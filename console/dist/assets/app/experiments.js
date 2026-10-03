@@ -102,7 +102,7 @@
   // ---------------------------------------------------------------- plans
   const TOOLS = { iperf3: 'iperf3', dash: 'DASH', ping: 'ping' };
   const KINDS = { intent: 'Intent', capture: 'Captura', pause: 'Pausar host' };
-  const SVCS = [['cdn-qoe', 'CDN-QoE'], ['llm', 'Roteamento por LLM'], ['bandwidth', 'Limite de banda'], ['block', 'Bloquear protocolo']];
+  const SVCS = [['cdn-qoe', 'CDN-QoE'], ['bandwidth', 'Limite de banda'], ['block', 'Bloquear protocolo']];
   const uid = p => `${p}${Math.random().toString(36).slice(2, 7)}`;
   const total = P => P.snapshots.length * P.win;
   const allHosts = P => [...R.hosts().map(h => ({ ...h, base: true })), ...P.hosts];
@@ -380,7 +380,7 @@
       <p class="xnote">${esc(R.IMAGES.find(i => i[0] === h.image)?.[1] || '')}${refs ? ` · usado em ${refs} fluxo${refs > 1 ? 's' : ''}` : ''}</p>
       ${flowsOf(P, h)}
       <h3 class="section-title">Ao iniciar</h3>
-      ${term([...hostCmds(h), `# no REPL do LFT: create ${h.role === 'Servidor' ? 'server' : 'host'} ${h.id} ${h.ip} · connect ${h.id} ${h.sw}`])}
+      ${term([...hostCmds(h), `# pelo LFT: sudo lft host add ${h.id} --switch ${h.sw} --ip ${h.ip} --image ${h.image}${h.role === 'Servidor' ? ' --server' : ''}`])}
       <div class="xi-foot"><button class="btn btn-danger" type="button" data-b-del>Remover ${h.id}</button></div>`;
   }
   function inspFlow(P, f, k) {
@@ -418,7 +418,7 @@
         ${e.kind === 'intent' ? `<label class="row"><span>Serviço</span><select data-f="svc" aria-label="Serviço">${SVCS.map(([v, t]) => `<option value="${v}"${v === e.svc ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
         <label class="row"><span>Alvo</span><select data-f="host" aria-label="Alvo">${hostOpts(clients(P), e.host)}</select></label>
         ${e.svc === 'bandwidth' ? `<label class="row"><span>Máximo</span><span class="unitf"><input type="number" min="1" value="${e.mbps || 10}" data-f="mbps" aria-label="Máximo"><em>Mb/s</em></span></label>` : ''}
-        ${e.svc === 'block' ? `<div class="row"><span>Protocolo</span>${seg('proto', e.proto, [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP']], 'Protocolo')}</div>` : ''}` : ''}
+        ${e.svc === 'block' ? `<div class="row"><span>Protocolo</span>${seg('proto', e.proto, [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], 'Protocolo')}</div>` : ''}` : ''}
         ${e.kind === 'capture' ? `<label class="row"><span>Interface</span><select data-f="iface" aria-label="Interface">${ifs.map(i => `<option${i === e.iface ? ' selected' : ''}>${i}</option>`).join('')}</select></label>` : ''}
         ${e.kind === 'pause' ? `<label class="row"><span>Host</span><select data-f="host" aria-label="Host">${hostOpts(allHosts(P), e.host)}</select></label>` : ''}
         ${e.kind !== 'intent' ? `<label class="row"><span>Duração</span><span class="unitf"><input type="number" min="5" max="${T}" step="5" value="${e.dur}" data-f="dur" aria-label="Duração"><em>s</em></span></label>` : ''}
@@ -452,8 +452,8 @@
       if (!c || !s) { out.push({ t: `${name}: escolha o cliente e o servidor`, sel: `flow:${f.id}`, bad: true }); return; }
       const cut = P.snapshots.map((st, i) => (f.start < (i + 1) * P.win && f.start + f.dur > i * P.win && !flowRoute(P, f, st) ? i + 1 : 0)).filter(Boolean);
       if (cut.length) out.push({ t: `${name} fica sem caminho no snapshot ${cut.join(', ')}`, sel: `flow:${f.id}` });
-      if (f.tool === 'dash' && !/dash-video|nginx/.test(s.image)) out.push({ t: `DASH pede um servidor lft-dash-video; ${s.id} usa ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
-      if (f.tool === 'dash' && !/dash-client|pydash/.test(c.image)) out.push({ t: `dash-client não existe em ${c.image} (${c.id})`, sel: c.base ? `base:${c.id}` : `host:${c.id}` });
+      if (f.tool === 'dash' && !/dash-video|dash-live|pydash-server/.test(s.image)) out.push({ t: `DASH pede um servidor de vídeo (lft-dash-video, lft-dash-live ou lft-pydash-server); ${s.id} usa ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
+      if (f.tool === 'dash' && !/dash-client|pydash-client/.test(c.image)) out.push({ t: `${c.id} usa ${c.image}, que não tem player DASH (lft-dash-client ou lft-pydash-client)`, sel: c.base ? `base:${c.id}` : `host:${c.id}` });
       if (f.tool === 'iperf3' && P.flows.some(g => g !== f && g.tool === 'iperf3' && g.server === f.server && g.port === f.port && g.start < f.start + f.dur && f.start < g.start + g.dur && P.flows.indexOf(g) < P.flows.indexOf(f))) out.push({ t: `porta ${f.port} já em uso em ${f.server} nesse intervalo`, sel: `flow:${f.id}`, bad: true });
     });
     P.hosts.forEach(h => { if (!P.flows.some(f => f.client === h.id || f.server === h.id) && !P.events.some(e => e.host === h.id)) out.push({ t: `${h.id} não participa de nenhum fluxo`, sel: `host:${h.id}` }); });
@@ -821,7 +821,7 @@
     if (d.bSw !== undefined) {
       if (view.mode === 'links') return;
       const role = view.mode === 'server' ? 'Servidor' : 'Cliente';
-      const h = { id: freeName(P, role === 'Servidor' ? 'ds' : 'cl'), role, sw: d.bSw, ip: freeIp(P), image: 'networkstatic/iperf3' };
+      const h = { id: freeName(P, role === 'Servidor' ? 'ds' : 'cl'), role, sw: d.bSw, ip: freeIp(P), image: role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client' };
       P.hosts.push(h);
       view.mode = 'links'; view.sel = { type: 'host', id: h.id };
       paint();
