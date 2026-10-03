@@ -38,7 +38,7 @@ REIN = Path(__file__).resolve().parent       # through the /usr/local/bin/rein l
 COMMAND = Path("/usr/local/bin/rein")
 LFT_DIR = Path(os.environ.get("LFT_DIR", REIN.parent / "lft"))
 LFT_REPO = "https://github.com/UnB-COMNET/lft.git"
-LFT_BRANCH = os.environ.get("LFT_BRANCH", "dash-experiments")   # main once it has the topology runtime
+LFT_BRANCH = os.environ.get("LFT_BRANCH", "main")
 SUDO = [] if os.geteuid() == 0 else ["sudo"]
 USER = os.environ.get("SUDO_USER") or getpass.getuser()
 HOME = Path.home() / ".rein-console"          # the console's log and pid when it runs without systemd
