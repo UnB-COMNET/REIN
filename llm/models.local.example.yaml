@@ -1,0 +1,15 @@
+# Brief: This machine's own models: copy to models.local.yaml (kept out of git) and adapt.
+# The example is a model that another machine on the network serves with vLLM. It is used wherever its
+# server answers and REIN never starts or stops it.
+models:
+  - id: qwen3.6
+    label: Qwen3.6 35B-A3B
+    model: nvidia/Qwen3.6-35B-A3B-NVFP4
+    base_url: http://gpu.mfcaetano.lan:8000/v1
+    quantization: NVFP4
+    budget_gb: 25
+    pinned: true
+    # Also serves the supervisor: never slept, and never sent a grammar (a Lark grammar crashed its
+    # EngineCore on 2026-09-28)
+    shared: true
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}

@@ -3,11 +3,11 @@
 #   LLM_GPU_FRACTION=0.75 docker compose --profile lite up -d lite
 # LLM_GPU_FRACTION is the model's budget over the GPU's memory; LLM_BIND the address the server listens
 # on (127.0.0.1; 0.0.0.0 on a GPU machine that serves other machines).
-# The lab's Qwen3.6 server (gpu.mfcaetano.lan:8000) is shared with the supervisor: nothing here touches it.
 # On a GPU machine apart from REIN's, llm-status tells REIN that machine's memory and models, and
 # swaps them: choosing one wakes it and sleeps the others (never a pinned one):
 #   LLM_BIND=0.0.0.0 docker compose --profile llama --profile status up -d
-# then set llm_status_url and the models' base_url to that machine in models.yaml, without `local`.
+# then, on REIN's machine, set llm_status_url and the models' base_url to that machine in
+# models.local.yaml, without `local`.
 
 x-vllm: &vllm
   image: vllm/vllm-openai:${VLLM_TAG:-v0.29.0}

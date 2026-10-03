@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -13,9 +14,42 @@ from langgraph.checkpoint.memory import MemorySaver
 from app import graph, llm
 
 NILE = "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')"
+MODELS_YAML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "llm", "models.yaml")
+# A machine's own models: one that another machine serves
+LOCAL = """models:
+  - {id: qwen3.6, label: Qwen3.6, model: q, base_url: 'http://gpu:8000/v1', quantization: NVFP4, budget_gb: 25, shared: true}
+"""
+
+
+# Brief: The repo's models.yaml with LOCAL over it, as a machine with a model server on its network has
+def config(local: str = LOCAL) -> dict:
+    with tempfile.TemporaryDirectory() as folder:
+        with open(MODELS_YAML) as source, open(os.path.join(folder, "models.yaml"), "w") as copy:
+            copy.write(source.read())
+        if local:
+            with open(os.path.join(folder, "models.local.yaml"), "w") as own:
+                own.write(local)
+        return llm.load(os.path.join(folder, "models.yaml"))
+
+
+class ModelsFileTest(unittest.TestCase):
+
+    def test_the_repo_lists_only_models_rein_starts_here(self):
+        self.assertTrue(all(m.get("local") and "127.0.0.1" in m["base_url"] for m in config(local="")["models"]))
+
+    def test_a_machines_own_models_come_first_and_replace_the_same_id(self):
+        self.assertEqual([m["id"] for m in config()["models"]], ["qwen3.6", "llama", "lite"])
+        own = "models:\n  - {id: lite, label: Mine, model: m, base_url: 'http://gpu:8002/v1', quantization: q, budget_gb: 2}\n"
+        self.assertEqual([(m["id"], m["label"]) for m in config(own)["models"]], [("lite", "Mine"), ("llama", "Llama 3.2 3B Instruct")])
 
 
 class ModelChoiceTest(unittest.TestCase):
+
+    def setUp(self):
+        models = config()
+        for patch in (mock.patch.object(llm, "CONFIG", models), mock.patch.object(llm, "MODELS", {m["id"]: m for m in models["models"]})):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     # Brief: status() on a machine with this free VRAM and these servers answering
     def status(self, free_gb, awake=(), total_gb=None):
