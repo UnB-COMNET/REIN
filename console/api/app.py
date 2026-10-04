@@ -245,7 +245,7 @@ def ui_state(state: dict) -> dict:
             n = {**n, "uf": n["desc"], "pop": f"PoP-{n['desc']}" if n["desc"] else None}
         else:
             server = n["role"] == "server" or (n["role"] is None and n["id"].startswith("ds"))
-            n = {**n, "role": "Servidor" if server else "Cliente"}
+            n = {**n, "role": "Server" if server else "Client"}
         nodes.append({**n, **where.get(n["id"], {})})
     controller = state.get("controller") or ""
     return {**state, "nodes": nodes, "onos": {"ip": controller.split(":")[1] if controller.count(":") == 2 else None}}
@@ -363,7 +363,7 @@ def put_link(lid):
 def add_host():
     b = body()
     current = lft_state()
-    server = b.get("role") == "Servidor"
+    server = b.get("role") == "Server"
     prefix, used = ("ds" if server else "cl"), {n["id"] for n in current["nodes"]}
     taken = {n.get("ip") for n in current["nodes"]}
     hid = name(b.get("id") or next(f"{prefix}{i}" for i in range(1000) if f"{prefix}{i}" not in used))

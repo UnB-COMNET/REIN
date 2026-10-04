@@ -19,14 +19,14 @@
     const text = ta.value.trim();
     if (!text) return;
     ta.value = ''; sync();
-    R.profile(text, R.page === 'intents' ? 'Intents' : 'Topologia');
+    R.profile(text, R.page === 'intents' ? 'Intents' : 'Topology');
   });
 
   // Model menu
   const popModels = $('[data-pop="models"]'), modelBtn = $('[data-models]');
   function syncModel() {
-    $('[data-model-label]').textContent = R.api?.switching ? `${R.api.switching}…` : R.state.model || 'Nile direto';
-    ta.placeholder = R.state.model ? 'Descreva o que a rede precisa garantir' : 'Escreva a intent em Nile';
+    $('[data-model-label]').textContent = R.api?.switching ? `${R.api.switching}…` : R.state.model || L`Direct Nile`;
+    ta.placeholder = R.state.model ? L`Describe what the network must guarantee` : L`Write the intent in Nile`;
     suggest.innerHTML = '';
     renderSuggest();
   }
@@ -36,21 +36,21 @@
     // what a model that runs here can count on: the free VRAM plus what the ones running here give back
     const room = free + (live ? live.models.filter(m => m.local && m.state === 'awake').reduce((t, m) => t + m.budget_gb, 0) : 0);
     const current = R.api?.switching || R.state.model || 'nile', gb = v => `${R.fmt(v, 2)} GB`;
-    const use = (id, where) => `${id === current ? 'Em uso' : 'Pronto'} · ${where}`;
-    const why = m => m.id === R.api?.switching ? 'Iniciando'
-      : m.state === 'awake' ? use(m.id, m.local ? gb(m.budget_gb) : 'remoto')
-      : m.fits ? `${gb(m.budget_gb)} · inicia ao escolher`
-      : !m.local ? 'Servidor fora do ar'
-      : !live.gpu.total_gb ? `Precisa de GPU com ${gb(m.budget_gb)}`
-      : `Precisa de ${gb(m.budget_gb)} · há ${gb(room)}`;
+    const use = (id, where) => `${id === current ? L`In use` : L`Ready`} · ${where}`;
+    const why = m => m.id === R.api?.switching ? L`Starting`
+      : m.state === 'awake' ? use(m.id, m.local ? gb(m.budget_gb) : L`remote`)
+      : m.fits ? L`${gb(m.budget_gb)} · starts when chosen`
+      : !m.local ? L`Server down`
+      : !live.gpu.total_gb ? L`Needs a GPU with ${gb(m.budget_gb)}`
+      : L`Needs ${gb(m.budget_gb)} · ${gb(room)} available`;
     const rows = live ? live.models.map(m => [m.id, `${m.id} · ${m.label}`, why(m), !m.fits])
-      : [['qwen3.6', 'qwen3.6 · Qwen3.6 35B-A3B', use('qwen3.6', 'remoto'), false],
-         ['llama', 'llama · Llama 3.2 3B Instruct', R.state.llamaAwake ? use('llama', '4 GB') : '4 GB · inicia ao escolher', false],
-         ['lite', 'lite · Qwen2.5 1.5B Instruct', '3 GB · inicia ao escolher', false]];
-    rows.push(['nile', 'Nile direto', 'Sem modelo', false]);
-    const gpu = live && !live.gpu.total_gb ? 'Sem GPU nesta máquina' : `GPU ${gb(live ? live.gpu.total_gb : 32)} · ${gb(free)} livres`;
-    popModels.innerHTML = `<div class="pop-head"><div><h2>Modelo de tradução</h2><p class="pop-sub">${gpu}</p></div></div>
-      <fieldset class="menu"><legend class="sr-only">Modelo</legend>
+      : [['qwen3.6', 'qwen3.6 · Qwen3.6 35B-A3B', use('qwen3.6', L`remote`), false],
+         ['llama', 'llama · Llama 3.2 3B Instruct', R.state.llamaAwake ? use('llama', '4 GB') : L`4 GB · starts when chosen`, false],
+         ['lite', 'lite · Qwen2.5 1.5B Instruct', L`3 GB · starts when chosen`, false]];
+    rows.push(['nile', L`Direct Nile`, L`No model`, false]);
+    const gpu = live && !live.gpu.total_gb ? L`No GPU on this machine` : L`GPU ${gb(live ? live.gpu.total_gb : 32)} · ${gb(free)} free`;
+    popModels.innerHTML = `<div class="pop-head"><div><h2>${L`Translation model`}</h2><p class="pop-sub">${gpu}</p></div></div>
+      <fieldset class="menu"><legend class="sr-only">${L`Model`}</legend>
         ${rows
           .map(([v, t, s, off]) => `<label${v === 'nile' ? ' class="m-apart"' : ''}><input type="radio" name="model" value="${v}"${current === v ? ' checked' : ''}${off ? ' disabled' : ''}><span class="m-title">${R.esc(t)}</span><span class="m-sub">${s}</span><span class="m-check">${R.icon('i-check')}</span></label>`).join('')}
       </fieldset>`;
@@ -67,15 +67,15 @@
     else {   // the emulation: the choice is the model, and llama "starts" at once
       R.setNile(v === 'nile');
       R.state.model = v === 'nile' ? null : v;
-      if (v === 'llama' && !R.state.llamaAwake) { R.state.llamaAwake = true; R.toast('Iniciando o modelo:', 'POST /api/models/llama'); R.emit('gpu', {}); }
+      if (v === 'llama' && !R.state.llamaAwake) { R.state.llamaAwake = true; R.toast(L`Starting the model:`, 'POST /api/models/llama'); R.emit('gpu', {}); }
     }
     syncModel();
     setTimeout(() => R.pop.close(), 200);
   });
 
   // ------------------------------------------------------------ shared bits
-  const stateText = { pending: 'Aguardando aprovação', checking: 'Verificando', deployed: 'Implantada', rejected: 'Recusada', cancelled: 'Cancelada', revoked: 'Revogada' };
-  const summary = it => it.kind === 'block' ? `Bloqueio de SSH em ${it.client}` : it.kind === 'bandwidth' ? `Limite de banda em ${it.client}` : `Qualidade de vídeo priorizada para ${it.client}`;
+  const stateText = { pending: L`Waiting for approval`, checking: L`Checking`, deployed: L`Deployed`, rejected: L`Refused`, cancelled: L`Cancelled`, revoked: L`Revoked` };
+  const summary = it => it.kind === 'block' ? L`SSH blocked for ${it.client}` : it.kind === 'bandwidth' ? L`Bandwidth limit for ${it.client}` : L`Video quality prioritized for ${it.client}`;
   const lastInFlight = () => [...M.chat].reverse().find(m => m.role === 'rein' && (m.kind === 'thinking' || m.kind === 'ask' || m.kind === 'proposal'));
   const secs = steps => R.fmt((steps || []).reduce((t, s) => t + s[1], 0), 1);
 
@@ -84,26 +84,26 @@
   function renderCard() {
     const m = lastInFlight();
     clearTimeout(hideTimer);
-    if (!m || R.page !== 'topologia') { hideCard(); return; }
+    if (!m || R.page !== 'topology') { hideCard(); return; }
     const it = m.intent ? M.intents.find(i => i.id === m.intent) : null;
     if (it && (it.state === 'cancelled' || (it.state === 'deployed' && cardFor !== it.id + ':live'))) { hideCard(); return; }
     let html;
-    const closeBtn = `<button class="close" type="button" data-card-close aria-label="Fechar">${R.icon('i-x')}</button>`;
+    const closeBtn = `<button class="close" type="button" data-card-close aria-label="${L`Close`}">${R.icon('i-x')}</button>`;
     if (m.kind === 'thinking') {
       const u = [...M.chat].reverse().find(x => x.role === 'user');
-      html = `<div class="card-head"><span class="card-ic spin"></span><b>${m.direct ? 'Lendo a Nile' : 'Traduzindo'}</b><span>“${R.esc(u?.text || '')}”</span>${closeBtn}</div>
+      html = `<div class="card-head"><span class="card-ic spin"></span><b>${m.direct ? L`Reading the Nile` : L`Translating`}</b><span>“${R.esc(u?.text || '')}”</span>${closeBtn}</div>
         <ol class="card-steps">${m.steps.map(([t, s, done]) => `<li class="${done ? 'is-done' : ''}"><span>${t}</span><span>${done ? `${R.fmt(s)} s` : ''}</span></li>`).join('')}</ol>`;
     } else if (m.kind === 'ask') {
-      html = `<div class="card-head"><span class="card-ic ask">${R.icon('i-question')}</span><b>Para qual cliente?</b><span>“${R.esc(m.ask)}”</span>${closeBtn}</div>
-        <div class="card-actions">${m.options.map(o => `<button class="btn" type="button" data-answer="${R.esc(o.value)}">${R.esc(o.label)}</button>`).join('') || '<p class="card-error">Nenhum cliente na topologia. Adicione um host.</p>'}</div>`;
+      html = `<div class="card-head"><span class="card-ic ask">${R.icon('i-question')}</span><b>${L`For which client?`}</b><span>“${R.esc(m.ask)}”</span>${closeBtn}</div>
+        <div class="card-actions">${m.options.map(o => `<button class="btn" type="button" data-answer="${R.esc(o.value)}">${R.esc(o.label)}</button>`).join('') || `<p class="card-error">${L`No client in the topology. Add a host.`}</p>`}</div>`;
     } else if (it) {
-      const nile = `<details><summary>Ver intent em Nile</summary><pre class="nile" data-nile-for="${it.id}">${R.highlight(it.nile)}</pre></details>`;
-      if (it.state === 'pending') html = `<div class="card-head"><span class="card-ic">${R.icon('i-check')}</span><b>Intent pronta</b><span>${summary(it)}</span>${closeBtn}</div><p class="card-value">${R.node(it.client)?.ip || ''}</p>${nile}
-        <div class="card-actions"><button class="btn btn-blue" type="button" data-i-act="approve" data-id="${it.id}">Aprovar intent</button><div class="card-links"><button class="btn btn-plain" type="button" data-i-act="edit" data-id="${it.id}">Editar</button><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">Cancelar</button></div></div>`;
-      else if (it.state === 'checking') html = `<div class="card-head"><span class="card-ic spin"></span><b>Verificando</b><span>O deployer confere a sintaxe e a capacidade.</span>${closeBtn}</div>`;
-      else if (it.state === 'deployed') html = `<div class="card-head"><span class="card-ic">${R.icon('i-check')}</span><b>Intent implantada</b><span>${it.flows} fluxos, servidor ${M.routes[it.id]?.server || '–'}</span>${closeBtn}</div>`;
-      else if (it.state === 'rejected') html = `<div class="card-head"><span class="card-ic err">${R.icon('i-x')}</span><b>Recusada pelo deployer</b><span>${summary(it)}</span>${closeBtn}</div><p class="card-error">${R.esc(it.error)}</p>${nile}
-        <div class="card-actions">${R.state.model ? `<button class="btn btn-blue" type="button" data-i-act="regenerate" data-id="${it.id}">Regenerar</button>` : ''}<div class="card-links"><button class="btn btn-plain" type="button" data-i-act="edit" data-id="${it.id}">Editar</button><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">Cancelar</button></div></div>`;
+      const nile = `<details><summary>${L`See the intent in Nile`}</summary><pre class="nile" data-nile-for="${it.id}">${R.highlight(it.nile)}</pre></details>`;
+      if (it.state === 'pending') html = `<div class="card-head"><span class="card-ic">${R.icon('i-check')}</span><b>${L`Intent ready`}</b><span>${summary(it)}</span>${closeBtn}</div><p class="card-value">${R.node(it.client)?.ip || ''}</p>${nile}
+        <div class="card-actions"><button class="btn btn-blue" type="button" data-i-act="approve" data-id="${it.id}">${L`Approve intent`}</button><div class="card-links"><button class="btn btn-plain" type="button" data-i-act="edit" data-id="${it.id}">${L`Edit`}</button><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">${L`Cancel`}</button></div></div>`;
+      else if (it.state === 'checking') html = `<div class="card-head"><span class="card-ic spin"></span><b>${L`Checking`}</b><span>${L`The deployer checks the syntax and the capability.`}</span>${closeBtn}</div>`;
+      else if (it.state === 'deployed') html = `<div class="card-head"><span class="card-ic">${R.icon('i-check')}</span><b>${L`Intent deployed`}</b><span>${L`${it.flows} flows, server ${M.routes[it.id]?.server || '–'}`}</span>${closeBtn}</div>`;
+      else if (it.state === 'rejected') html = `<div class="card-head"><span class="card-ic err">${R.icon('i-x')}</span><b>${L`Refused by the deployer`}</b><span>${summary(it)}</span>${closeBtn}</div><p class="card-error">${R.esc(it.error)}</p>${nile}
+        <div class="card-actions">${R.state.model ? `<button class="btn btn-blue" type="button" data-i-act="regenerate" data-id="${it.id}">${L`Regenerate`}</button>` : ''}<div class="card-links"><button class="btn btn-plain" type="button" data-i-act="edit" data-id="${it.id}">${L`Edit`}</button><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">${L`Cancel`}</button></div></div>`;
     } else { hideCard(); return; }
     card.innerHTML = html;
     if (card.hidden) { card.hidden = false; card.classList.remove('is-leaving'); }
@@ -120,7 +120,7 @@
   card.addEventListener('click', e => {
     if (e.target.closest('[data-card-close]')) { cardFor = null; hideCard(); return; }
     const ans = e.target.closest('[data-answer]');
-    if (ans) { const idx = M.chat.lastIndexOf(lastInFlight()); R.answer(idx, ans.dataset.answer, 'Topologia'); }
+    if (ans) { const idx = M.chat.lastIndexOf(lastInFlight()); R.answer(idx, ans.dataset.answer, 'Topology'); }
   });
 
   // ------------------------------------------------------------ intent actions (card and thread)
@@ -133,8 +133,8 @@
       const pre = b.closest('[data-card], .msg')?.querySelector(`[data-nile-for="${id}"]`);
       if (!pre) return;
       pre.closest('details')?.setAttribute('open', '');
-      if (pre.isContentEditable) { pre.contentEditable = 'false'; b.textContent = 'Editar'; R.intentAct(id, 'edit', pre.textContent.trim()); return; }
-      pre.contentEditable = 'true'; pre.focus(); getSelection().selectAllChildren(pre); b.textContent = 'Concluir';
+      if (pre.isContentEditable) { pre.contentEditable = 'false'; b.textContent = L`Edit`; R.intentAct(id, 'edit', pre.textContent.trim()); return; }
+      pre.contentEditable = 'true'; pre.focus(); getSelection().selectAllChildren(pre); b.textContent = L`Finish`;
       return;
     }
     R.intentAct(id, act);
@@ -147,15 +147,15 @@
       const it = M.intents.find(i => i.id === cp.dataset.copy);
       navigator.clipboard?.writeText(it?.nile || '').catch(() => {});
       const label = $('span', cp);
-      if (label) { label.textContent = 'Copiado'; setTimeout(() => { label.textContent = 'Copiar'; }, 1400); }
+      if (label) { label.textContent = L`Copied`; setTimeout(() => { label.textContent = L`Copy`; }, 1400); }
       cp.classList.add('is-done'); setTimeout(() => cp.classList.remove('is-done'), 1400);
     }
-    if (e.target.closest('[data-show-topo]')) location.hash = 'topologia';
+    if (e.target.closest('[data-show-topo]')) location.hash = 'topology';
   });
 
   // ------------------------------------------------------------ Intents page: history
   let selected = null;
-  const GROUPS = [['Em revisão', ['pending', 'checking']], ['Ativas', ['deployed']], ['Encerradas', ['rejected', 'cancelled', 'revoked']]];
+  const GROUPS = [[L`Under review`, ['pending', 'checking']], [L`Active`, ['deployed']], [L`Ended`, ['rejected', 'cancelled', 'revoked']]];
   function renderList() {
     const q = (search.value || '').trim().toLowerCase();
     const items = M.intents.slice().reverse().filter(it => !q || `${it.id} ${it.ask} ${it.client}`.toLowerCase().includes(q));
@@ -164,7 +164,7 @@
       if (!g.length) return '';
       return `<h2>${title}</h2>${g.map(it => `<button type="button" class="i-item" data-i-sel="${it.id}" aria-current="${selected === it.id}"><b>${R.esc(it.ask)}</b><span><i class="st st-${it.state}"></i>${it.id} · ${stateText[it.state]}${it.when ? `, ${it.when}` : ''}</span></button>`).join('')}`;
     }).join('');
-    list.innerHTML = html || `<p class="i-empty">${q ? 'Nada encontrado.' : 'Nenhuma intent ainda.'}</p>`;
+    list.innerHTML = html || `<p class="i-empty">${q ? L`Nothing found.` : L`No intent yet.`}</p>`;
   }
   search.addEventListener('input', renderList);
   list.addEventListener('click', e => {
@@ -184,8 +184,8 @@
   });
 
   // ------------------------------------------------------------ Intents page: suggestions above the composer
-  const IDEAS = [['Vídeo sem travar', 'para o cliente de SP', 'Quero vídeo sem travar para o cliente de SP'], ['Bloquear UDP', 'no cliente cl0', 'Bloqueie UDP no cliente cl0'], ['Limitar banda', 'de cl0 a 10 Mb/s', 'Limite a banda do cliente cl0 a 10 Mb/s']];
-  const IDEAS_NILE = [['Vídeo sem travar', "add service('cdn-qoe')", "add service('cdn-qoe')"], ['Bloquear UDP', "block protocol('udp')", "block protocol('udp')"], ['Limitar banda', "set bandwidth('max', '10', 'mbps')", "set bandwidth('max', '10', 'mbps')"]];
+  const IDEAS = [[L`Video without stalls`, L`for the client in SP`, L`I want video without stalls for the client in SP`], [L`Block UDP`, L`on client cl0`, L`Block UDP on client cl0`], [L`Limit bandwidth`, L`of cl0 to 10 Mb/s`, L`Limit the bandwidth of client cl0 to 10 Mb/s`]];
+  const IDEAS_NILE = [[L`Video without stalls`, "add service('cdn-qoe')", "add service('cdn-qoe')"], [L`Block UDP`, "block protocol('udp')", "block protocol('udp')"], [L`Limit bandwidth`, "set bandwidth('max', '10', 'mbps')", "set bandwidth('max', '10', 'mbps')"]];
   function renderSuggest() {
     const busy = lastInFlight();
     const flowing = busy && (busy.kind === 'thinking' || busy.kind === 'ask' || M.intents.find(i => i.id === busy.intent)?.state === 'pending');
@@ -210,25 +210,25 @@
   const STREAM_WORD = 24;
   // Prose the profiler writes around the Nile line
   function prose(it) {
-    if (it.direct) return 'Recebi a intent em Nile, como você escreveu; nenhum modelo a traduziu. O deployer confere a sintaxe e a capacidade ao implantar:';
+    if (it.direct) return L`I received the intent in Nile, as you wrote it. No model translated it. The deployer checks the syntax and the capability when deploying:`;
     const n = R.node(it.client), who = `${it.client} (${n?.ip || '–'})`;
-    if (it.kind === 'block') { const pr = (R.nileInfo(it.nile).value || '').toUpperCase(); return `Entendi: bloquear ${pr} para ${who}. Em Nile, esta é a intent; o deployer a aplica no switch desse cliente:`; }
-    if (it.kind === 'bandwidth') { const mb = (it.nile.match(/'(\d+)', 'mbps'/) || [, '10'])[1]; return `Entendi: limitar a banda de ${who} a ${mb} Mb/s. Em Nile, esta é a intent:`; }
-    return `Entendi: vídeo sem travar para ${who}. Em Nile isso é o serviço cdn-qoe a partir desse endpoint; o deployer escolhe o servidor e o caminho de maior vazão.`;
+    if (it.kind === 'block') { const pr = (R.nileInfo(it.nile).value || '').toUpperCase(); return L`Understood: block ${pr} for ${who}. In Nile, this is the intent, which the deployer applies at this client's switch:`; }
+    if (it.kind === 'bandwidth') { const mb = (it.nile.match(/'(\d+)', 'mbps'/) || [, '10'])[1]; return L`Understood: limit the bandwidth of ${who} to ${mb} Mb/s. In Nile, this is the intent:`; }
+    return L`Understood: video without stalls for ${who}. In Nile that is the cdn-qoe service from this endpoint. The deployer picks the server and the path of highest throughput.`;
   }
   const words = (text, from = 0) => text.split(/(\s+)/).map(w => (/^\s+$/.test(w) ? w : `<span class="w" style="--i:${from++}">${R.esc(w)}</span>`)).join('');
   const countWords = text => text.split(/\s+/).filter(Boolean).length;
 
   function approval(it) {
     const route = M.routes[it.id];
-    if (it.state === 'pending') return `<div class="approve"><span class="ap-ic">${R.icon('i-shield')}</span><div class="ap-text"><b>Implantar ${it.id} na rede?</b><span>O deployer confere a sintaxe e a capacidade antes de instalar os fluxos no ONOS.</span></div><div class="ap-acts"><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">Cancelar</button><button class="btn" type="button" data-i-act="edit" data-id="${it.id}">Editar</button><button class="btn btn-blue" type="button" data-i-act="approve" data-id="${it.id}">Aprovar</button></div></div>`;
-    if (it.state === 'checking') return `<div class="approve is-busy"><span class="ap-ic"><i class="spinner"></i></span><div class="ap-text"><b class="shimmer">Verificando no deployer</b><span>Sintaxe, capacidade e caminho.</span></div></div>`;
-    if (it.state === 'deployed') return `<div class="approve is-ok"><span class="ap-ic">${R.icon('i-check')}</span><div class="ap-text"><b>Implantada às ${it.when}</b><span>${route?.path ? `${it.flows} fluxos · servidor ${route.server} · caminho ${route.path.slice(1, -1).join(', ')}` : R.esc(it.effect || `${it.flows} fluxos`)}</span></div><button type="button" class="btn btn-plain" data-i-act="revoke" data-id="${it.id}">Revogar</button></div>`;
-    if (it.state === 'revoked') return `<div class="approve is-off"><div class="ap-text"><span>Revogada às ${it.revokedAt || '–'}: fluxos e regras removidos do ONOS.</span></div></div>`;
-    if (it.state === 'rejected') return `<div class="approve is-err"><span class="ap-ic">${R.icon('i-x')}</span><div class="ap-text"><b>Recusada pelo deployer (${it.code || 422})</b><span>${R.esc(it.error)}</span></div><div class="ap-acts"><button class="btn" type="button" data-i-act="edit" data-id="${it.id}">Editar</button>${R.state.model ? `<button class="btn btn-blue" type="button" data-i-act="regenerate" data-id="${it.id}">Regenerar</button>` : ''}</div></div>`;
-    return `<div class="approve is-off"><div class="ap-text"><span>Cancelada. Nada foi enviado ao deployer.</span></div></div>`;
+    if (it.state === 'pending') return `<div class="approve"><span class="ap-ic">${R.icon('i-shield')}</span><div class="ap-text"><b>${L`Deploy ${it.id} in the network?`}</b><span>${L`The deployer checks the syntax and the capability before installing the flows in ONOS.`}</span></div><div class="ap-acts"><button class="btn btn-plain" type="button" data-i-act="cancel" data-id="${it.id}">${L`Cancel`}</button><button class="btn" type="button" data-i-act="edit" data-id="${it.id}">${L`Edit`}</button><button class="btn btn-blue" type="button" data-i-act="approve" data-id="${it.id}">${L`Approve`}</button></div></div>`;
+    if (it.state === 'checking') return `<div class="approve is-busy"><span class="ap-ic"><i class="spinner"></i></span><div class="ap-text"><b class="shimmer">${L`Checking with the deployer`}</b><span>${L`Syntax, capability and path.`}</span></div></div>`;
+    if (it.state === 'deployed') return `<div class="approve is-ok"><span class="ap-ic">${R.icon('i-check')}</span><div class="ap-text"><b>${L`Deployed at ${it.when}`}</b><span>${route?.path ? L`${it.flows} flows · server ${route.server} · path ${route.path.slice(1, -1).join(', ')}` : R.esc(it.effect || L`${it.flows} flows`)}</span></div><button type="button" class="btn btn-plain" data-i-act="revoke" data-id="${it.id}">${L`Revoke`}</button></div>`;
+    if (it.state === 'revoked') return `<div class="approve is-off"><div class="ap-text"><span>${L`Revoked at ${it.revokedAt || '–'}: flows and rules removed from ONOS.`}</span></div></div>`;
+    if (it.state === 'rejected') return `<div class="approve is-err"><span class="ap-ic">${R.icon('i-x')}</span><div class="ap-text"><b>${L`Refused by the deployer (${it.code || 422})`}</b><span>${R.esc(it.error)}</span></div><div class="ap-acts"><button class="btn" type="button" data-i-act="edit" data-id="${it.id}">${L`Edit`}</button>${R.state.model ? `<button class="btn btn-blue" type="button" data-i-act="regenerate" data-id="${it.id}">${L`Regenerate`}</button>` : ''}</div></div>`;
+    return `<div class="approve is-off"><div class="ap-text"><span>${L`Cancelled. Nothing was sent to the deployer.`}</span></div></div>`;
   }
-  const thought = steps => `<details class="thought"><summary>Pensou por ${secs(steps)} s${R.icon('i-chevron-right', 'chev')}</summary><ol>${steps.map(([t, s]) => `<li><span>${t}</span><span>${R.fmt(s)} s</span></li>`).join('')}</ol></details>`;
+  const thought = steps => `<details class="thought"><summary>${L`Thought for ${secs(steps)} s${R.icon('i-chevron-right', 'chev')}`}</summary><ol>${steps.map(([t, s]) => `<li><span>${t}</span><span>${R.fmt(s)} s</span></li>`).join('')}</ol></details>`;
   const ICON = { Deployer: 'i-deployer', Supervisor: 'i-eye', Profiler: 'i-chat' };
 
   function msgHtml(m, i) {
@@ -236,7 +236,7 @@
     const first = !prev || prev.role === 'user';
     if (m.role === 'user') {
       const it = M.intents.find(x => x.ask === m.text);
-      return { cls: 'msg user', html: `<div class="bubble">${R.esc(m.text)}</div><div class="meta">${m.time}${m.source === 'Topologia' ? ` · ${R.icon('i-topo')} pelo rodapé da topologia` : ''}${it ? ` · ${it.id}` : ''}</div>` };
+      return { cls: 'msg user', html: `<div class="bubble">${R.esc(m.text)}</div><div class="meta">${m.time}${m.source === 'Topology' ? ` ${L`· ${R.icon('i-topo')} from the topology's footer`}` : ''}${it ? ` · ${it.id}` : ''}</div>` };
     }
     const av = first ? `<span class="av">${MARK}</span>` : '<span class="av-gap"></span>';
     // the model's name only on what a model translated: not on an intent sent in Nile, nor without a model
@@ -246,10 +246,10 @@
     }
     let body = '';
     if (m.kind === 'thinking') {
-      body = `<div class="thinking"><span class="shimmer">${m.direct ? 'Lendo a Nile' : 'Traduzindo para Nile'}</span><ol>${m.steps.map(([t, s, done]) => `<li class="${done ? 'is-done' : ''}">${done ? R.icon('i-check') : '<i></i>'}<span>${t}</span>${done ? `<em>${R.fmt(s)} s</em>` : ''}</li>`).join('')}</ol></div>`;
+      body = `<div class="thinking"><span class="shimmer">${m.direct ? L`Reading the Nile` : L`Translating to Nile`}</span><ol>${m.steps.map(([t, s, done]) => `<li class="${done ? 'is-done' : ''}">${done ? R.icon('i-check') : '<i></i>'}<span>${t}</span>${done ? `<em>${R.fmt(s)} s</em>` : ''}</li>`).join('')}</ol></div>`;
     } else if (m.kind === 'ask') {
       const n = m.options.length;
-      body = `<p class="prose">${n > 1 ? `Encontrei ${n} clientes que podem atender ao pedido. Para qual deles?` : n ? 'Encontrei um cliente que atende ao pedido. É este?' : 'Não há clientes na topologia. Adicione um host antes.'}</p>
+      body = `<p class="prose">${n > 1 ? L`I found ${n} clients that can serve the request. Which one?` : n ? L`I found one client that serves the request. Is it this one?` : L`There are no clients in the topology. Add a host first.`}</p>
         <div class="choices">${m.options.map(o => `<button type="button" class="choice${m.answered === o.value ? ' is-picked' : ''}" data-thread-answer="${R.esc(o.value)}" data-msg="${i}"${m.answered ? ' disabled' : ''}>${R.icon('i-laptop')}<span>${R.esc(o.label)}</span></button>`).join('')}</div>`;
     } else if (m.kind === 'text') {
       body = `<p class="prose">${R.esc(m.text)}</p>`;
@@ -261,9 +261,9 @@
       body = `${m.steps?.length ? thought(m.steps) : ''}
         <p class="prose">${streaming ? words(text) : R.esc(text)}</p>
         <div class="after" style="--after:${nWords}">
-          <div class="code"><div class="code-head"><span>Nile</span><button type="button" class="code-copy" data-copy="${it.id}">${R.icon('i-copy')}<span>Copiar</span></button></div><pre class="nile" data-nile-for="${it.id}">${R.highlight(it.nile)}</pre></div>
+          <div class="code"><div class="code-head"><span>Nile</span><button type="button" class="code-copy" data-copy="${it.id}">${R.icon('i-copy')}<span>${L`Copy`}</span></button></div><pre class="nile" data-nile-for="${it.id}">${R.highlight(it.nile)}</pre></div>
           ${approval(it)}
-          <div class="acts"><button type="button" class="ico" data-copy="${it.id}" data-tip="Copiar Nile" aria-label="Copiar Nile">${R.icon('i-copy')}</button><button type="button" class="ico" data-show-topo data-tip="Ver na topologia" aria-label="Ver na topologia">${R.icon('i-topo')}</button></div>
+          <div class="acts"><button type="button" class="ico" data-copy="${it.id}" data-tip="${L`Copy Nile`}" aria-label="${L`Copy Nile`}">${R.icon('i-copy')}</button><button type="button" class="ico" data-show-topo data-tip="${L`See in the topology`}" aria-label="${L`See in the topology`}">${R.icon('i-topo')}</button></div>
         </div>`;
       return { cls: `msg rein${first ? ' first' : ''}${streaming ? ' is-streaming' : ''}`, html: `${av}<div class="body" data-i-anchor="${it.id}">${head}${body}</div>` };
     }
@@ -301,28 +301,28 @@
   // ------------------------------------------------------------ Intents page: applied Nile history
   const side = $('.chat-side'), sideHead = $('.side-head', side), chatMain = $('.chat-main');
   const helpBtn = document.createElement('button');
-  helpBtn.className = 'tool'; helpBtn.type = 'button'; helpBtn.dataset.help = ''; helpBtn.dataset.tip = 'Guia das intents'; helpBtn.setAttribute('aria-label', 'Guia das intents: exemplos, sintaxe Nile e capacidades');
+  helpBtn.className = 'tool'; helpBtn.type = 'button'; helpBtn.dataset.help = ''; helpBtn.dataset.tip = L`Intents guide`; helpBtn.setAttribute('aria-label', L`Intents guide: examples, Nile syntax and capabilities`);
   helpBtn.innerHTML = R.icon('i-help');
   sideHead.querySelector('[data-new-intent]').before(helpBtn);
   const modeSeg = document.createElement('div');
-  modeSeg.className = 'seg side-seg'; modeSeg.setAttribute('role', 'tablist'); modeSeg.setAttribute('aria-label', 'Visão');
-  modeSeg.innerHTML = '<button type="button" role="tab" data-imode="chat" aria-pressed="true">Conversa</button><button type="button" role="tab" data-imode="applied" aria-pressed="false">Aplicadas</button>';
+  modeSeg.className = 'seg side-seg'; modeSeg.setAttribute('role', 'tablist'); modeSeg.setAttribute('aria-label', L`View`);
+  modeSeg.innerHTML = `<button type="button" role="tab" data-imode="chat" aria-pressed="true">${L`Chat`}</button><button type="button" role="tab" data-imode="applied" aria-pressed="false">${L`Applied`}</button>`;
   sideHead.after(modeSeg);
   const applied = document.createElement('section');
-  applied.className = 'applied'; applied.hidden = true; applied.setAttribute('aria-label', 'Intents aplicadas');
+  applied.className = 'applied'; applied.hidden = true; applied.setAttribute('aria-label', L`Applied intents`);
   chatMain.append(applied);
   let imode = 'chat', aFilter = 'active';
-  const srcText = { Topologia: 'pelo rodapé da topologia', Intents: 'na conversa', 'Serviços': 'pelo painel de serviços' };
+  const srcText = { Topology: L`from the topology's footer`, Intents: L`in the chat`, Services: L`from the services panel` };
   function renderApplied() {
     const all = M.intents.filter(i => i.state === 'deployed' || i.state === 'revoked');
     const shown = all.filter(i => aFilter === 'all' || i.state === 'deployed').slice().reverse();
     applied.innerHTML = `<div class="ap-col">
-      <header class="ap-head"><div><h2>Intents aplicadas</h2><p>${all.filter(i => i.state === 'deployed').length} em vigor no ONOS, ${all.filter(i => i.state === 'revoked').length} revogada${all.filter(i => i.state === 'revoked').length === 1 ? '' : 's'}. Cada linha é exatamente o que o deployer recebeu.</p></div>
-        <div class="ap-tools"><div class="seg" role="group" aria-label="Filtro"><button type="button" data-afilter="active" aria-pressed="${aFilter === 'active'}">Em vigor</button><button type="button" data-afilter="all" aria-pressed="${aFilter === 'all'}">Todas</button></div><button class="btn" type="button" data-export-nile>${R.icon('i-export')}Exportar .nile</button></div></header>
-      ${shown.length ? `<ol class="ap-list">${shown.map(it => { const u = M.chat.find(m => m.role === 'user' && (m.intent === it.id || m.text === it.ask)); return `<li class="ap-item st-${it.state}"><div class="ap-meta"><b class="mono">${it.id}</b><span class="ap-state"><i class="st st-${it.state === 'deployed' ? 'deployed' : 'cancelled'}"></i>${it.state === 'deployed' ? `Em vigor desde ${it.when}` : `Revogada às ${it.revokedAt || '–'}`}</span><span class="ap-src">${R.esc(srcText[u?.source] || 'na conversa')}</span></div>
+      <header class="ap-head"><div><h2>${L`Applied intents`}</h2><p>${L`${all.filter(i => i.state === 'deployed').length} in force in ONOS, ${all.filter(i => i.state === 'revoked').length} revoked. Each line is exactly what the deployer received.`}</p></div>
+        <div class="ap-tools"><div class="seg" role="group" aria-label="${L`Filter`}"><button type="button" data-afilter="active" aria-pressed="${aFilter === 'active'}">${L`In force`}</button><button type="button" data-afilter="all" aria-pressed="${aFilter === 'all'}">${L`All`}</button></div><button class="btn" type="button" data-export-nile>${L`${R.icon('i-export')}Export .nile`}</button></div></header>
+      ${shown.length ? `<ol class="ap-list">${shown.map(it => { const u = M.chat.find(m => m.role === 'user' && (m.intent === it.id || m.text === it.ask)); return `<li class="ap-item st-${it.state}"><div class="ap-meta"><b class="mono">${it.id}</b><span class="ap-state"><i class="st st-${it.state === 'deployed' ? 'deployed' : 'cancelled'}"></i>${it.state === 'deployed' ? L`In force since ${it.when}` : L`Revoked at ${it.revokedAt || '–'}`}</span><span class="ap-src">${R.esc(srcText[u?.source] || L`in the chat`)}</span></div>
           <pre class="nile">${R.highlight(it.nile)}</pre>
-          <p class="ap-effect">${R.esc(it.effect || (it.flows ? `${it.flows} fluxos` : ''))}${it.ask ? ` · “${R.esc(it.ask)}”` : ''}</p>
-          <div class="ap-acts"><button type="button" class="btn btn-plain" data-copy="${it.id}">${R.icon('i-copy')}<span>Copiar</span></button>${it.state === 'deployed' ? `<button type="button" class="btn btn-danger" data-i-act="revoke" data-id="${it.id}">Revogar</button>` : ''}</div></li>`; }).join('')}</ol>` : '<p class="ap-empty">Nenhuma intent em vigor. As aprovadas aparecem aqui.</p>'}</div>`;
+          <p class="ap-effect">${R.esc(it.effect || (it.flows ? L`${it.flows} flows` : ''))}${it.ask ? ` · “${R.esc(it.ask)}”` : ''}</p>
+          <div class="ap-acts"><button type="button" class="btn btn-plain" data-copy="${it.id}">${R.icon('i-copy')}<span>${L`Copy`}</span></button>${it.state === 'deployed' ? `<button type="button" class="btn btn-danger" data-i-act="revoke" data-id="${it.id}">${L`Revoke`}</button>` : ''}</div></li>`; }).join('')}</ol>` : `<p class="ap-empty">${L`No intent in force. The approved ones appear here.`}</p>`}</div>`;
   }
   function setMode(m) {
     imode = m;
@@ -337,7 +337,7 @@
   applied.addEventListener('click', e => {
     const f = e.target.closest('[data-afilter]'); if (f) { aFilter = f.dataset.afilter; renderApplied(); return; }
     if (e.target.closest('[data-export-nile]')) {
-      const body = M.intents.filter(i => i.state === 'deployed').map(i => `# ${i.id}, em vigor desde ${i.when}${i.effect ? `: ${i.effect}` : ''}\n${i.nile}`).join('\n\n') + '\n';
+      const body = M.intents.filter(i => i.state === 'deployed').map(i => L`# ${i.id}, in force since ${i.when}${i.effect ? `: ${i.effect}` : ''}\n${i.nile}`).join('\n\n') + '\n';
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain' })); a.download = `intents-${R.env?.testbed || 'rein'}.nile`; a.click();
     }
   });
@@ -346,11 +346,11 @@
   // ------------------------------------------------------------ help: a guide to asking, Nile and the deployer
   const helpSheet = $('[data-sheet="help"]'), toc = $('[data-help-toc]'), doc = $('[data-help-doc]');
   const EX = [
-    ['Quero vídeo sem travar para o cliente de SP', "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')", 'O deployer escolhe o servidor DASH de menor RTT e o caminho de maior vazão. O supervisor mede a latência e pede outro caminho quando passa de 200 ms.', 'ok'],
-    ['Limite o cl0 a 10 Mb/s', "define intent q2: for endpoint('192.168.0.2') set bandwidth('max', '10', 'mbps')", 'Um meter OpenFlow com banda DROP de 10.000 kbps no switch do cl0, sobre o que chega a ele. Um novo limite substitui este.', 'ok'],
-    ['Bloqueie UDP no cliente cl0', "define intent q3: for endpoint('192.168.0.2') block protocol('udp')", 'Descarta UDP de e para o cl0, no switch dele. O iperf3 -u desse cliente para de receber; o TCP segue.', 'ok'],
-    ['Bloqueie SSH no cliente de SP', "define intent q4: for endpoint('192.168.0.2') block protocol('ssh')", 'Descarta TCP na porta 22 de e para o cliente. allow protocol(\'ssh\') desfaz.', 'ok'],
-    ['Inspecione o tráfego dos estudantes', "define intent q5: for group('students') add middlebox('dpi')", 'Sintaxe válida, mas recusada: não há middlebox neste testbed.', 'no'],
+    [L`I want video without stalls for the client in SP`, "define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')", L`The deployer picks the DASH server of lowest RTT and the path of highest throughput. The supervisor measures the latency and asks for another path when it goes above 200 ms.`, 'ok'],
+    [L`Limit cl0 to 10 Mb/s`, "define intent q2: for endpoint('192.168.0.2') set bandwidth('max', '10', 'mbps')", L`An OpenFlow meter with a DROP band of 10,000 kbps at cl0's switch, on what reaches it. A new limit replaces this one.`, 'ok'],
+    [L`Block UDP on client cl0`, "define intent q3: for endpoint('192.168.0.2') block protocol('udp')", L`Drops UDP to and from cl0, at its switch. That client's iperf3 -u stops receiving, and TCP goes on.`, 'ok'],
+    [L`Block SSH on the client in SP`, "define intent q4: for endpoint('192.168.0.2') block protocol('ssh')", L`Drops TCP on port 22 to and from the client. allow protocol('ssh') undoes it.`, 'ok'],
+    [L`Inspect the students' traffic`, "define intent q5: for group('students') add middlebox('dpi')", L`Valid syntax, but refused: there is no middlebox in this testbed.`, 'no'],
   ];
   const BNF = `<intent>    ::= "define" "intent" <name> ":" <scope> <action> [ <window> ]
 
@@ -374,30 +374,30 @@
 
 <chain-op>  ::= "add" | "remove"
 <chain>     ::= <chain-fn> "(" <str> ")"
-<chain-fn>  ::= "middlebox" | "service"         ; service(...) é extensão do REIN
+<chain-fn>  ${L`::= "middlebox" | "service"         ; service(...) is a REIN extension`}
 
 <window>    ::= "start" <time> "end" <time>
 <time>      ::= <time-fn> "(" <str> ")"
 <time-fn>   ::= "hour" | "date" | "datetime" | "timestamp"
 
-<name>      ::= letra ou "_", seguida de letras, dígitos ou "_"
-<str>       ::= "'" qualquer texto sem aspas simples "'"`;
+<name>      ${L`::= a letter or "_", followed by letters, digits or "_"`}
+<str>       ${L`::= "'" any text without single quotes "'"`}`;
   const CAPS = [
-    ["add | remove service('cdn-qoe')", 'Executa', 'Servidor de menor RTT, caminho de maior vazão; o supervisor recalcula. remove apaga o caminho.', 'yes'],
-    ["set | unset bandwidth('max', N, unidade)", 'Executa', 'Meter DROP no switch do cliente; bps, kbps, mbps ou gbps.', 'yes'],
-    ["set bandwidth('min', …)", 'Recusa', '422: um mínimo precisa de filas; só o máximo é aplicado.', 'no'],
-    ["block | allow protocol('tcp'|'udp'|'icmp'|'ssh'|'http'|'https')", 'Executa', 'Descarte nos dois sentidos, no switch do cliente; allow desfaz.', 'yes'],
-    ["block | allow service(…), traffic(…)", 'Recusa', '422: nomes de serviço e de tráfego exigem DPI.', 'no'],
-    ["add | remove middlebox(…)", 'Recusa', '422: não há middlebox neste testbed.', 'no'],
-    ["set quota(…), start … end …", 'Recusa', '422: não implementados.', 'no'],
+    ["add | remove service('cdn-qoe')", L`Executes`, L`Server of lowest RTT, path of highest throughput, and the supervisor recalculates. remove deletes the path.`, 'yes'],
+    [L`set | unset bandwidth('max', N, unit)`, L`Executes`, L`DROP meter at the client's switch: bps, kbps, mbps or gbps.`, 'yes'],
+    ["set bandwidth('min', …)", L`Refuses`, L`422: a minimum needs queues, only the maximum is applied.`, 'no'],
+    ["block | allow protocol('tcp'|'udp'|'icmp'|'ssh'|'http'|'https')", L`Executes`, L`Dropped both ways, at the client's switch. allow undoes it.`, 'yes'],
+    ["block | allow service(…), traffic(…)", L`Refuses`, L`422: service and traffic names need DPI.`, 'no'],
+    ["add | remove middlebox(…)", L`Refuses`, L`422: there is no middlebox in this testbed.`, 'no'],
+    ["set quota(…), start … end …", L`Refuses`, L`422: not implemented.`, 'no'],
   ];
   const SECTIONS = [
-    ['start', 'Como pedir', `<p class="hd-lead">Diga o que a rede precisa garantir e para quem. O REIN encontra o cliente pelo endereço (192.168.0.2), pelo nome (cl0) ou pelo estado do switch (“cliente de SP”), escreve a intent em Nile e espera a sua aprovação. Nada chega ao ONOS antes disso.</p>
-      <ul class="hd-steps"><li><b>1</b><span>Escreva no campo do rodapé, na Topologia ou aqui. Enter envia, Shift+Enter quebra a linha, / leva ao campo.</span></li><li><b>2</b><span>Se faltar um dado, o REIN pergunta. Responda escolhendo uma opção.</span></li><li><b>3</b><span>Confira a Nile. Edite o texto se precisar e aprove.</span></li><li><b>4</b><span>O deployer confere a sintaxe e se a operação é executável. Se recusar, o motivo aparece e você pode regenerar.</span></li></ul>
-      <p>Quem já sabe a Nile pode escrevê-la direto no mesmo campo: um pedido que começa com <code>define intent</code> vai para a aprovação como está, sem passar pelo modelo. O menu ao lado do campo troca o modelo ou ativa o <b>Nile direto</b>, sem modelo.</p>`],
-    ['ex', 'Exemplos', `<div class="hd-ex">${EX.map(([nl, nile, what, ok]) => `<article class="${ok}"><p class="hd-nl">“${R.esc(nl)}”</p><pre class="nile">${R.highlight(nile)}</pre><p class="hd-what">${ok === 'no' ? R.icon('i-x') : R.icon('i-check')}${R.esc(what)}</p></article>`).join('')}</div>`],
-    ['bnf', 'Sintaxe da Nile', `<p>A gramática do REIN, em BNF. Espaços não importam; valores vão entre aspas simples. Ela aceita as 256.913 linhas do NEAT e os pedidos do REIN, e só valida a forma: o que roda depende do deployer.</p><pre class="bnf">${R.esc(BNF).replace(/(&lt;[\w-]+&gt;)/g, '<span class="nt">$1</span>').replace(/(&quot;[^&]*?&quot;)/g, '<span class="t">$1</span>').replace(/(\s; [^\n]*)/g, '<span class="c">$1</span>')}</pre><p class="hd-src">Fonte: REIN/docs/intent-profiling/nile.lark (Lark, LALR).</p>`],
-    ['caps', 'O que o deployer executa', `<table class="hd-caps"><thead><tr><th>Operação</th><th>Estado</th><th>Como</th></tr></thead><tbody>${CAPS.map(([op, st, how, k]) => `<tr><td><code>${R.esc(op)}</code></td><td><span class="cap ${k}">${st}</span></td><td>${R.esc(how)}</td></tr>`).join('')}</tbody></table><p class="hd-src">Todas pedem for endpoint('&lt;ip&gt;'). De deployer/nile.py (GET /capabilities) e deployer/edge.py; também pelo painel Serviços da Topologia.</p>`],
+    ['start', L`How to ask`, `<p class="hd-lead">${L`Say what the network must guarantee and for whom. REIN finds the client by its address (192.168.0.2), by its name (cl0) or by the state of its switch (“client in SP”), writes the intent in Nile and waits for your approval. Nothing reaches ONOS before that.`}</p>
+      <ul class="hd-steps"><li><b>1</b><span>${L`Write in the field at the bottom, in Topology or here. Enter sends, Shift+Enter breaks the line, / goes to the field.`}</span></li><li><b>2</b><span>${L`If something is missing, REIN asks. Answer by choosing an option.`}</span></li><li><b>3</b><span>${L`Check the Nile. Edit the text if needed and approve.`}</span></li><li><b>4</b><span>${L`The deployer checks the syntax and whether the operation can be executed. If it refuses, the reason appears and you can regenerate.`}</span></li></ul>
+      <p>${L`Those who know Nile can write it directly in the same field: a request that starts with`} <code>define intent</code> ${L`goes to approval as it is, without the model. The menu next to the field changes the model or turns on`} <b>${L`Direct Nile`}</b>${L`, with no model.`}</p>`],
+    ['ex', L`Examples`, `<div class="hd-ex">${EX.map(([nl, nile, what, ok]) => `<article class="${ok}"><p class="hd-nl">“${R.esc(nl)}”</p><pre class="nile">${R.highlight(nile)}</pre><p class="hd-what">${ok === 'no' ? R.icon('i-x') : R.icon('i-check')}${R.esc(what)}</p></article>`).join('')}</div>`],
+    ['bnf', L`Nile syntax`, `<p>${L`REIN's grammar, in BNF. Spaces do not matter and values go between single quotes. It accepts the 256,913 lines of NEAT and REIN's requests, and only validates the form: what runs depends on the deployer.`}</p><pre class="bnf">${R.esc(BNF).replace(/(&lt;[\w-]+&gt;)/g, '<span class="nt">$1</span>').replace(/(&quot;[^&]*?&quot;)/g, '<span class="t">$1</span>').replace(/(\s; [^\n]*)/g, '<span class="c">$1</span>')}</pre><p class="hd-src">${L`Source: deployer/nile.lark (Lark, LALR).`}</p>`],
+    ['caps', L`What the deployer executes`, `<table class="hd-caps"><thead><tr><th>${L`Operation`}</th><th>${L`State`}</th><th>${L`How`}</th></tr></thead><tbody>${CAPS.map(([op, st, how, k]) => `<tr><td><code>${R.esc(op)}</code></td><td><span class="cap ${k}">${st}</span></td><td>${R.esc(how)}</td></tr>`).join('')}</tbody></table><p class="hd-src">${L`All of them need for endpoint('&lt;ip&gt;'). From deployer/nile.py (GET /capabilities) and deployer/edge.py, and also through the Services panel in Topology.`}</p>`],
   ];
   let helpAt = 'start';
   function paintHelp() {

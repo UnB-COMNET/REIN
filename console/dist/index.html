@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="pt-BR" class="no-js">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>REIN</title>
-<meta name="description" content="REIN Console: a rede, as intents e o que acontece quando um link piora.">
+<meta name="description" content="REIN Console: the network, the intents and what happens when a link gets worse.">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#ECEDEF">
 <link rel="icon" href="assets/rein-mark.svg" type="image/svg+xml">
@@ -18,6 +18,8 @@
 <link rel="stylesheet" href="assets/studio.css">
 <link rel="stylesheet" href="assets/interaction.css">
 <link rel="stylesheet" href="assets/console.css">
+<script defer src="assets/app/pt.js"></script>
+<script defer src="assets/app/i18n.js"></script>
 <script defer src="assets/app/brazil.js"></script>
 <script defer src="assets/app/model.js"></script>
 <script defer src="assets/app/ui.js"></script>
@@ -83,49 +85,50 @@
 <div class="backdrop" data-backdrop aria-hidden="true"></div>
 <div class="intro" data-intro aria-hidden="true"><svg viewBox="-12 -12 1638 424"></svg></div>
 
-<a class="skip" href="#ask" data-skip>Ir para o campo de intent</a>
+<a class="skip" href="#ask" data-skip>Go to the intent field</a>
 
-<nav class="nav" aria-label="Seções">
+<nav class="nav" aria-label="Sections">
   <span class="nav-ind" data-nav-ind aria-hidden="true"></span>
-  <a href="#topologia" data-nav="topologia"><svg aria-hidden="true"><use href="#i-topo"/></svg>Topologia</a>
+  <a href="#topology" data-nav="topology"><svg aria-hidden="true"><use href="#i-topo"/></svg>Topology</a>
   <a href="#intents" data-nav="intents"><svg aria-hidden="true"><use href="#i-chat"/></svg>Intents</a>
-  <a href="#monitor" data-nav="monitor" aria-label="Monitoramento"><svg aria-hidden="true"><use href="#i-monitor"/></svg><span class="lbl-long">Monitoramento</span><span class="lbl-short">Monitor</span></a>
-  <a href="#experimentos" data-nav="experimentos"><svg aria-hidden="true"><use href="#i-flask"/></svg>Experimentos</a>
-  <a href="#modulos" data-nav="modulos"><svg aria-hidden="true"><use href="#i-modules"/></svg>Módulos</a>
-  <a href="#sobre" data-nav="sobre"><svg aria-hidden="true"><use href="#i-info"/></svg>Sobre</a>
+  <a href="#monitor" data-nav="monitor" aria-label="Monitoring"><svg aria-hidden="true"><use href="#i-monitor"/></svg><span class="lbl-long">Monitoring</span><span class="lbl-short">Monitor</span></a>
+  <a href="#experiments" data-nav="experiments"><svg aria-hidden="true"><use href="#i-flask"/></svg>Experiments</a>
+  <a href="#modules" data-nav="modules"><svg aria-hidden="true"><use href="#i-modules"/></svg>Modules</a>
+  <a href="#about" data-nav="about"><svg aria-hidden="true"><use href="#i-info"/></svg>About</a>
 </nav>
 
 <div class="window">
   <header class="w-head">
-    <a class="brand" href="#topologia" aria-label="REIN, topologia"><svg viewBox="0 0 1614 400" aria-hidden="true"><use href="#rein-logo"/></svg></a>
-    <div class="w-tools" data-for="topologia" role="toolbar" aria-label="Topologia">
-      <button class="tool" type="button" data-tool="map" aria-pressed="false" data-tip="Mapa do Brasil" aria-label="Mapa do Brasil"><svg aria-hidden="true"><use href="#i-map"/></svg></button>
-      <button class="tool" type="button" data-tool="add" data-keep-pop data-tip="Adicionar" aria-label="Adicionar switch, host ou tráfego" aria-haspopup="menu" aria-expanded="false"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
-      <button class="tool" type="button" data-tool="services" data-tip="Serviços do deployer" aria-label="Serviços do deployer"><svg aria-hidden="true"><use href="#i-shield"/></svg></button>
-      <button class="tool" type="button" data-tool="traffic" data-tip="Tráfego" aria-label="Tráfego entre hosts"><svg aria-hidden="true"><use href="#i-traffic"/></svg></button>
-      <button class="tool" type="button" data-tool="look" data-keep-pop data-tip="Aparência" aria-label="Aparência" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true"><use href="#i-sliders"/></svg></button>
+    <a class="brand" href="#topology" aria-label="REIN, topology"><svg viewBox="0 0 1614 400" aria-hidden="true"><use href="#rein-logo"/></svg></a>
+    <div class="w-tools" data-for="topology" role="toolbar" aria-label="Topology">
+      <button class="tool" type="button" data-tool="map" aria-pressed="false" data-tip="Map of Brazil" aria-label="Map of Brazil"><svg aria-hidden="true"><use href="#i-map"/></svg></button>
+      <button class="tool" type="button" data-tool="add" data-keep-pop data-tip="Add" aria-label="Add a switch, a host or traffic" aria-haspopup="menu" aria-expanded="false"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button class="tool" type="button" data-tool="services" data-tip="Deployer services" aria-label="Deployer services"><svg aria-hidden="true"><use href="#i-shield"/></svg></button>
+      <button class="tool" type="button" data-tool="traffic" data-tip="Traffic" aria-label="Traffic between hosts"><svg aria-hidden="true"><use href="#i-traffic"/></svg></button>
+      <button class="tool" type="button" data-tool="look" data-keep-pop data-tip="Appearance" aria-label="Appearance" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true"><use href="#i-sliders"/></svg></button>
       <span class="tool-sep" aria-hidden="true"></span>
-      <a class="tool" data-tool="onos" target="_blank" rel="noreferrer" data-tip="Abrir o ONOS (GUI2)" aria-label="Abrir a interface GUI2 do ONOS em nova aba"><svg aria-hidden="true"><use href="#i-external"/></svg></a>
-      <button class="tool" type="button" data-tool="import" data-tip="Importar .py" aria-label="Importar topologia .py"><svg aria-hidden="true"><use href="#i-import"/></svg></button>
-      <button class="tool" type="button" data-tool="export" data-tip="Exportar .py" aria-label="Exportar topologia .py"><svg aria-hidden="true"><use href="#i-export"/></svg></button>
+      <a class="tool" data-tool="onos" target="_blank" rel="noreferrer" data-tip="Open ONOS (GUI2)" aria-label="Open the ONOS GUI2 in a new tab"><svg aria-hidden="true"><use href="#i-external"/></svg></a>
+      <button class="tool" type="button" data-tool="import" data-tip="Import .py" aria-label="Import a topology .py"><svg aria-hidden="true"><use href="#i-import"/></svg></button>
+      <button class="tool" type="button" data-tool="export" data-tip="Export .py" aria-label="Export the topology as .py"><svg aria-hidden="true"><use href="#i-export"/></svg></button>
       <input type="file" accept=".py,text/x-python" data-import hidden>
     </div>
     <button class="conn" type="button" data-conn data-keep-pop aria-haspopup="dialog" aria-expanded="false"><span class="dot"></span><span data-conn-label>lft · cdn-qoe</span></button>
+    <button class="lang" type="button" data-lang></button>
   </header>
 
   <main class="pages" id="main">
-    <section class="page" data-page="topologia" aria-labelledby="t-title">
+    <section class="page" data-page="topology" aria-labelledby="t-title">
       <div class="topo-head page-head">
-        <h1 id="t-title" tabindex="-1">Sua rede <span data-net-status></span></h1>
-        <p>Conectividade orientada a intenções.</p>
+        <h1 id="t-title" tabindex="-1">Your network <span data-net-status></span></h1>
+        <p>Intent-driven connectivity.</p>
       </div>
       <div class="stage" data-stage data-slot="topology">
         <div class="world" data-world></div>
-        <section class="tpanel" data-tpanel hidden aria-label="Tráfego em curso"></section>
+        <section class="tpanel" data-tpanel hidden aria-label="Traffic running"></section>
         <div class="zoom" role="toolbar" aria-label="Zoom" data-zoom-bar>
-          <button type="button" data-zoom="in" aria-label="Aproximar" data-tip="Aproximar  +"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
-          <button type="button" data-zoom="out" aria-label="Afastar" data-tip="Afastar  −"><svg aria-hidden="true"><use href="#i-minus"/></svg></button>
-          <button type="button" data-zoom="fit" aria-label="Enquadrar a rede" data-tip="Enquadrar  0"><svg aria-hidden="true"><use href="#i-fit"/></svg></button>
+          <button type="button" data-zoom="in" aria-label="Zoom in" data-tip="Zoom in  +"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button type="button" data-zoom="out" aria-label="Zoom out" data-tip="Zoom out  −"><svg aria-hidden="true"><use href="#i-minus"/></svg></button>
+          <button type="button" data-zoom="fit" aria-label="Fit the network" data-tip="Fit  0"><svg aria-hidden="true"><use href="#i-fit"/></svg></button>
         </div>
       </div>
     </section>
@@ -135,136 +138,136 @@
         <aside class="chat-side">
           <div class="side-head">
             <h1 id="i-title" tabindex="-1">Intents</h1>
-            <button class="tool" type="button" data-new-intent data-tip="Nova intent" aria-label="Nova intent"><svg aria-hidden="true"><use href="#i-compose"/></svg></button>
+            <button class="tool" type="button" data-new-intent data-tip="New intent" aria-label="New intent"><svg aria-hidden="true"><use href="#i-compose"/></svg></button>
           </div>
-          <label class="search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Buscar" data-i-search aria-label="Buscar intents" autocomplete="off"></label>
+          <label class="search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Search" data-i-search aria-label="Search intents" autocomplete="off"></label>
           <nav class="i-list" data-i-list aria-label="Intents"></nav>
         </aside>
         <div class="chat-main">
           <div class="thread" data-thread aria-live="polite" data-slot="chat"></div>
-          <div class="suggest" data-suggest aria-label="Sugestões"></div>
+          <div class="suggest" data-suggest aria-label="Suggestions"></div>
         </div>
       </div>
     </section>
 
     <section class="page" data-page="monitor" aria-labelledby="m-title">
-      <div class="page-head"><h1 id="m-title" tabindex="-1">Monitoramento</h1><p>O que o collector mede para cada cliente.</p></div>
+      <div class="page-head"><h1 id="m-title" tabindex="-1">Monitoring</h1><p>What the collector measures for each client.</p></div>
       <div class="page-scroll" data-slot="observer"></div>
     </section>
 
-    <section class="page" data-page="experimentos" aria-labelledby="e-title">
-      <div class="page-head"><h1 id="e-title" tabindex="-1">Experimentos</h1><p>Os runners do LFT e os seus planos, executados no testbed com resultados em results/.</p></div>
+    <section class="page" data-page="experiments" aria-labelledby="e-title">
+      <div class="page-head"><h1 id="e-title" tabindex="-1">Experiments</h1><p>LFT's runners and your plans, run in the testbed with results in results/.</p></div>
       <div class="page-scroll" data-slot="experiments"></div>
     </section>
 
-    <section class="page" data-page="modulos" aria-labelledby="mo-title">
-      <div class="page-head"><h1 id="mo-title" tabindex="-1">Módulos</h1><p>Do pedido à execução. Inspecione cada serviço do REIN.</p></div>
+    <section class="page" data-page="modules" aria-labelledby="mo-title">
+      <div class="page-head"><h1 id="mo-title" tabindex="-1">Modules</h1><p>From the request to the execution. Inspect each REIN service.</p></div>
       <div class="page-scroll" data-slot="modules"></div>
     </section>
 
-    <section class="page" data-page="sobre" aria-labelledby="s-title">
-      <div class="page-head"><h1 id="s-title" tabindex="-1">Sobre</h1><p>O que é o REIN e como as peças se conectam.</p></div>
+    <section class="page" data-page="about" aria-labelledby="s-title">
+      <div class="page-head"><h1 id="s-title" tabindex="-1">About</h1><p>What REIN is and how the pieces connect.</p></div>
       <div class="page-scroll"></div>
     </section>
   </main>
 
   <form class="composer" data-composer data-slot="composer">
     <div class="composer-field">
-      <button class="model-btn" type="button" data-models data-keep-pop aria-haspopup="dialog" aria-expanded="false"><span data-model-label>qwen3.6</span><svg aria-hidden="true"><use href="#i-chevron"/></svg></button>
-      <label class="sr-only" for="ask">Descreva o que a rede precisa garantir</label>
-      <textarea id="ask" rows="1" placeholder="Descreva o que a rede precisa garantir" autocomplete="off"></textarea>
-      <button class="clear" type="button" data-clear aria-label="Limpar"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
+      <button class="model-btn" type="button" data-models data-keep-pop aria-haspopup="dialog" aria-expanded="false"><span data-model-label>Model</span><svg aria-hidden="true"><use href="#i-chevron"/></svg></button>
+      <label class="sr-only" for="ask">Describe what the network must guarantee</label>
+      <textarea id="ask" rows="1" placeholder="Describe what the network must guarantee" autocomplete="off"></textarea>
+      <button class="clear" type="button" data-clear aria-label="Clear"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
-    <button class="btn btn-blue send" type="submit" data-send disabled aria-label="Revisar"><span class="send-label">Revisar</span><svg class="send-ic" aria-hidden="true"><use href="#i-arrow-up"/></svg></button>
+    <button class="btn btn-blue send" type="submit" data-send disabled aria-label="Review"><span class="send-label">Review</span><svg class="send-ic" aria-hidden="true"><use href="#i-arrow-up"/></svg></button>
   </form>
 
   <section class="card" data-card hidden aria-live="polite" data-slot="intent-review"></section>
 </div>
 
 <section class="pop" data-pop="link" role="dialog" aria-label="Link" hidden data-slot="link-editor"></section>
-<section class="pop" data-pop="node" role="dialog" aria-label="Nó" hidden data-slot="node-detail"></section>
-<section class="pop pop-look" data-pop="look" role="dialog" aria-label="Aparência" hidden></section>
-<section class="pop pop-menu" data-pop="add" role="menu" aria-label="Adicionar" hidden></section>
+<section class="pop" data-pop="node" role="dialog" aria-label="Node" hidden data-slot="node-detail"></section>
+<section class="pop pop-look" data-pop="look" role="dialog" aria-label="Appearance" hidden></section>
+<section class="pop pop-menu" data-pop="add" role="menu" aria-label="Add" hidden></section>
 <section class="pop pop-iface" data-pop="iface" role="dialog" aria-label="Interface" hidden></section>
 <section class="pop pop-conn" data-pop="conn" role="dialog" aria-label="Testbed" hidden></section>
-<section class="pop" data-pop="models" role="dialog" aria-label="Modelo de tradução" hidden data-slot="model-picker"></section>
+<section class="pop" data-pop="models" role="dialog" aria-label="Translation model" hidden data-slot="model-picker"></section>
 
 <dialog class="sheet sheet-md" data-sheet="host" aria-labelledby="host-title">
   <form class="sheet-in" data-host-form data-slot="host-form">
-    <div class="sheet-head"><div><h2 id="host-title" data-host-title>Adicionar host</h2><p>Um container Docker ligado ao switch por um par veth. Ao responder ARP, o ONOS o descobre.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-head"><div><h2 id="host-title" data-host-title>Add host</h2><p>A Docker container connected to the switch by a veth pair. When it answers ARP, ONOS discovers it.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="fgrid">
-      <div class="frow"><span class="flabel">Papel</span><div class="seg" role="group" aria-label="Papel"><button type="button" data-role="Cliente">Cliente</button><button type="button" data-role="Servidor">Servidor</button></div><input type="hidden" name="role"></div>
-      <label class="frow"><span class="flabel">Nome</span><span class="fctl"><input name="name" required pattern="(cl|ds)[0-9]+" autocomplete="off" spellcheck="false"><small>cl para cliente, ds para servidor</small></span></label>
+      <div class="frow"><span class="flabel">Role</span><div class="seg" role="group" aria-label="Role"><button type="button" data-role="Client">Client</button><button type="button" data-role="Server">Server</button></div><input type="hidden" name="role"></div>
+      <label class="frow"><span class="flabel">Name</span><span class="fctl"><input name="name" required pattern="(cl|ds)[0-9]+" autocomplete="off" spellcheck="false"><small>cl for a client, ds for a server</small></span></label>
       <label class="frow"><span class="flabel">Switch</span><span class="fctl"><select name="sw" aria-label="Switch"></select></span></label>
-      <label class="frow"><span class="flabel">Endereço</span><span class="fctl"><input name="ip" inputmode="decimal" autocomplete="off"><small>/24 na rede 192.168.0.0</small></span></label>
-      <label class="frow"><span class="flabel">Imagem</span><span class="fctl"><select name="image" aria-label="Imagem Docker"><option value="lft-dash-video">lft-dash-video</option><option value="lft-dash-live">lft-dash-live</option><option value="lft-pydash-server">lft-pydash-server</option><option value="lft-dash-client">lft-dash-client</option><option value="lft-pydash-client">lft-pydash-client</option><option value="lft-iperf">lft-iperf</option><option value="__other">Outra imagem…</option></select><small data-image-hint></small></span></label>
-      <label class="frow" data-custom-image hidden><span class="flabel">Nome da imagem</span><span class="fctl"><input name="custom" placeholder="registry/imagem:tag" autocomplete="off" spellcheck="false"></span></label>
+      <label class="frow"><span class="flabel">Address</span><span class="fctl"><input name="ip" inputmode="decimal" autocomplete="off"><small>/24 in the network 192.168.0.0</small></span></label>
+      <label class="frow"><span class="flabel">Image</span><span class="fctl"><select name="image" aria-label="Docker image"><option value="lft-dash-video">lft-dash-video</option><option value="lft-dash-live">lft-dash-live</option><option value="lft-pydash-server">lft-pydash-server</option><option value="lft-dash-client">lft-dash-client</option><option value="lft-pydash-client">lft-pydash-client</option><option value="lft-iperf">lft-iperf</option><option value="__other">Another image…</option></select><small data-image-hint></small></span></label>
+      <label class="frow" data-custom-image hidden><span class="flabel">Image name</span><span class="fctl"><input name="custom" placeholder="registry/image:tag" autocomplete="off" spellcheck="false"></span></label>
     </div>
-    <div class="fcli"><span class="flabel">O que o testbed executa</span><pre data-host-cli></pre></div>
-    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-host-remove hidden>Remover host</button><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar host</button></div>
+    <div class="fcli"><span class="flabel">What the testbed runs</span><pre data-host-cli></pre></div>
+    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-host-remove hidden>Remove host</button><button class="btn" type="button" data-close-sheet>Cancel</button><button class="btn btn-blue" type="submit">Create host</button></div>
   </form>
 </dialog>
 
 <dialog class="sheet sheet-sm" data-sheet="newtopo" aria-labelledby="nt-title">
   <form class="sheet-in" data-newtopo-form>
-    <div class="sheet-head"><div><h2 id="nt-title">Nova topologia</h2><p>O testbed atual sai, e o LFT sobe o ONOS com a rede escolhida. Leva cerca de um minuto.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
-    <div class="presets" role="radiogroup" aria-label="Topologia" data-presets></div>
-    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-topo-clean>Limpar a topologia</button><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar</button></div>
+    <div class="sheet-head"><div><h2 id="nt-title">New topology</h2><p>The current testbed goes away, and LFT starts ONOS with the network chosen. It takes about a minute.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="presets" role="radiogroup" aria-label="Topology" data-presets></div>
+    <div class="sheet-foot"><button class="btn btn-danger" type="button" data-topo-clean>Clear the topology</button><button class="btn" type="button" data-close-sheet>Cancel</button><button class="btn btn-blue" type="submit">Create</button></div>
   </form>
 </dialog>
 
 <dialog class="sheet sheet-md" data-sheet="switch" aria-labelledby="sw-title">
   <form class="sheet-in" data-switch-form>
-    <div class="sheet-head"><div><h2 id="sw-title">Adicionar switch</h2><p>Um container Open vSwitch com datapath próprio, ligado ao controlador ONOS. O dp-desc guarda o estado.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-head"><div><h2 id="sw-title">Add switch</h2><p>An Open vSwitch container with its own datapath, connected to the ONOS controller. The dp-desc keeps the state.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="fgrid">
-      <label class="frow"><span class="flabel">Nome</span><span class="fctl"><input name="name" required pattern="s[0-9]+" autocomplete="off" spellcheck="false"><small data-dpid></small></span></label>
-      <label class="frow"><span class="flabel">Estado</span><span class="fctl"><select name="uf" aria-label="Estado (dp-desc)" data-uf></select><small>other-config:dp-desc</small></span></label>
+      <label class="frow"><span class="flabel">Name</span><span class="fctl"><input name="name" required pattern="s[0-9]+" autocomplete="off" spellcheck="false"><small data-dpid></small></span></label>
+      <label class="frow"><span class="flabel">State</span><span class="fctl"><select name="uf" aria-label="State (dp-desc)" data-uf></select><small>other-config:dp-desc</small></span></label>
     </div>
-    <div class="fsec"><div class="fsec-h"><span class="flabel">Links</span><button class="btn btn-plain" type="button" data-add-conn><svg aria-hidden="true"><use href="#i-plus"/></svg>Adicionar link</button></div>
+    <div class="fsec"><div class="fsec-h"><span class="flabel">Links</span><button class="btn btn-plain" type="button" data-add-conn><svg aria-hidden="true"><use href="#i-plus"/></svg>Add link</button></div>
       <div class="conns" data-conns></div></div>
-    <div class="fcli"><span class="flabel">O que o testbed executa</span><pre data-sw-cli></pre></div>
-    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit">Criar switch</button></div>
+    <div class="fcli"><span class="flabel">What the testbed runs</span><pre data-sw-cli></pre></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancel</button><button class="btn btn-blue" type="submit">Create switch</button></div>
   </form>
 </dialog>
 
 <dialog class="sheet sheet-lg" data-sheet="services" aria-labelledby="svc-title">
   <div class="sheet-in svc">
-    <div class="sheet-head"><div><h2 id="svc-title">Serviços do deployer</h2><p>O que o deployer sabe instalar no ONOS. Cada serviço vira uma intent em Nile e passa pela sua aprovação.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
-    <div class="svc-body"><nav class="svc-list" data-svc-list aria-label="Serviços"></nav><form class="svc-form" data-svc-form></form></div>
+    <div class="sheet-head"><div><h2 id="svc-title">Deployer services</h2><p>What the deployer can install in ONOS. Each service becomes an intent in Nile and goes through your approval.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="svc-body"><nav class="svc-list" data-svc-list aria-label="Services"></nav><form class="svc-form" data-svc-form></form></div>
   </div>
 </dialog>
 
 <dialog class="sheet sheet-md" data-sheet="traffic" aria-labelledby="tr-title">
   <form class="sheet-in" data-traffic-form>
-    <div class="sheet-head"><div><h2 id="tr-title">Iniciar tráfego</h2><p>As ferramentas rodam dentro dos containers e o tráfego atravessa os veth, as filas tc e os switches OVS.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-head"><div><h2 id="tr-title">Start traffic</h2><p>The tools run inside the containers and the traffic crosses the veths, the tc queues and the OVS switches.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="fgrid" data-traffic-fields></div>
-    <div class="fcli"><span class="flabel">Comandos</span><pre data-traffic-cli></pre></div>
-    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancelar</button><button class="btn btn-blue" type="submit"><svg aria-hidden="true"><use href="#i-play"/></svg>Iniciar</button></div>
+    <div class="fcli"><span class="flabel">Commands</span><pre data-traffic-cli></pre></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-close-sheet>Cancel</button><button class="btn btn-blue" type="submit"><svg aria-hidden="true"><use href="#i-play"/></svg>Start</button></div>
   </form>
 </dialog>
 
 <dialog class="sheet sheet-lg" data-sheet="tlog" aria-labelledby="tl-title">
   <div class="sheet-in">
-    <div class="sheet-head"><div><h2 id="tl-title" data-tl-title>Log</h2><p data-tl-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
-    <div class="tl-bar"><div class="seg" role="group" aria-label="Lado"><button type="button" data-tl-side="client" aria-pressed="true">Cliente</button><button type="button" data-tl-side="server" aria-pressed="false">Servidor</button></div><span class="tl-file" data-tl-file></span></div>
+    <div class="sheet-head"><div><h2 id="tl-title" data-tl-title>Log</h2><p data-tl-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="tl-bar"><div class="seg" role="group" aria-label="Side"><button type="button" data-tl-side="client" aria-pressed="true">Client</button><button type="button" data-tl-side="server" aria-pressed="false">Server</button></div><span class="tl-file" data-tl-file></span></div>
     <pre class="term" data-tl-log></pre>
-    <div class="sheet-foot"><button class="btn" type="button" data-tl-copy>Copiar caminho</button><button class="btn btn-danger" type="button" data-tl-stop>Parar tráfego</button></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-tl-copy>Copy path</button><button class="btn btn-danger" type="button" data-tl-stop>Stop traffic</button></div>
   </div>
 </dialog>
 
 <dialog class="sheet sheet-xl" data-sheet="help" aria-labelledby="help-title">
   <div class="sheet-in help">
-    <div class="sheet-head"><div><h2 id="help-title">Guia das intents</h2><p>Como pedir, como ler a Nile e o que o deployer executa.</p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
-    <div class="help-body"><nav class="help-toc" data-help-toc aria-label="Seções"></nav><article class="help-doc" data-help-doc></article></div>
+    <div class="sheet-head"><div><h2 id="help-title">Intents guide</h2><p>How to ask, how to read the Nile and what the deployer executes.</p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="help-body"><nav class="help-toc" data-help-toc aria-label="Sections"></nav><article class="help-doc" data-help-doc></article></div>
   </div>
 </dialog>
 
 <dialog class="sheet" data-sheet="video" aria-labelledby="video-title">
   <div class="sheet-in" data-slot="player">
-    <div class="sheet-head"><div><h2 id="video-title" data-video-title>Vídeo</h2><p data-video-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Fechar"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
-    <div class="player"><canvas data-video-canvas aria-label="Vídeo transmitido ao cliente"></canvas></div>
+    <div class="sheet-head"><div><h2 id="video-title" data-video-title>Video</h2><p data-video-sub></p></div><button class="close" type="button" data-close-sheet aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="player"><canvas data-video-canvas aria-label="Video streamed to the client"></canvas></div>
     <dl class="player-meta" data-video-meta></dl>
-    <div class="sheet-foot"><button class="btn" type="button" data-video-play>Conectar ao dash.js</button></div>
+    <div class="sheet-foot"><button class="btn" type="button" data-video-play>Connect to dash.js</button></div>
   </div>
 </dialog>
 

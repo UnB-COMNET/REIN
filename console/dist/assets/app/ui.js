@@ -64,7 +64,7 @@
     if (!box) return;
     const el = document.createElement('div');
     el.className = `notice${tone ? ` ${tone}` : ''}`;
-    el.innerHTML = `<span class="ic">${tone === 'ok' ? R.icon('i-check') : '<svg viewBox="0 0 534 400" aria-hidden="true"><use href="#rein-mark"/></svg>'}</span><b>${R.esc(source)}</b><time>agora</time><p>${R.esc(text)}</p>`;
+    el.innerHTML = `<span class="ic">${tone === 'ok' ? R.icon('i-check') : '<svg viewBox="0 0 534 400" aria-hidden="true"><use href="#rein-mark"/></svg>'}</span><b>${R.esc(source)}</b><time>${L`now`}</time><p>${R.esc(text)}</p>`;
     box.prepend(el);
     [...box.children].slice(3).forEach(n => n.remove());
     setTimeout(() => { el.classList.add('is-leaving'); setTimeout(() => el.remove(), 350); }, 6000);

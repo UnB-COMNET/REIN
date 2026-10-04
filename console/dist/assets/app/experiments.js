@@ -17,10 +17,10 @@
 
   // ---------------------------------------------------------------- the runners in the LFT
   const RUNNERS = [
-    { id: 'diamond', title: 'diamond', topo: 'diamond', what: 'Quatro switches em losango (ES, MG, RJ, SP), um servidor e um cliente. O link s0–s1 é degradado ou derrubado nas janelas pares; cada janela abre um iperf3 novo.', modes: ['cdn-qoe', 'llm', 'treshold', 'fwd'], windows: 6, win: 60, hit: [2, 4, 6], hindering: true, outputs: ['iperf_flow_all.csv', 'ping_flow_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], dir: 'results/iperf', config: 'topologies/configs/diamond.py' },
-    { id: 'rnp', title: 'rnp', topo: 'rnp', what: 'O backbone da RNP com PoPs por estado. Doze janelas com impairment nas pares, iperf3 contínuo e troca de servidor pelo callback em :5152.', modes: ['cdn-qoe', 'baseline', 'fwd', 'cdn-qoe-best-path', 'llm'], windows: 12, win: 60, hit: [2, 4, 6, 8, 10, 12], seed: true, outputs: ['iperf_all.csv', 'ping_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], dir: 'results/iperf', config: 'topologies/configs/rnp.py' },
-    { id: 'dash', title: 'dash', topo: 'dash', what: 'Topologia DASH com captura contínua: tcpdump nos switches e conversão para CSV com tshark ao fim de cada ciclo.', modes: [], windows: 0, win: 60, outputs: ['packet_flow_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
-    { id: 'dash-load', title: 'dash-load', topo: 'dash', what: 'Carga cumulativa de clientes DASH em quatro janelas de 300 s, limitada pelos clientes disponíveis.', modes: [], windows: 4, win: 300, hit: [], outputs: ['packet_flow_all.csv', 'dash_segments.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
+    { id: 'diamond', title: 'diamond', topo: 'diamond', what: L`Four switches in a diamond (ES, MG, RJ, SP), one server and one client. The s0–s1 link is degraded or taken down in the even windows, and each window opens a new iperf3.`, modes: ['cdn-qoe', 'llm', 'treshold', 'fwd'], windows: 6, win: 60, hit: [2, 4, 6], hindering: true, outputs: ['iperf_flow_all.csv', 'ping_flow_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], dir: 'results/iperf', config: 'topologies/configs/diamond.py' },
+    { id: 'rnp', title: 'rnp', topo: 'rnp', what: L`RNP's backbone with one PoP per state. Twelve windows with impairment in the even ones, continuous iperf3 and server switch through the callback on :5152.`, modes: ['cdn-qoe', 'baseline', 'fwd', 'cdn-qoe-best-path', 'llm'], windows: 12, win: 60, hit: [2, 4, 6, 8, 10, 12], seed: true, outputs: ['iperf_all.csv', 'ping_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv'], dir: 'results/iperf', config: 'topologies/configs/rnp.py' },
+    { id: 'dash', title: 'dash', topo: 'dash', what: L`DASH topology with continuous capture: tcpdump on the switches and conversion to CSV with tshark at the end of each cycle.`, modes: [], windows: 0, win: 60, outputs: ['packet_flow_all.csv', 'ovs_flows_all.csv', 'ovs_ports_all.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
+    { id: 'dash-load', title: 'dash-load', topo: 'dash', what: L`Cumulative load of DASH clients in four 300 s windows, limited by the clients available.`, modes: [], windows: 4, win: 300, hit: [], outputs: ['packet_flow_all.csv', 'dash_segments.csv', 'hardware.csv'], dir: 'results/dash', config: 'topologies/configs/dash.py' },
   ];
   R.xRunners = RUNNERS; // api.js corrects windows and modes from `lft experiment --json`
   const HARD = { rate: .1, delay: 10 }; // HARD_DEGRADE in the LFT: rate ×0,1 and delay ×10
@@ -28,6 +28,7 @@
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') || d; } catch { return d; } };
   const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
   let customs = load('rein-custom-exp', []);
+  customs.forEach(c => (c.hosts || []).forEach(h => { h.role = { Servidor: 'Server', Cliente: 'Client' }[h.role] || h.role; }));   // plans saved in Portuguese
   let runs = load('rein-runs', []);
   let view = { name: 'catalog' };
   let run = null; // the run in progress
@@ -64,8 +65,8 @@
           ${hit.map(([p, q]) => `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${q[0].toFixed(1)} ${q[1].toFixed(1)}" class="xa-l thin xa-hl"/>`).join('')}
           <path d="M${route.map(q => `${q[1].toFixed(1)} ${q[2].toFixed(1)}`).join('L')}" class="xa-f thin"/>
           ${P.map(([, x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.9" class="xa-pop"/>`).join('')}
-          <text x="24" y="30" class="xa-t l">PoP por UF</text><text x="24" y="42" class="xa-t l dim">backbone</text>
-          <text x="216" y="30" class="xa-t r">iperf3</text><text x="216" y="42" class="xa-t r dim">contínuo</text>`;
+          <text x="24" y="30" class="xa-t l">${L`PoP per state`}</text><text x="24" y="42" class="xa-t l dim">backbone</text>
+          <text x="216" y="30" class="xa-t r">iperf3</text><text x="216" y="42" class="xa-t r dim">${L`continuous`}</text>`;
       }
       return `${open}${rnpArt}${strip(n, r.hit)}</svg>`;
     }
@@ -93,16 +94,16 @@
     const k = Math.min((w - 90) / Math.max(1, x1 - x0), (h - 80) / Math.max(1, y1 - y0));
     const P = n => [45 + (n.x - x0) * k + ((w - 90) - (x1 - x0) * k) / 2, 40 + (n.y - y0) * k + ((h - 80) - (y1 - y0) * k) / 2];
     const dense = ns.length > 14;
-    const links = M.links.map(l => { const a = P(R.node(l.a)), b = P(R.node(l.b)), st = states[l.id] || 'ok'; return `<g class="xl st-${st}" data-xlink="${l.id}"><path d="M${a}L${b}" class="xl-w"/>${interactive ? `<path d="M${a}L${b}" class="xl-hit"/>` : ''}${!dense ? `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 7}" class="xl-t">${st === 'down' ? 'fora' : st === 'warn' ? `${R.fmt(l.base.rate * HARD.rate)} Mb/s` : `${R.fmt(l.base.rate)} Mb/s`}</text>` : ''}</g>`; }).join('');
+    const links = M.links.map(l => { const a = P(R.node(l.a)), b = P(R.node(l.b)), st = states[l.id] || 'ok'; return `<g class="xl st-${st}" data-xlink="${l.id}"><path d="M${a}L${b}" class="xl-w"/>${interactive ? `<path d="M${a}L${b}" class="xl-hit"/>` : ''}${!dense ? `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 7}" class="xl-t">${st === 'down' ? L`down` : st === 'warn' ? `${R.fmt(l.base.rate * HARD.rate)} Mb/s` : `${R.fmt(l.base.rate)} Mb/s`}</text>` : ''}</g>`; }).join('');
     const access = R.hosts().map(hn => { const sw = R.node(hn.sw); if (!sw) return ''; const a = P(sw), b = P(hn); return `<path d="M${a}L${b}" class="xl-a"/>`; }).join('');
     const nodes = ns.map(n => { const [x, y] = P(n); return n.kind === 'switch' ? `<g class="xn"><circle cx="${x}" cy="${y}" r="${dense ? 5 : 11}" class="xn-s"/><circle cx="${x}" cy="${y}" r="${dense ? 2 : 4.2}" class="xn-c"/>${dense ? '' : `<text x="${x}" y="${y + 26}" class="xn-t">${n.id}${n.uf ? ` · ${n.uf}` : ''}</text>`}</g>` : `<g class="xn"><rect x="${x - 8}" y="${y - 8}" width="16" height="16" rx="5" class="xn-h"/>${dense ? '' : `<text x="${x}" y="${y + 23}" class="xn-t">${n.id}</text>`}</g>`; }).join('');
-    return `<svg viewBox="0 0 ${w} ${h}" class="xtopo${interactive ? ' is-edit' : ''}" role="img" aria-label="Topologia com o estado dos links neste snapshot">${access}${links}${nodes}</svg>`;
+    return `<svg viewBox="0 0 ${w} ${h}" class="xtopo${interactive ? ' is-edit' : ''}" role="img" aria-label="${L`Topology with the state of the links in this snapshot`}">${access}${links}${nodes}</svg>`;
   }
 
   // ---------------------------------------------------------------- plans
   const TOOLS = { iperf3: 'iperf3', dash: 'DASH', ping: 'ping' };
-  const KINDS = { intent: 'Intent', capture: 'Captura', pause: 'Pausar host' };
-  const SVCS = [['cdn-qoe', 'CDN-QoE'], ['bandwidth', 'Limite de banda'], ['block', 'Bloquear protocolo']];
+  const KINDS = { intent: 'Intent', capture: L`Capture`, pause: L`Pause host` };
+  const SVCS = [['cdn-qoe', 'CDN-QoE'], ['bandwidth', L`Bandwidth limit`], ['block', L`Block protocol`]];
   const uid = p => `${p}${Math.random().toString(36).slice(2, 7)}`;
   const total = P => P.snapshots.length * P.win;
   const allHosts = P => [...R.hosts().map(h => ({ ...h, base: true })), ...P.hosts];
@@ -110,22 +111,22 @@
   const freeName = (P, pre) => { const used = new Set([...M.nodes.map(n => n.id), ...P.hosts.map(h => h.id)]); let i = 0; while (used.has(`${pre}${i}`)) i++; return `${pre}${i}`; };
   const freeIp = P => { const used = new Set(allHosts(P).map(h => h.ip)); for (let i = 1; i < 254; i++) if (!used.has(`192.168.0.${i}`)) return `192.168.0.${i}`; return '192.168.0.254'; };
   const freePort = P => { let p = 5201; while (P.flows.some(f => f.tool === 'iperf3' && f.port === p)) p++; return p; };
-  const clients = P => allHosts(P).filter(h => h.role !== 'Servidor');
-  const servers = P => allHosts(P).filter(h => h.role === 'Servidor');
+  const clients = P => allHosts(P).filter(h => h.role !== 'Server');
+  const servers = P => allHosts(P).filter(h => h.role === 'Server');
 
   // Plans saved before flows existed had one tool and one rate for the whole run
   function normPlan(P) {
     P.hosts ||= []; P.events ||= [];
     P.degrade ||= { rate: HARD.rate, delay: HARD.delay, loss: 0 };
     if (!P.flows) {
-      const c = R.hosts().find(h => h.role !== 'Servidor'), s = R.hosts().find(h => h.role === 'Servidor');
+      const c = R.hosts().find(h => h.role !== 'Server'), s = R.hosts().find(h => h.role === 'Server');
       P.flows = c && s ? [{ id: uid('f'), tool: P.traffic === 'dash' ? 'dash' : 'iperf3', client: c.id, server: s.id, start: 0, dur: total(P), rate: P.rate || 35, proto: 'tcp', reverse: true, port: 5201, interval: 1 }] : [];
     }
     delete P.traffic; delete P.rate;
     return P;
   }
-  const blankPlan = () => normPlan({ name: `plano-${pad(new Date().getDate())}${pad(new Date().getMonth() + 1)}-${pad(customs.length + 1)}`, win: 60, mode: 'cdn-qoe', auto: true, snapshots: Array.from({ length: 6 }, (_, i) => (i % 2 ? Object.fromEntries(M.links.slice(0, 1).map(l => [l.id, 'warn'])) : {})) });
-  const planSpec = P => ({ name: P.name, runner: 'plano do console', mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'dash_all.csv', 'ping_all.csv'], py: planPy(P) });
+  const blankPlan = () => normPlan({ name: `plan-${pad(new Date().getDate())}${pad(new Date().getMonth() + 1)}-${pad(customs.length + 1)}`, win: 60, mode: 'cdn-qoe', auto: true, snapshots: Array.from({ length: 6 }, (_, i) => (i % 2 ? Object.fromEntries(M.links.slice(0, 1).map(l => [l.id, 'warn'])) : {})) });
+  const planSpec = P => ({ name: P.name, runner: L`console plan`, mode: P.mode, dir: `results/iperf/${P.name}`, plan: P.snapshots, windows: P.snapshots.length, winLen: P.win, auto: P.auto, degrade: { ...P.degrade }, hosts: P.hosts.map(h => ({ ...h })), flows: P.flows.map(f => ({ ...f })), events: P.events.map(e => ({ ...e })), outputs: ['iperf_all.csv', 'dash_all.csv', 'ping_all.csv'], py: planPy(P) });
 
   // Shortest switch path that avoids the links a snapshot takes down
   function swPath(a, b, st = {}) {
@@ -146,10 +147,10 @@
   }
   const flowRoute = (P, f, st) => { const c = hostOf(P, f.client), s = hostOf(P, f.server); if (!c || !s) return null; const p = swPath(c.sw, s.sw, st); return p ? [c.id, ...p, s.id] : null; };
   const dirText = f => (f.tool === 'dash' || (f.tool === 'iperf3' && f.reverse) ? `${f.server} → ${f.client}` : `${f.client} → ${f.server}`);
-  const whatText = f => (f.tool === 'iperf3' ? `${f.rate} Mb/s ${f.proto.toUpperCase()}` : f.tool === 'dash' ? 'vídeo' : `ICMP a cada ${R.fmt(f.interval || 1)} s`);
+  const whatText = f => (f.tool === 'iperf3' ? `${f.rate} Mb/s ${f.proto.toUpperCase()}` : f.tool === 'dash' ? L`video` : L`ICMP every ${R.fmt(f.interval || 1)} s`);
   function flowCmds(P, f, dir = `results/iperf/${P.name}`) {
     const c = hostOf(P, f.client), s = hostOf(P, f.server);
-    if (!c || !s) return ['# escolha o cliente e o servidor'];
+    if (!c || !s) return [L`# choose the client and the server`];
     const out = `${dir}/flows`;
     if (f.tool === 'ping') return [`sudo docker exec ${c.id} ping -i ${f.interval || 1} -w ${f.dur} ${s.ip} > ${out}/${c.id}-${s.id}.ping.txt`];
     if (f.tool === 'dash') return [`sudo docker exec ${s.id} nginx -t && curl -sI http://${s.ip}/manifest.mpd`, `sudo docker exec ${c.id} timeout ${f.dur} /usr/local/bin/dash-client -y -hostname ${s.ip} -scheme http > ${out}/${c.id}.jsonl`];
@@ -159,9 +160,9 @@
   // Switch-side veth ends, including the ones the plan's hosts will get
   const ifaceMap = P => new Map([...R.switches().flatMap(s => R.ifaces(s.id).map(i => [i.name, s.id])), ...P.hosts.map(h => [`${h.sw}${h.id}`, h.sw])]);
   const evNile = (e, ip) => R.serviceNile(e.svc === 'block' ? 'acl' : e.svc, { ip: ip || '192.168.0.x', mbps: e.mbps || 10, action: 'block', proto: e.proto || 'udp' }, 'e1');
-  const evText = e => (e.kind === 'intent' ? `${SVCS.find(s => s[0] === e.svc)?.[1] || e.svc} para ${e.host}` : e.kind === 'capture' ? `tcpdump em ${e.iface} por ${e.dur} s` : `${e.host} pausado por ${e.dur} s`);
+  const evText = e => (e.kind === 'intent' ? L`${SVCS.find(s => s[0] === e.svc)?.[1] || e.svc} to ${e.host}` : e.kind === 'capture' ? L`tcpdump on ${e.iface} for ${e.dur} s` : L`${e.host} paused for ${e.dur} s`);
   function evCmds(P, e, dir = `results/iperf/${P.name}`) {
-    if (e.kind === 'intent') return [`# ${evNile(e, hostOf(P, e.host)?.ip)}`, `# vai ao deployer: POST ${DEPLOY}`];
+    if (e.kind === 'intent') return [`# ${evNile(e, hostOf(P, e.host)?.ip)}`, L`# goes to the deployer: POST ${DEPLOY}`];
     if (e.kind === 'capture') return [`sudo ip netns exec ${ifaceMap(P).get(e.iface) || '<switch>'} timeout ${e.dur} tcpdump -i ${e.iface} -nn -U -s 0 -w ${dir}/pcap/${e.iface}-${e.at}.pcap`];
     return [`sudo docker pause ${e.host}`, `sleep ${e.dur}`, `sudo docker unpause ${e.host}`];
   }
@@ -170,32 +171,32 @@
   function planPy(P) {
     const q = s => JSON.stringify(String(s)), py = b => (b ? 'True' : 'False');
     return [
-      `# ${P.name}: plano de experimento do REIN Console, uma timeline do LFT (lft timeline run)`,
-      '# Roda sobre o testbed atual, mais os HOSTS abaixo. Tempos em segundos, contados do fim do aquecimento.',
+      `# ${P.name}: REIN Console experiment plan, an LFT timeline (lft timeline run)`,
+      '# Runs on the current testbed, plus the HOSTS below. Times in seconds, counted from the end of the warm-up.',
       '',
       `NAME = ${q(P.name)}`,
       `RESULTS = ${q(`results/iperf/${P.name}`)}`,
       `WINDOW_S = ${P.win}`,
       'WARMUP_S = 30',
-      `DEGRADE = {"rate": ${P.degrade.rate}, "delay": ${P.degrade.delay}, "loss": ${P.degrade.loss}}  # HARD_DEGRADE do LFT: rate 0.1, delay 10`,
-      `AUTO_START = ${py(P.auto)}  # o console sobe deployer e supervisor antes do aquecimento e os para no fim`,
+      `DEGRADE = {"rate": ${P.degrade.rate}, "delay": ${P.degrade.delay}, "loss": ${P.degrade.loss}}  # LFT's HARD_DEGRADE: rate 0.1, delay 10`,
+      `AUTO_START = ${py(P.auto)}  # the console starts the deployer and the supervisor before the warm-up and stops them at the end`,
       `MODE = ${q(P.mode)}`,
       '',
-      '# (nome, switch, imagem, ip, servidor)',
+      '# (name, switch, image, ip, server)',
       'HOSTS = [',
-      ...P.hosts.map(h => `    (${q(h.id)}, ${q(h.sw)}, ${q(h.image)}, ${q(h.ip)}, ${py(h.role === 'Servidor')}),`),
+      ...P.hosts.map(h => `    (${q(h.id)}, ${q(h.sw)}, ${q(h.image)}, ${q(h.ip)}, ${py(h.role === 'Server')}),`),
       ']',
       '',
       'FLOWS = [',
       ...P.flows.map(f => `    {"tool": ${q(f.tool)}, "client": ${q(f.client)}, "server": ${q(f.server)}, "start": ${f.start}, "duration": ${f.dur}${f.tool === 'iperf3' ? `, "rate": ${f.rate}, "proto": ${q(f.proto)}, "reverse": ${py(f.reverse)}, "port": ${f.port}` : ''}${f.tool === 'ping' ? `, "interval": ${f.interval || 1}` : ''}},`),
       ']',
       '',
-      '# estado dos links em cada janela; link ausente = normal',
+      '# state of the links in each window, a link left out is normal',
       'WINDOWS = [',
       ...P.snapshots.map((s, i) => `    {${Object.entries(s).map(([id, st]) => `${q(id)}: ${q(st === 'down' ? 'down' : 'degrade')}`).join(', ')}},  # ${i + 1}: ${clock(i * P.win)}`),
       ']',
       '',
-      '# intents vão ao deployer como chamadas HTTP',
+      '# intents go to the deployer as HTTP calls',
       'EVENTS = [',
       ...P.events.map(e => `    {"at": ${e.at}, ${e.kind === 'intent' ? `"kind": "http", "url": ${q(DEPLOY)}, "json": {"intent": ${q(evNile(e, hostOf(P, e.host)?.ip))}}` : e.kind === 'capture' ? `"kind": "capture", "iface": ${q(e.iface)}, "duration": ${e.dur}` : `"kind": "pause", "host": ${q(e.host)}, "duration": ${e.dur}`}},`),
       ']',
@@ -211,28 +212,28 @@
         <header><span class="sq blue">${icon('i-flask')}</span><div><b>${r.title}</b><em>${r.config}</em></div></header>
         <div class="xart-box">${art(r)}</div>
         <p>${r.what}</p>
-        <dl class="xfacts"><div><dt>Janelas</dt><dd>${r.windows ? `${r.windows} × ${r.win} s` : 'contínuo'}</dd></div><div><dt>Impairment</dt><dd>${r.hit?.length ? `janelas ${r.hit.length > 4 ? 'pares' : r.hit.join(', ')}` : 'nenhum'}</dd></div><div><dt>Modos</dt><dd>${r.modes.join(' · ') || 'interativos'}</dd></div></dl>
-        <button class="xcmd" type="button" data-copy-text="sudo lft experiment ${r.id}" title="Copiar"><code>sudo lft experiment ${r.id}</code>${icon('i-copy')}</button>
-        <footer><span class="xdir">${icon('i-folder')}${r.dir}</span><button class="btn btn-blue" type="button" data-x-config="${r.id}">Configurar</button></footer>
+        <dl class="xfacts"><div><dt>${L`Windows`}</dt><dd>${r.windows ? `${r.windows} × ${r.win} s` : L`continuous`}</dd></div><div><dt>Impairment</dt><dd>${r.hit?.length ? L`windows ${r.hit.length > 4 ? L`even` : r.hit.join(', ')}` : L`none`}</dd></div><div><dt>${L`Modes`}</dt><dd>${r.modes.join(' · ') || L`interactive`}</dd></div></dl>
+        <button class="xcmd" type="button" data-copy-text="sudo lft experiment ${r.id}" title="${L`Copy`}"><code>sudo lft experiment ${r.id}</code>${icon('i-copy')}</button>
+        <footer><span class="xdir">${icon('i-folder')}${r.dir}</span><button class="btn btn-blue" type="button" data-x-config="${r.id}">${L`Configure`}</button></footer>
       </article>`).join('');
     const mine = customs.map((c, i) => { normPlan(c); return `<div class="xplan reveal is-in" style="--d:${n + i}">
         ${planArt(c)}
-        <div class="xplan-t"><b>${esc(c.name)}</b><span>${c.snapshots.length} snapshots de ${c.win} s · ${c.flows.length} fluxo${c.flows.length === 1 ? '' : 's'}${c.hosts.length ? ` · ${c.hosts.length} host${c.hosts.length > 1 ? 's' : ''} novo${c.hosts.length > 1 ? 's' : ''}` : ''}${c.events.length ? ` · ${c.events.length} evento${c.events.length > 1 ? 's' : ''}` : ''} · modo ${esc(c.mode)}</span></div>
-        <div class="xplan-a"><button class="btn btn-plain" type="button" data-x-edit="${i}">Editar</button><button class="btn btn-blue" type="button" data-x-runc="${i}">${icon('i-play')}Executar</button></div>
+        <div class="xplan-t"><b>${esc(c.name)}</b><span>${L`${c.snapshots.length} snapshots of ${c.win} s · ${c.flows.length} flow${c.flows.length === 1 ? '' : 's'}${c.hosts.length ? ` ${L`· ${c.hosts.length} new host${c.hosts.length > 1 ? 's' : ''}`}` : ''}${c.events.length ? ` ${L`· ${c.events.length} event${c.events.length > 1 ? 's' : ''}`}` : ''} · mode ${esc(c.mode)}`}</span></div>
+        <div class="xplan-a"><button class="btn btn-plain" type="button" data-x-edit="${i}">${L`Edit`}</button><button class="btn btn-blue" type="button" data-x-runc="${i}">${L`${icon('i-play')}Run`}</button></div>
       </div>`; }).join('');
     const empty = `<button type="button" class="xnew reveal is-in" style="--d:${n}" data-x-new>
         <span class="xnew-art" aria-hidden="true"><svg viewBox="0 0 120 56"><path d="M14 28Q37 6 60 28T106 28" class="a"/><path d="M14 28Q37 50 60 28" class="b"/><path d="M60 28Q83 50 106 28" class="c"/>${[[14, 28], [60, 28], [106, 28]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5.5"/>`).join('')}</svg></span>
-        <span class="xnew-t"><b>Novo experimento</b><em>Parta da topologia atual e monte o resto: clientes e servidores próprios, fluxos iperf3, DASH ou ping com hora para começar e terminar, eventos como uma intent ou uma captura, e o estado de cada link em cada snapshot.</em></span>
-        <span class="xnew-go">${icon('i-plus')}Criar</span>
+        <span class="xnew-t"><b>${L`New experiment`}</b><em>${L`Start from the current topology and build the rest: your own clients and servers, iperf3, DASH or ping flows with a time to start and to end, events such as an intent or a capture, and the state of each link in each snapshot.`}</em></span>
+        <span class="xnew-go">${L`${icon('i-plus')}Create`}</span>
       </button>`;
-    const history = runs.slice(0, 8).map(r => `<div class="xrun st-${r.status}"><span class="xrun-ic">${r.status === 'running' ? '<i class="spinner"></i>' : icon(r.status === 'done' ? 'i-check' : 'i-x')}</span><b>${esc(r.name)}</b><span>${esc(r.runner)}${r.mode ? ` · ${esc(r.mode)}` : ''}</span><span>${esc(r.when)}</span><code>${esc(r.dir)}</code>${r.status === 'running' ? '<button class="btn btn-plain" type="button" data-x-open-run>Abrir</button>' : '<span></span>'}</div>`).join('');
+    const history = runs.slice(0, 8).map(r => `<div class="xrun st-${r.status}"><span class="xrun-ic">${r.status === 'running' ? '<i class="spinner"></i>' : icon(r.status === 'done' ? 'i-check' : 'i-x')}</span><b>${esc(r.name)}</b><span>${esc(r.runner)}${r.mode ? ` · ${esc(r.mode)}` : ''}</span><span>${esc(r.when)}</span><code>${esc(r.dir)}</code>${r.status === 'running' ? `<button class="btn btn-plain" type="button" data-x-open-run>${L`Open`}</button>` : '<span></span>'}</div>`).join('');
     return `<div class="xc">
-      <div class="xsec"><h2 class="section-title">Runners do LFT <small>experiments/registry.py</small></h2></div>
+      <div class="xsec"><h2 class="section-title">${L`LFT runners`} <small>experiments/registry.py</small></h2></div>
       <div class="xgrid">${cards}</div>
-      <div class="xsec"><h2 class="section-title">Planos do console <small>${customs.length ? `${customs.length} salvos` : 'nenhum ainda'}</small></h2>${customs.length ? `<button class="btn btn-plain" type="button" data-x-new>${icon('i-plus')}Novo experimento</button>` : ''}</div>
+      <div class="xsec"><h2 class="section-title">${L`Console plans`} <small>${customs.length ? L`${customs.length} saved` : L`none yet`}</small></h2>${customs.length ? `<button class="btn btn-plain" type="button" data-x-new>${L`${icon('i-plus')}New experiment`}</button>` : ''}</div>
       ${customs.length ? `<div class="xplans group">${mine}</div>` : empty}
-      <div class="xsec"><h2 class="section-title">Execuções <small>results/ no testbed</small></h2></div>
-      <div class="xruns group">${history || '<p class="xempty">Nenhuma execução ainda. Cada execução grava events.log e os CSVs em results/.</p>'}</div>
+      <div class="xsec"><h2 class="section-title">${L`Runs`} <small>${L`results/ in the testbed`}</small></h2></div>
+      <div class="xruns group">${history || `<p class="xempty">${L`No run yet. Each run writes events.log and the CSVs in results/.`}</p>`}</div>
     </div>`;
   }
 
@@ -243,27 +244,27 @@
     const cmd = r.id === 'diamond' ? `sudo lft experiment diamond --mode ${c.mode} --hindering ${c.hindering === 'take down' ? '"take down"' : 'degrade'} --run-name ${c.name}${c.auto ? ' --auto-start' : ''}`
       : r.id === 'rnp' ? `sudo lft experiment rnp --mode ${c.mode} --seed ${c.seed}${c.auto ? ' --auto-start' : ''} --run-name ${c.name}` : `sudo lft experiment ${r.id}`;
     return `<div class="xcfg">
-      <button class="xback" type="button" data-x-back>${icon('i-chevron-right')}Experimentos</button>
+      <button class="xback" type="button" data-x-back>${L`${icon('i-chevron-right')}Experiments`}</button>
       <header class="xcfg-head"><span class="sq lg blue">${icon('i-flask')}</span><div><h2>${r.title}</h2><p>${r.what}</p></div></header>
       <div class="xcfg-body">
         <div>
-          <h3 class="section-title">Execução</h3>
+          <h3 class="section-title">${L`Run`}</h3>
           <div class="group">
-            ${r.modes.length ? `<label class="row"><span>Modo</span><select data-c="mode" aria-label="Modo">${r.modes.map(m => `<option${m === c.mode ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
-            ${r.hindering ? `<div class="row"><span>Perturbação</span><div class="seg" role="group" aria-label="Perturbação"><button type="button" data-cs="hindering" data-v="degrade" aria-pressed="${c.hindering === 'degrade'}">Degradar</button><button type="button" data-cs="hindering" data-v="take down" aria-pressed="${c.hindering === 'take down'}">Derrubar</button></div></div>` : ''}
+            ${r.modes.length ? `<label class="row"><span>${L`Mode`}</span><select data-c="mode" aria-label="${L`Mode`}">${r.modes.map(m => `<option${m === c.mode ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
+            ${r.hindering ? `<div class="row"><span>${L`Hindering`}</span><div class="seg" role="group" aria-label="${L`Hindering`}"><button type="button" data-cs="hindering" data-v="degrade" aria-pressed="${c.hindering === 'degrade'}">${L`Degrade`}</button><button type="button" data-cs="hindering" data-v="take down" aria-pressed="${c.hindering === 'take down'}">${L`Take down`}</button></div></div>` : ''}
             ${r.seed ? `<label class="row"><span>Seed</span><input type="number" min="1" value="${c.seed}" data-c="seed" aria-label="Seed"></label>` : ''}
-            <label class="row"><span>Nome da run</span><input type="text" value="${esc(c.name)}" data-c="name" spellcheck="false" aria-label="Nome da run"></label>
-            <div class="row"><span>Subir deployer e supervisor</span><button class="toggle" type="button" role="switch" aria-checked="${c.auto}" data-c-auto aria-label="Subir deployer e supervisor automaticamente"></button></div>
+            <label class="row"><span>${L`Run name`}</span><input type="text" value="${esc(c.name)}" data-c="name" spellcheck="false" aria-label="${L`Run name`}"></label>
+            <div class="row"><span>${L`Start the deployer and the supervisor`}</span><button class="toggle" type="button" role="switch" aria-checked="${c.auto}" data-c-auto aria-label="${L`Start the deployer and the supervisor automatically`}"></button></div>
           </div>
-          <h3 class="section-title">Saída</h3>
-          <div class="group"><div class="row"><span>Pasta</span><span class="val mono">${esc(dir)}/</span></div><div class="row"><span>Arquivos</span><span class="val">${['meta.json', 'events.log', ...r.outputs].join(', ')}</span></div></div>
+          <h3 class="section-title">${L`Output`}</h3>
+          <div class="group"><div class="row"><span>${L`Folder`}</span><span class="val mono">${esc(dir)}/</span></div><div class="row"><span>${L`Files`}</span><span class="val">${['meta.json', 'events.log', ...r.outputs].join(', ')}</span></div></div>
         </div>
         <div>
-          <h3 class="section-title">Janelas</h3>
-          <div class="xwins">${r.windows ? Array.from({ length: r.windows }, (_, k) => `<span class="${r.hit?.includes(k + 1) ? (c.hindering === 'take down' ? 'down' : 'warn') : ''}"><b>${k + 1}</b>${r.win} s</span>`).join('') : '<span class="cont">Captura contínua até parar</span>'}</div>
-          <p class="xnote">${r.windows ? `Cerca de ${Math.ceil((r.windows * r.win + 150) / 60)} min, contando ONOS, descoberta e estabilização.` : 'Cada ciclo grava pcaps nos switches e converte ao final.'}</p>
-          <div class="cmd"><code>${esc(cmd)}</code><button class="btn" type="button" data-copy-text="${esc(cmd)}">Copiar</button></div>
-          <div class="xcfg-foot"><button class="btn btn-blue btn-lg" type="button" data-x-start>${icon('i-play')}Executar</button></div>
+          <h3 class="section-title">${L`Windows`}</h3>
+          <div class="xwins">${r.windows ? Array.from({ length: r.windows }, (_, k) => `<span class="${r.hit?.includes(k + 1) ? (c.hindering === 'take down' ? 'down' : 'warn') : ''}"><b>${k + 1}</b>${r.win} s</span>`).join('') : `<span class="cont">${L`Continuous capture until stopped`}</span>`}</div>
+          <p class="xnote">${r.windows ? L`About ${Math.ceil((r.windows * r.win + 150) / 60)} min, counting ONOS, discovery and stabilization.` : L`Each cycle writes pcaps on the switches and converts them at the end.`}</p>
+          <div class="cmd"><code>${esc(cmd)}</code><button class="btn" type="button" data-copy-text="${esc(cmd)}">${L`Copy`}</button></div>
+          <div class="xcfg-foot"><button class="btn btn-blue btn-lg" type="button" data-x-start>${L`${icon('i-play')}Run`}</button></div>
         </div>
       </div>
     </div>`;
@@ -275,7 +276,7 @@
   // Inspector: the plan, or whatever is selected.
   function planSvg(P, k, sel, mode) {
     const w = 760, st = P.snapshots[k] || {}, ns = M.nodes;
-    if (!ns.length) return '<p class="xempty">A topologia está vazia. Crie switches na Topologia.</p>';
+    if (!ns.length) return `<p class="xempty">${L`The topology is empty. Create switches in Topology.`}</p>`;
     const xs = ns.map(n => n.x), ys = ns.map(n => n.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
     // The drawing is as tall as the network needs, with room for the plan's hosts around it
     const s = Math.min((w - 192) / Math.max(1, x1 - x0), 272 / Math.max(1, y1 - y0));
@@ -303,19 +304,19 @@
       const a = pos.get(l.a), b = pos.get(l.b), ls = st[l.id] || 'ok';
       if (!a || !b) return '';
       const d = `M${xy(a)}L${xy(b)}`;
-      return `<g class="xl st-${ls}" data-xlink="${l.id}"><path d="${d}" class="xl-w"/>${mode === 'links' ? `<path d="${d}" class="xl-hit"/>` : ''}${dense ? '' : `<text x="${((a[0] + b[0]) / 2).toFixed(1)}" y="${((a[1] + b[1]) / 2 - 8).toFixed(1)}" class="xl-t">${ls === 'down' ? 'fora' : `${R.fmt(l.base.rate * (ls === 'warn' ? P.degrade.rate : 1))} Mb/s`}</text>`}</g>`;
+      return `<g class="xl st-${ls}" data-xlink="${l.id}"><path d="${d}" class="xl-w"/>${mode === 'links' ? `<path d="${d}" class="xl-hit"/>` : ''}${dense ? '' : `<text x="${((a[0] + b[0]) / 2).toFixed(1)}" y="${((a[1] + b[1]) / 2 - 8).toFixed(1)}" class="xl-t">${ls === 'down' ? L`down` : `${R.fmt(l.base.rate * (ls === 'warn' ? P.degrade.rate : 1))} Mb/s`}</text>`}</g>`;
     }).join('');
     const drawn = [...new Set([...act, ...(selFlow ? [selFlow] : [])])];
     const flows = drawn.map(f => { const r = flowRoute(P, f, st); if (!r) return ''; const pts = r.map(id => pos.get(id)).filter(Boolean); return `<path d="M${pts.map(xy).join('L')}" class="xf t-${f.tool}${f === selFlow ? ' is-sel' : ''}${act.includes(f) ? '' : ' is-idle'}${f.tool === 'dash' || (f.tool === 'iperf3' && f.reverse) ? ' rev' : ''}"/>`; }).join('');
     const swSvg = sws.map(n => { const [x, y] = pos.get(n.id); return `<g class="xn${mode !== 'links' ? ' is-target' : ''}" data-b-sw="${n.id}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="19" class="xn-ring"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dense ? 7 : 11}" class="xn-s"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dense ? 2.6 : 4.2}" class="xn-c"/>${dense ? '' : `<text x="${x.toFixed(1)}" y="${(y + 27).toFixed(1)}" class="xn-t">${n.id}${n.uf ? ` · ${n.uf}` : ''}</text>`}</g>`; }).join('');
-    const glyph = (x, y, role) => (role === 'Servidor' ? `<path d="M${x - 5} ${y - 5}h10v4.2h-10zM${x - 5} ${y + .8}h10v4.2h-10z" class="xn-g"/>` : `<path d="M${x - 4.8} ${y - 4.6}h9.6v6.6h-9.6zM${x - 6.5} ${y + 5}h13" class="xn-g"/>`);
+    const glyph = (x, y, role) => (role === 'Server' ? `<path d="M${x - 5} ${y - 5}h10v4.2h-10zM${x - 5} ${y + .8}h10v4.2h-10z" class="xn-g"/>` : `<path d="M${x - 4.8} ${y - 4.6}h9.6v6.6h-9.6zM${x - 6.5} ${y + 5}h13" class="xn-g"/>`);
     const hostSvg = hosts.map(hn => {
       const p = pos.get(hn.id);
       if (!p) return '';
       const [x, y] = p, on = act.some(f => f.client === hn.id || f.server === hn.id), isSel = (sel?.type === 'host' || sel?.type === 'base') && sel.id === hn.id;
-      return `<g class="xn xh${hn.base ? '' : ' new'}${isSel ? ' is-sel' : ''}${on ? ' is-busy' : ''}" data-hid="${hn.id}" data-cx="${x.toFixed(1)}" data-cy="${y.toFixed(1)}"${hn.base ? ` data-b-base="${hn.id}"` : ` data-b-host="${hn.id}"`}><title>${hn.id} · ${hn.role} · ${hn.ip} · ${esc(hn.image)} · ${hn.base ? 'da topologia' : 'criado pelo plano'}</title><rect x="${(x - 11).toFixed(1)}" y="${(y - 11).toFixed(1)}" width="22" height="22" rx="7" class="xn-h"/>${glyph(x, y, hn.role)}<text x="${x.toFixed(1)}" y="${(y + 26).toFixed(1)}" class="xn-t">${hn.id}</text></g>`;
+      return `<g class="xn xh${hn.base ? '' : ' new'}${isSel ? ' is-sel' : ''}${on ? ' is-busy' : ''}" data-hid="${hn.id}" data-cx="${x.toFixed(1)}" data-cy="${y.toFixed(1)}"${hn.base ? ` data-b-base="${hn.id}"` : ` data-b-host="${hn.id}"`}><title>${hn.id} · ${L(hn.role)} · ${hn.ip} · ${esc(hn.image)} · ${hn.base ? L`from the topology` : L`created by the plan`}</title><rect x="${(x - 11).toFixed(1)}" y="${(y - 11).toFixed(1)}" width="22" height="22" rx="7" class="xn-h"/>${glyph(x, y, hn.role)}<text x="${x.toFixed(1)}" y="${(y + 26).toFixed(1)}" class="xn-t">${hn.id}</text></g>`;
     }).join('');
-    return `<svg viewBox="0 0 ${w} ${h}" class="xtopo xplan-svg${mode === 'links' ? ' is-edit' : ' is-adding'}" role="img" aria-label="Topologia no snapshot ${k + 1}, com os hosts do plano e os fluxos ativos">${access}${links}${flows}${swSvg}${hostSvg}</svg>`;
+    return `<svg viewBox="0 0 ${w} ${h}" class="xtopo xplan-svg${mode === 'links' ? ' is-edit' : ' is-adding'}" role="img" aria-label="${L`Topology in snapshot ${k + 1}, with the hosts of the plan and the active flows`}">${access}${links}${flows}${swSvg}${hostSvg}</svg>`;
   }
 
   function timeline(P, k, sel) {
@@ -324,116 +325,116 @@
     const rows = P.flows.map(f => {
       const bad = !hostOf(P, f.client) || !hostOf(P, f.server), isSel = sel?.type === 'flow' && sel.id === f.id;
       // Stretches where the flow has no path, because a snapshot takes a link on its way down
-      const gaps = P.snapshots.map((st, i) => { const a = Math.max(f.start, i * P.win), b = Math.min(f.start + f.dur, (i + 1) * P.win); return b > a && !bad && !flowRoute(P, f, st) ? `<i class="xtl-gap" style="left:${((a - f.start) / f.dur * 100).toFixed(2)}%;width:${((b - a) / f.dur * 100).toFixed(2)}%" title="Sem caminho no snapshot ${i + 1}"></i>` : ''; }).join('');
+      const gaps = P.snapshots.map((st, i) => { const a = Math.max(f.start, i * P.win), b = Math.min(f.start + f.dur, (i + 1) * P.win); return b > a && !bad && !flowRoute(P, f, st) ? `<i class="xtl-gap" style="left:${((a - f.start) / f.dur * 100).toFixed(2)}%;width:${((b - a) / f.dur * 100).toFixed(2)}%" title="${L`No path in snapshot ${i + 1}`}"></i>` : ''; }).join('');
       return `<div class="xtl-row"><button type="button" class="xtl-lab${isSel ? ' is-sel' : ''}" data-b-sel="flow:${f.id}"><i class="dot t-${f.tool}"></i><b>${TOOLS[f.tool]}</b><span>${esc(dirText(f))}</span></button>
-        <div class="xtl-track"><div class="xtl-bar t-${f.tool}${isSel ? ' is-sel' : ''}${bad ? ' bad' : ''}" data-flow="${f.id}" tabindex="0" role="button" aria-label="${TOOLS[f.tool]} ${esc(dirText(f))}, de ${clock(f.start)} a ${clock(f.start + f.dur)}. Setas movem, Shift e setas mudam a duração." style="left:${pct(f.start)};width:${pct(f.dur)}">${gaps}<span>${bad ? 'host ausente' : whatText(f)}</span><i class="xtl-grip" data-grip></i></div></div></div>`;
+        <div class="xtl-track"><div class="xtl-bar t-${f.tool}${isSel ? ' is-sel' : ''}${bad ? ' bad' : ''}" data-flow="${f.id}" tabindex="0" role="button" aria-label="${L`${TOOLS[f.tool]} ${esc(dirText(f))}, from ${clock(f.start)} to ${clock(f.start + f.dur)}. Arrows move, Shift and arrows change the duration.`}" style="left:${pct(f.start)};width:${pct(f.dur)}">${gaps}<span>${bad ? L`host missing` : whatText(f)}</span><i class="xtl-grip" data-grip></i></div></div></div>`;
     }).join('');
     // A capture or a pause lasts a while: a thin span after its marker shows for how long
-    const evs = P.events.map(e => `${e.kind !== 'intent' ? `<i class="xtl-evd k-${e.kind}" style="left:${pct(e.at)};width:${pct(Math.min(e.dur, T - e.at))}"></i>` : ''}<button type="button" class="xtl-ev k-${e.kind}${sel?.type === 'event' && sel.id === e.id ? ' is-sel' : ''}" data-ev="${e.id}" style="left:${pct(e.at)}" aria-label="${KINDS[e.kind]} em ${clock(e.at)}: ${esc(evText(e))}" title="${KINDS[e.kind]} em ${clock(e.at)}: ${esc(evText(e))}"></button>`).join('');
+    const evs = P.events.map(e => `${e.kind !== 'intent' ? `<i class="xtl-evd k-${e.kind}" style="left:${pct(e.at)};width:${pct(Math.min(e.dur, T - e.at))}"></i>` : ''}<button type="button" class="xtl-ev k-${e.kind}${sel?.type === 'event' && sel.id === e.id ? ' is-sel' : ''}" data-ev="${e.id}" style="left:${pct(e.at)}" aria-label="${L`${KINDS[e.kind]} at ${clock(e.at)}: ${esc(evText(e))}`}" title="${L`${KINDS[e.kind]} at ${clock(e.at)}: ${esc(evText(e))}`}"></button>`).join('');
     return `<div class="xtl${n > 10 ? ' is-many' : ''}${view.play ? ' is-playing' : ''}" style="--n:${n};--k:${k}">
-      <div class="xtl-head"><div><b>Linha do tempo</b><span>${n} snapshots de ${P.win} s · ${clock(T)} no total. Arraste os fluxos para mudar quando começam, e a borda direita para mudar a duração.</span></div>
-        <div class="xtl-acts"><button class="btn btn-plain" type="button" data-b-play aria-pressed="${!!view.play}">${icon(view.play ? 'i-stop' : 'i-play')}${view.play ? 'Parar' : 'Reproduzir'}</button><button class="btn btn-plain" type="button" data-b-add="flow">${icon('i-plus')}Fluxo</button><button class="btn btn-plain" type="button" data-b-add="event">${icon('i-plus')}Evento</button></div></div>
+      <div class="xtl-head"><div><b>${L`Timeline`}</b><span>${L`${n} snapshots of ${P.win} s · ${clock(T)} in total. Drag the flows to change when they start, and the right edge to change the duration.`}</span></div>
+        <div class="xtl-acts"><button class="btn btn-plain" type="button" data-b-play aria-pressed="${!!view.play}">${icon(view.play ? 'i-stop' : 'i-play')}${view.play ? L`Stop` : L`Play`}</button><button class="btn btn-plain" type="button" data-b-add="flow">${L`${icon('i-plus')}Flow`}</button><button class="btn btn-plain" type="button" data-b-add="event">${L`${icon('i-plus')}Event`}</button></div></div>
       <div class="xtl-body">
         <div class="xtl-row xtl-ruler"><span class="xtl-lab static"></span><div class="xtl-track xtl-cells">${P.snapshots.map((s, i) => `<button type="button" class="xtl-col${i === k ? ' is-on' : ''}" data-b-snap="${i}"><b>${i + 1}</b><span>${clock(i * P.win)}</span></button>`).join('')}</div></div>
-        <div class="xtl-row"><span class="xtl-lab static"><i class="dot t-links"></i><b>Links</b><span>estado por snapshot</span></span><div class="xtl-track xtl-cells">${P.snapshots.map((s, i) => { const c = Object.keys(s).length; return `<button type="button" class="xtl-cell ${worst(s)}${i === k ? ' is-on' : ''}" data-b-snap="${i}">${c ? `${c} link${c > 1 ? 's' : ''}` : 'normal'}</button>`; }).join('')}</div></div>
-        ${rows || '<div class="xtl-row"><span class="xtl-lab static"><i class="dot t-iperf3"></i><b>Fluxos</b><span>nenhum</span></span><div class="xtl-track xtl-none">Sem tráfego. Adicione um fluxo iperf3, DASH ou ping.</div></div>'}
-        <div class="xtl-row"><span class="xtl-lab static"><i class="dot t-ev"></i><b>Eventos</b><span>${P.events.length ? `${P.events.length}` : 'nenhum'}</span></span><div class="xtl-track xtl-evs">${evs}</div></div>
+        <div class="xtl-row"><span class="xtl-lab static"><i class="dot t-links"></i><b>Links</b><span>${L`state per snapshot`}</span></span><div class="xtl-track xtl-cells">${P.snapshots.map((s, i) => { const c = Object.keys(s).length; return `<button type="button" class="xtl-cell ${worst(s)}${i === k ? ' is-on' : ''}" data-b-snap="${i}">${c ? `${c} link${c > 1 ? 's' : ''}` : 'normal'}</button>`; }).join('')}</div></div>
+        ${rows || `<div class="xtl-row"><span class="xtl-lab static"><i class="dot t-iperf3"></i><b>${L`Flows`}</b><span>${L`none`}</span></span><div class="xtl-track xtl-none">${L`No traffic. Add an iperf3, DASH or ping flow.`}</div></div>`}
+        <div class="xtl-row"><span class="xtl-lab static"><i class="dot t-ev"></i><b>${L`Events`}</b><span>${P.events.length ? `${P.events.length}` : L`none`}</span></span><div class="xtl-track xtl-evs">${evs}</div></div>
       </div>
     </div>`;
   }
 
-  const ihead = (title, sub, ic, tone) => `<div class="xi-h"><button class="xi-back" type="button" data-b-sel="">${icon('i-chevron-right')}Plano</button><div class="xi-t"><span class="sq ${tone}">${icon(ic)}</span><div><b>${title}</b><span>${sub}</span></div></div></div>`;
+  const ihead = (title, sub, ic, tone) => `<div class="xi-h"><button class="xi-back" type="button" data-b-sel="">${L`${icon('i-chevron-right')}Plan`}</button><div class="xi-t"><span class="sq ${tone}">${icon(ic)}</span><div><b>${title}</b><span>${sub}</span></div></div></div>`;
   const seg = (field, cur, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" data-fs="${field}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
-  const hostOpts = (list, cur) => list.map(h => `<option value="${h.id}"${h.id === cur ? ' selected' : ''}>${h.id} · ${h.ip}${h.base ? '' : ' (plano)'}</option>`).join('') || '<option value="">nenhum</option>';
+  const hostOpts = (list, cur) => list.map(h => `<option value="${h.id}"${h.id === cur ? ' selected' : ''}>${h.id} · ${h.ip}${h.base ? '' : ` ${L`(plan)`}`}</option>`).join('') || `<option value="">${L`none`}</option>`;
   const term = cmds => `<pre class="term xi-term">${cmds.map(c => (c.startsWith('#') ? esc(c) : `$ ${esc(c)}`)).join('\n')}</pre>`;
 
   function inspPlan(P) {
-    return `<div class="xi-h"><div class="xi-t"><span class="sq blue">${icon('i-flask')}</span><div><b>Plano</b><span>A topologia atual, mais o que o experimento traz</span></div></div></div>
-      <h3 class="section-title">Execução</h3>
+    return `<div class="xi-h"><div class="xi-t"><span class="sq blue">${icon('i-flask')}</span><div><b>${L`Plan`}</b><span>${L`The current topology, plus what the experiment brings`}</span></div></div></div>
+      <h3 class="section-title">${L`Run`}</h3>
       <div class="group">
         <label class="row"><span>Snapshots</span><input type="number" min="1" max="48" value="${P.snapshots.length}" data-b="count" aria-label="Snapshots"></label>
-        <label class="row"><span>Duração de cada</span><span class="unitf"><input type="number" min="10" step="10" value="${P.win}" data-b="win" aria-label="Duração do snapshot"><em>s</em></span></label>
-        <label class="row"><span>Roteamento</span><select data-b="mode" aria-label="Modo de roteamento">${['fwd', 'cdn-qoe', 'llm', 'cdn-qoe-best-path', 'baseline', 'treshold'].map(m => `<option${m === P.mode ? ' selected' : ''}>${m}</option>`).join('')}</select></label>
-        <div class="row"><span>Subir deployer e supervisor</span><button class="toggle" type="button" role="switch" aria-checked="${P.auto}" data-b-auto aria-label="Subir deployer e supervisor"></button></div>
+        <label class="row"><span>${L`Duration of each`}</span><span class="unitf"><input type="number" min="10" step="10" value="${P.win}" data-b="win" aria-label="${L`Snapshot duration`}"><em>s</em></span></label>
+        <label class="row"><span>${L`Routing`}</span><select data-b="mode" aria-label="${L`Routing mode`}">${['fwd', 'cdn-qoe', 'llm', 'cdn-qoe-best-path', 'baseline', 'treshold'].map(m => `<option${m === P.mode ? ' selected' : ''}>${m}</option>`).join('')}</select></label>
+        <div class="row"><span>${L`Start the deployer and the supervisor`}</span><button class="toggle" type="button" role="switch" aria-checked="${P.auto}" data-b-auto aria-label="${L`Start the deployer and the supervisor`}"></button></div>
       </div>
-      <h3 class="section-title">Link degradado <small>tc em cada ponta</small></h3>
+      <h3 class="section-title">${L`Link degraded`} <small>${L`tc at each end`}</small></h3>
       <div class="group">
-        <label class="row"><span>Banda</span><span class="unitf"><input type="number" min="0.01" max="1" step="0.05" value="${P.degrade.rate}" data-d="rate" aria-label="Fator de banda"><em>× nominal</em></span></label>
-        <label class="row"><span>Atraso</span><span class="unitf"><input type="number" min="1" max="100" step="1" value="${P.degrade.delay}" data-d="delay" aria-label="Fator de atraso"><em>× nominal</em></span></label>
-        <label class="row"><span>Perda</span><span class="unitf"><input type="number" min="0" max="100" step="0.5" value="${P.degrade.loss}" data-d="loss" aria-label="Perda"><em>%</em></span></label>
+        <label class="row"><span>${L`Bandwidth`}</span><span class="unitf"><input type="number" min="0.01" max="1" step="0.05" value="${P.degrade.rate}" data-d="rate" aria-label="${L`Bandwidth factor`}"><em>× nominal</em></span></label>
+        <label class="row"><span>${L`Delay`}</span><span class="unitf"><input type="number" min="1" max="100" step="1" value="${P.degrade.delay}" data-d="delay" aria-label="${L`Delay factor`}"><em>× nominal</em></span></label>
+        <label class="row"><span>${L`Loss`}</span><span class="unitf"><input type="number" min="0" max="100" step="0.5" value="${P.degrade.loss}" data-d="loss" aria-label="${L`Loss`}"><em>%</em></span></label>
       </div>
-      <div class="xi-sec"><h3 class="section-title">Hosts do plano</h3><span><button class="btn btn-plain" type="button" data-b-mode="client">${icon('i-plus')}Cliente</button><button class="btn btn-plain" type="button" data-b-mode="server">${icon('i-plus')}Servidor</button></span></div>
-      <div class="group">${P.hosts.length ? P.hosts.map(h => `<button type="button" class="row xi-item" data-b-sel="host:${h.id}"><span class="xi-ic">${icon(h.role === 'Servidor' ? 'i-server' : 'i-laptop')}</span><span class="xi-it"><b>${h.id}</b><em>${h.role} em ${h.sw} · ${h.ip} · ${esc(h.image)}</em></span>${icon('i-chevron-right')}</button>`).join('') : '<p class="xempty">Nenhum ainda. Os hosts da topologia já fazem parte do plano; os daqui são criados ao iniciar e removidos ao fim.</p>'}</div>
-      <h3 class="section-title">Resultados</h3>
-      <div class="group"><div class="row"><span>Pasta</span><span class="val mono">results/iperf/${esc(P.name)}/</span></div><div class="row"><span>Arquivos</span><span class="val">events.log, flows/, ${P.events.some(e => e.kind === 'capture') ? 'pcap/, ' : ''}ovs_flows_all.csv</span></div></div>`;
+      <div class="xi-sec"><h3 class="section-title">${L`Hosts of the plan`}</h3><span><button class="btn btn-plain" type="button" data-b-mode="client">${L`${icon('i-plus')}Client`}</button><button class="btn btn-plain" type="button" data-b-mode="server">${L`${icon('i-plus')}Server`}</button></span></div>
+      <div class="group">${P.hosts.length ? P.hosts.map(h => `<button type="button" class="row xi-item" data-b-sel="host:${h.id}"><span class="xi-ic">${icon(h.role === 'Server' ? 'i-server' : 'i-laptop')}</span><span class="xi-it"><b>${h.id}</b><em>${L`${L(h.role)} on ${h.sw} · ${h.ip} · ${esc(h.image)}`}</em></span>${icon('i-chevron-right')}</button>`).join('') : `<p class="xempty">${L`None yet. The hosts of the topology are already part of the plan, and the ones here are created at the start and removed at the end.`}</p>`}</div>
+      <h3 class="section-title">${L`Results`}</h3>
+      <div class="group"><div class="row"><span>${L`Folder`}</span><span class="val mono">results/iperf/${esc(P.name)}/</span></div><div class="row"><span>${L`Files`}</span><span class="val">events.log, flows/, ${P.events.some(e => e.kind === 'capture') ? 'pcap/, ' : ''}ovs_flows_all.csv</span></div></div>`;
   }
   function inspHost(P, h) {
     const refs = P.flows.filter(f => f.client === h.id || f.server === h.id).length;
-    return `${ihead(h.id, `${h.role} do plano · criado ao iniciar, removido ao fim`, h.role === 'Servidor' ? 'i-server' : 'i-laptop', h.role === 'Servidor' ? 'graphite' : 'blue')}
+    return `${ihead(h.id, L`${h.role} from the plan · created at the start, removed at the end`, h.role === 'Server' ? 'i-server' : 'i-laptop', h.role === 'Server' ? 'graphite' : 'blue')}
       <div class="group">
-        <label class="row"><span>Nome</span><input type="text" value="${h.id}" data-f="id" spellcheck="false" aria-label="Nome"></label>
-        <div class="row"><span>Papel</span>${seg('role', h.role, [['Cliente', 'Cliente'], ['Servidor', 'Servidor']], 'Papel')}</div>
+        <label class="row"><span>${L`Name`}</span><input type="text" value="${h.id}" data-f="id" spellcheck="false" aria-label="${L`Name`}"></label>
+        <div class="row"><span>${L`Role`}</span>${seg('role', h.role, [['Client', L`Client`], ['Server', L`Server`]], L`Role`)}</div>
         <label class="row"><span>Switch</span><select data-f="sw" aria-label="Switch">${R.switches().map(s => `<option value="${s.id}"${s.id === h.sw ? ' selected' : ''}>${s.id}${s.uf ? ` · ${s.uf}` : ''}</option>`).join('')}</select></label>
-        <label class="row"><span>Endereço</span><input type="text" value="${h.ip}" data-f="ip" inputmode="decimal" spellcheck="false" aria-label="Endereço"></label>
-        <label class="row"><span>Imagem</span><select data-f="image" aria-label="Imagem Docker">${R.IMAGES.map(([im]) => `<option${im === h.image ? ' selected' : ''}>${im}</option>`).join('')}</select></label>
+        <label class="row"><span>${L`Address`}</span><input type="text" value="${h.ip}" data-f="ip" inputmode="decimal" spellcheck="false" aria-label="${L`Address`}"></label>
+        <label class="row"><span>${L`Image`}</span><select data-f="image" aria-label="${L`Docker image`}">${R.IMAGES.map(([im]) => `<option${im === h.image ? ' selected' : ''}>${im}</option>`).join('')}</select></label>
       </div>
-      <p class="xnote">${esc(R.IMAGES.find(i => i[0] === h.image)?.[1] || '')}${refs ? ` · usado em ${refs} fluxo${refs > 1 ? 's' : ''}` : ''}</p>
+      <p class="xnote">${esc(R.IMAGES.find(i => i[0] === h.image)?.[1] || '')}${refs ? ` ${L`· used in ${refs} flow${refs > 1 ? 's' : ''}`}` : ''}</p>
       ${flowsOf(P, h)}
-      <h3 class="section-title">Ao iniciar</h3>
-      ${term([...hostCmds(h), `# pelo LFT: sudo lft host add ${h.id} --switch ${h.sw} --ip ${h.ip} --image ${h.image}${h.role === 'Servidor' ? ' --server' : ''}`])}
-      <div class="xi-foot"><button class="btn btn-danger" type="button" data-b-del>Remover ${h.id}</button></div>`;
+      <h3 class="section-title">${L`At start`}</h3>
+      ${term([...hostCmds(h), L`# through LFT: sudo lft host add ${h.id} --switch ${h.sw} --ip ${h.ip} --image ${h.image}${h.role === 'Server' ? ' --server' : ''}`])}
+      <div class="xi-foot"><button class="btn btn-danger" type="button" data-b-del>${L`Remove ${h.id}`}</button></div>`;
   }
   function inspFlow(P, f, k) {
     const T = total(P), c1 = Math.floor(f.start / P.win) + 1, c2 = Math.ceil((f.start + f.dur) / P.win);
     const on = f.start < (k + 1) * P.win && f.start + f.dur > k * P.win, r = flowRoute(P, f, P.snapshots[k] || {});
     const to = f.tool === 'ping' ? allHosts(P).filter(h => h.id !== f.client) : servers(P);
-    return `${ihead(`${TOOLS[f.tool]} · ${esc(dirText(f))}`, `${whatText(f)} · de ${clock(f.start)} a ${clock(Math.min(T, f.start + f.dur))}`, 'i-traffic', f.tool === 'dash' ? 'orange' : f.tool === 'ping' ? 'teal' : 'blue')}
+    return `${ihead(`${TOOLS[f.tool]} · ${esc(dirText(f))}`, L`${whatText(f)} · from ${clock(f.start)} to ${clock(Math.min(T, f.start + f.dur))}`, 'i-traffic', f.tool === 'dash' ? 'orange' : f.tool === 'ping' ? 'teal' : 'blue')}
       <div class="group">
-        <div class="row"><span>Ferramenta</span>${seg('tool', f.tool, [['iperf3', 'iperf3'], ['dash', 'DASH'], ['ping', 'ping']], 'Ferramenta')}</div>
-        <label class="row"><span>${f.tool === 'ping' ? 'Origem' : 'Cliente'}</span><select data-f="client" aria-label="Cliente">${hostOpts(f.tool === 'ping' ? allHosts(P) : clients(P), f.client)}</select></label>
-        <label class="row"><span>${f.tool === 'ping' ? 'Destino' : 'Servidor'}</span><select data-f="server" aria-label="Servidor">${hostOpts(to, f.server)}</select></label>
-        ${f.tool === 'iperf3' ? `<div class="row"><span>Sentido</span>${seg('reverse', f.reverse ? 1 : 0, [[1, 'Download'], [0, 'Upload']], 'Sentido')}</div>
-        <div class="row"><span>Protocolo</span>${seg('proto', f.proto, [['tcp', 'TCP'], ['udp', 'UDP']], 'Protocolo')}</div>
-        <label class="row"><span>Taxa</span><span class="unitf"><input type="number" min="1" max="10000" value="${f.rate}" data-f="rate" aria-label="Taxa"><em>Mb/s</em></span></label>
-        <label class="row"><span>Porta</span><input type="number" min="1024" max="65535" value="${f.port}" data-f="port" aria-label="Porta"></label>` : ''}
-        ${f.tool === 'ping' ? `<label class="row"><span>Intervalo</span><span class="unitf"><input type="number" min="0.2" max="10" step="0.1" value="${f.interval || 1}" data-f="interval" aria-label="Intervalo"><em>s</em></span></label>` : ''}
+        <div class="row"><span>${L`Tool`}</span>${seg('tool', f.tool, [['iperf3', 'iperf3'], ['dash', 'DASH'], ['ping', 'ping']], L`Tool`)}</div>
+        <label class="row"><span>${f.tool === 'ping' ? L`Source` : L`Client`}</span><select data-f="client" aria-label="${L`Client`}">${hostOpts(f.tool === 'ping' ? allHosts(P) : clients(P), f.client)}</select></label>
+        <label class="row"><span>${f.tool === 'ping' ? L`Destination` : L`Server`}</span><select data-f="server" aria-label="${L`Server`}">${hostOpts(to, f.server)}</select></label>
+        ${f.tool === 'iperf3' ? `<div class="row"><span>${L`Direction`}</span>${seg('reverse', f.reverse ? 1 : 0, [[1, 'Download'], [0, 'Upload']], L`Direction`)}</div>
+        <div class="row"><span>${L`Protocol`}</span>${seg('proto', f.proto, [['tcp', 'TCP'], ['udp', 'UDP']], L`Protocol`)}</div>
+        <label class="row"><span>${L`Rate`}</span><span class="unitf"><input type="number" min="1" max="10000" value="${f.rate}" data-f="rate" aria-label="${L`Rate`}"><em>Mb/s</em></span></label>
+        <label class="row"><span>${L`Port`}</span><input type="number" min="1024" max="65535" value="${f.port}" data-f="port" aria-label="${L`Port`}"></label>` : ''}
+        ${f.tool === 'ping' ? `<label class="row"><span>${L`Interval`}</span><span class="unitf"><input type="number" min="0.2" max="10" step="0.1" value="${f.interval || 1}" data-f="interval" aria-label="${L`Interval`}"><em>s</em></span></label>` : ''}
       </div>
-      <h3 class="section-title">Quando</h3>
+      <h3 class="section-title">${L`When`}</h3>
       <div class="group">
-        <label class="row"><span>Início</span><span class="unitf"><input type="number" min="0" max="${T - 5}" step="5" value="${f.start}" data-f="start" aria-label="Início"><em>s</em></span></label>
-        <label class="row"><span>Duração</span><span class="unitf"><input type="number" min="5" max="${T}" step="5" value="${f.dur}" data-f="dur" aria-label="Duração"><em>s</em></span></label>
-        <div class="row"><span>Snapshots</span><span class="val">${c1 === c2 ? `${c1}` : `${c1} a ${Math.min(c2, P.snapshots.length)}`}</span></div>
-        <div class="row"><span>Caminho no ${k + 1}</span><span class="val${on && !r ? ' bad' : ''}">${!on ? 'não roda neste snapshot' : r ? r.join(' · ') : 'sem caminho: link fora'}</span></div>
+        <label class="row"><span>${L`Start`}</span><span class="unitf"><input type="number" min="0" max="${T - 5}" step="5" value="${f.start}" data-f="start" aria-label="${L`Start`}"><em>s</em></span></label>
+        <label class="row"><span>${L`Duration`}</span><span class="unitf"><input type="number" min="5" max="${T}" step="5" value="${f.dur}" data-f="dur" aria-label="${L`Duration`}"><em>s</em></span></label>
+        <div class="row"><span>Snapshots</span><span class="val">${c1 === c2 ? `${c1}` : `${c1}–${Math.min(c2, P.snapshots.length)}`}</span></div>
+        <div class="row"><span>${L`Path in ${k + 1}`}</span><span class="val${on && !r ? ' bad' : ''}">${!on ? L`does not run in this snapshot` : r ? r.join(' · ') : L`no path: link down`}</span></div>
       </div>
-      <h3 class="section-title">Comandos</h3>
-      ${term([`# em ${clock(f.start)}, por ${clock(f.dur)}`, ...flowCmds(P, f)])}
-      <div class="xi-foot"><button class="btn btn-plain" type="button" data-b-dup>Duplicar</button><button class="btn btn-danger" type="button" data-b-del>Remover fluxo</button></div>`;
+      <h3 class="section-title">${L`Commands`}</h3>
+      ${term([L`# at ${clock(f.start)}, for ${clock(f.dur)}`, ...flowCmds(P, f)])}
+      <div class="xi-foot"><button class="btn btn-plain" type="button" data-b-dup>${L`Duplicate`}</button><button class="btn btn-danger" type="button" data-b-del>${L`Remove flow`}</button></div>`;
   }
   function inspEvent(P, e) {
     const T = total(P), ifs = [...ifaceMap(P).keys()];
-    return `${ihead(KINDS[e.kind], `${esc(evText(e))} · em ${clock(e.at)}`, e.kind === 'intent' ? 'i-chat' : e.kind === 'capture' ? 'i-terminal' : 'i-stop', e.kind === 'intent' ? 'blue' : e.kind === 'capture' ? 'graphite' : 'orange')}
+    return `${ihead(KINDS[e.kind], L`${esc(evText(e))} · at ${clock(e.at)}`, e.kind === 'intent' ? 'i-chat' : e.kind === 'capture' ? 'i-terminal' : 'i-stop', e.kind === 'intent' ? 'blue' : e.kind === 'capture' ? 'graphite' : 'orange')}
       <div class="group">
-        <div class="row"><span>Tipo</span>${seg('kind', e.kind, [['intent', 'Intent'], ['capture', 'Captura'], ['pause', 'Pausa']], 'Tipo de evento')}</div>
-        <label class="row"><span>Instante</span><span class="unitf"><input type="number" min="0" max="${T - 5}" step="5" value="${e.at}" data-f="at" aria-label="Instante"><em>s</em></span></label>
-        ${e.kind === 'intent' ? `<label class="row"><span>Serviço</span><select data-f="svc" aria-label="Serviço">${SVCS.map(([v, t]) => `<option value="${v}"${v === e.svc ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-        <label class="row"><span>Alvo</span><select data-f="host" aria-label="Alvo">${hostOpts(clients(P), e.host)}</select></label>
-        ${e.svc === 'bandwidth' ? `<label class="row"><span>Máximo</span><span class="unitf"><input type="number" min="1" value="${e.mbps || 10}" data-f="mbps" aria-label="Máximo"><em>Mb/s</em></span></label>` : ''}
-        ${e.svc === 'block' ? `<div class="row"><span>Protocolo</span>${seg('proto', e.proto, [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], 'Protocolo')}</div>` : ''}` : ''}
+        <div class="row"><span>${L`Type`}</span>${seg('kind', e.kind, [['intent', 'Intent'], ['capture', L`Capture`], ['pause', L`Pause`]], L`Event type`)}</div>
+        <label class="row"><span>${L`Time`}</span><span class="unitf"><input type="number" min="0" max="${T - 5}" step="5" value="${e.at}" data-f="at" aria-label="${L`Time`}"><em>s</em></span></label>
+        ${e.kind === 'intent' ? `<label class="row"><span>${L`Service`}</span><select data-f="svc" aria-label="${L`Service`}">${SVCS.map(([v, t]) => `<option value="${v}"${v === e.svc ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="row"><span>${L`Target`}</span><select data-f="host" aria-label="${L`Target`}">${hostOpts(clients(P), e.host)}</select></label>
+        ${e.svc === 'bandwidth' ? `<label class="row"><span>${L`Maximum`}</span><span class="unitf"><input type="number" min="1" value="${e.mbps || 10}" data-f="mbps" aria-label="${L`Maximum`}"><em>Mb/s</em></span></label>` : ''}
+        ${e.svc === 'block' ? `<div class="row"><span>${L`Protocol`}</span>${seg('proto', e.proto, [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], L`Protocol`)}</div>` : ''}` : ''}
         ${e.kind === 'capture' ? `<label class="row"><span>Interface</span><select data-f="iface" aria-label="Interface">${ifs.map(i => `<option${i === e.iface ? ' selected' : ''}>${i}</option>`).join('')}</select></label>` : ''}
         ${e.kind === 'pause' ? `<label class="row"><span>Host</span><select data-f="host" aria-label="Host">${hostOpts(allHosts(P), e.host)}</select></label>` : ''}
-        ${e.kind !== 'intent' ? `<label class="row"><span>Duração</span><span class="unitf"><input type="number" min="5" max="${T}" step="5" value="${e.dur}" data-f="dur" aria-label="Duração"><em>s</em></span></label>` : ''}
+        ${e.kind !== 'intent' ? `<label class="row"><span>${L`Duration`}</span><span class="unitf"><input type="number" min="5" max="${T}" step="5" value="${e.dur}" data-f="dur" aria-label="${L`Duration`}"><em>s</em></span></label>` : ''}
       </div>
-      <p class="xnote">${e.kind === 'intent' ? 'A Nile passa pela aprovação e segue ao deployer, como se viesse da conversa. Fica em vigor até o fim da execução.' : e.kind === 'capture' ? 'O pcap fica na pasta da execução, pronto para o tshark ou o Wireshark.' : 'Congela o container: os fluxos desse host param de trafegar até o unpause.'}</p>
-      <h3 class="section-title">Comandos</h3>
-      ${term([`# em ${clock(e.at)}`, ...evCmds(P, e)])}
-      <div class="xi-foot"><button class="btn btn-danger" type="button" data-b-del>Remover evento</button></div>`;
+      <p class="xnote">${e.kind === 'intent' ? L`The Nile goes through approval and on to the deployer, as if it came from the chat. It stays in force until the end of the run.` : e.kind === 'capture' ? L`The pcap stays in the run's folder, ready for tshark or Wireshark.` : L`Freezes the container: this host's flows stop until the unpause.`}</p>
+      <h3 class="section-title">${L`Commands`}</h3>
+      ${term([L`# at ${clock(e.at)}`, ...evCmds(P, e)])}
+      <div class="xi-foot"><button class="btn btn-danger" type="button" data-b-del>${L`Remove event`}</button></div>`;
   }
   // The flows a host takes part in, and a shortcut to add one
-  const flowsOf = (P, h) => { const fs = P.flows.filter(f => f.client === h.id || f.server === h.id); return `<div class="xi-sec"><h3 class="section-title">Fluxos</h3><button class="btn btn-plain" type="button" data-b-flowwith="${h.id}">${icon('i-plus')}Fluxo</button></div>
-      <div class="group">${fs.length ? fs.map(f => `<button type="button" class="row xi-item" data-b-sel="flow:${f.id}"><span class="xi-ic"><i class="dot t-${f.tool}"></i></span><span class="xi-it"><b>${TOOLS[f.tool]} · ${esc(dirText(f))}</b><em>${whatText(f)} · ${clock(f.start)} a ${clock(f.start + f.dur)}</em></span>${icon('i-chevron-right')}</button>`).join('') : `<p class="xempty">Nenhum ainda. Arraste de ${h.id} até outro host no desenho, ou use + Fluxo.</p>`}</div>`; };
+  const flowsOf = (P, h) => { const fs = P.flows.filter(f => f.client === h.id || f.server === h.id); return `<div class="xi-sec"><h3 class="section-title">${L`Flows`}</h3><button class="btn btn-plain" type="button" data-b-flowwith="${h.id}">${L`${icon('i-plus')}Flow`}</button></div>
+      <div class="group">${fs.length ? fs.map(f => `<button type="button" class="row xi-item" data-b-sel="flow:${f.id}"><span class="xi-ic"><i class="dot t-${f.tool}"></i></span><span class="xi-it"><b>${TOOLS[f.tool]} · ${esc(dirText(f))}</b><em>${whatText(f)} · ${clock(f.start)}–${clock(f.start + f.dur)}</em></span>${icon('i-chevron-right')}</button>`).join('') : `<p class="xempty">${L`None yet. Drag from ${h.id} to another host in the drawing, or use + Flow.`}</p>`}</div>`; };
   function inspBase(P, h) {
-    return `${ihead(h.id, `${h.role} da topologia · para mudar, use a aba Topologia`, h.role === 'Servidor' ? 'i-server' : 'i-laptop', 'graphite')}
-      <div class="group"><div class="row"><span>Switch</span><span class="val">${h.sw}</span></div><div class="row"><span>Endereço</span><span class="val mono">${h.ip}</span></div><div class="row"><span>Imagem</span><span class="val mono">${esc(h.image)}</span></div></div>
+    return `${ihead(h.id, L`${h.role} from the topology · to change it, use the Topology tab`, h.role === 'Server' ? 'i-server' : 'i-laptop', 'graphite')}
+      <div class="group"><div class="row"><span>Switch</span><span class="val">${h.sw}</span></div><div class="row"><span>${L`Address`}</span><span class="val mono">${h.ip}</span></div><div class="row"><span>${L`Image`}</span><span class="val mono">${esc(h.image)}</span></div></div>
       ${flowsOf(P, h)}`;
   }
   const selected = P => { const s = view.sel; if (!s || s.type === 'base') return null; return (s.type === 'host' ? P.hosts : s.type === 'flow' ? P.flows : P.events).find(x => x.id === s.id) || null; };
@@ -449,44 +450,44 @@
     const out = [], T = total(P);
     P.flows.forEach(f => {
       const c = hostOf(P, f.client), s = hostOf(P, f.server), name = `${TOOLS[f.tool]} ${dirText(f)}`;
-      if (!c || !s) { out.push({ t: `${name}: escolha o cliente e o servidor`, sel: `flow:${f.id}`, bad: true }); return; }
+      if (!c || !s) { out.push({ t: L`${name}: choose the client and the server`, sel: `flow:${f.id}`, bad: true }); return; }
       const cut = P.snapshots.map((st, i) => (f.start < (i + 1) * P.win && f.start + f.dur > i * P.win && !flowRoute(P, f, st) ? i + 1 : 0)).filter(Boolean);
-      if (cut.length) out.push({ t: `${name} fica sem caminho no snapshot ${cut.join(', ')}`, sel: `flow:${f.id}` });
-      if (f.tool === 'dash' && !/dash-video|dash-live|pydash-server/.test(s.image)) out.push({ t: `DASH pede um servidor de vídeo (lft-dash-video, lft-dash-live ou lft-pydash-server); ${s.id} usa ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
-      if (f.tool === 'dash' && !/dash-client|pydash-client/.test(c.image)) out.push({ t: `${c.id} usa ${c.image}, que não tem player DASH (lft-dash-client ou lft-pydash-client)`, sel: c.base ? `base:${c.id}` : `host:${c.id}` });
-      if (f.tool === 'iperf3' && P.flows.some(g => g !== f && g.tool === 'iperf3' && g.server === f.server && g.port === f.port && g.start < f.start + f.dur && f.start < g.start + g.dur && P.flows.indexOf(g) < P.flows.indexOf(f))) out.push({ t: `porta ${f.port} já em uso em ${f.server} nesse intervalo`, sel: `flow:${f.id}`, bad: true });
+      if (cut.length) out.push({ t: L`${name} has no path in snapshot ${cut.join(', ')}`, sel: `flow:${f.id}` });
+      if (f.tool === 'dash' && !/dash-video|dash-live|pydash-server/.test(s.image)) out.push({ t: L`DASH needs a video server (lft-dash-video, lft-dash-live or lft-pydash-server), and ${s.id} uses ${s.image}`, sel: s.base ? `base:${s.id}` : `host:${s.id}` });
+      if (f.tool === 'dash' && !/dash-client|pydash-client/.test(c.image)) out.push({ t: L`${c.id} uses ${c.image}, which has no DASH player (lft-dash-client or lft-pydash-client)`, sel: c.base ? `base:${c.id}` : `host:${c.id}` });
+      if (f.tool === 'iperf3' && P.flows.some(g => g !== f && g.tool === 'iperf3' && g.server === f.server && g.port === f.port && g.start < f.start + f.dur && f.start < g.start + g.dur && P.flows.indexOf(g) < P.flows.indexOf(f))) out.push({ t: L`port ${f.port} already in use on ${f.server} in this interval`, sel: `flow:${f.id}`, bad: true });
     });
-    P.hosts.forEach(h => { if (!P.flows.some(f => f.client === h.id || f.server === h.id) && !P.events.some(e => e.host === h.id)) out.push({ t: `${h.id} não participa de nenhum fluxo`, sel: `host:${h.id}` }); });
-    P.events.forEach(e => { if (e.kind !== 'capture' && !hostOf(P, e.host)) out.push({ t: `${KINDS[e.kind]} em ${clock(e.at)} sem host`, sel: `event:${e.id}`, bad: true }); });
-    if (!P.flows.length) out.push({ t: 'sem tráfego: os snapshots só mudam os links', sel: '' });
+    P.hosts.forEach(h => { if (!P.flows.some(f => f.client === h.id || f.server === h.id) && !P.events.some(e => e.host === h.id)) out.push({ t: L`${h.id} takes part in no flow`, sel: `host:${h.id}` }); });
+    P.events.forEach(e => { if (e.kind !== 'capture' && !hostOf(P, e.host)) out.push({ t: L`${KINDS[e.kind]} at ${clock(e.at)} without a host`, sel: `event:${e.id}`, bad: true }); });
+    if (!P.flows.length) out.push({ t: L`no traffic: the snapshots only change the links`, sel: '' });
     return out;
   }
   function summary(P) {
     const T = total(P), c = checks(P), bad = c.some(x => x.bad);
-    return `<div class="xb-sum"><span class="xb-sum-t">${clock(T)} de experimento, cerca de ${Math.ceil((T + 150) / 60)} min com ONOS e estabilização · ${P.flows.length} fluxo${P.flows.length === 1 ? '' : 's'} · ${P.hosts.length} host${P.hosts.length === 1 ? '' : 's'} novo${P.hosts.length === 1 ? '' : 's'} · ${P.events.length} evento${P.events.length === 1 ? '' : 's'}</span>
-      ${c.length ? `<span class="xb-chips">${c.slice(0, 3).map(x => `<button type="button" class="xb-chip${x.bad ? ' bad' : ''}" data-b-sel="${x.sel}">${icon(x.bad ? 'i-x' : 'i-help')}${esc(x.t)}</button>`).join('')}${c.length > 3 ? `<span class="xb-more">+${c.length - 3}</span>` : ''}</span>` : `<span class="xb-ok">${icon('i-check')}Pronto para executar</span>`}${bad ? '' : ''}</div>`;
+    return `<div class="xb-sum"><span class="xb-sum-t">${L`${clock(T)} of experiment, about ${Math.ceil((T + 150) / 60)} min with ONOS and stabilization · ${P.flows.length} flow${P.flows.length === 1 ? '' : 's'} · ${P.hosts.length} new host${P.hosts.length === 1 ? '' : 's'} · ${P.events.length} event${P.events.length === 1 ? '' : 's'}`}</span>
+      ${c.length ? `<span class="xb-chips">${c.slice(0, 3).map(x => `<button type="button" class="xb-chip${x.bad ? ' bad' : ''}" data-b-sel="${x.sel}">${icon(x.bad ? 'i-x' : 'i-help')}${esc(x.t)}</button>`).join('')}${c.length > 3 ? `<span class="xb-more">+${c.length - 3}</span>` : ''}</span>` : `<span class="xb-ok">${L`${icon('i-check')}Ready to run`}</span>`}${bad ? '' : ''}</div>`;
   }
   function builder() {
     const P = view.plan, k = view.snap, mode = view.mode || 'links', T0 = k * P.win;
     const live = P.flows.filter(f => f.start < T0 + P.win && f.start + f.dur > T0).length;
-    const hint = mode === 'links' ? `${live ? `${live} fluxo${live > 1 ? 's' : ''} neste snapshot` : 'Nenhum fluxo neste snapshot'}. Clique num link para alternar Normal, Degradado e Fora; arraste de um host a outro para criar um fluxo.` : `Clique no switch onde o novo ${mode === 'server' ? 'servidor' : 'cliente'} vai se ligar. Esc cancela.`;
+    const hint = mode === 'links' ? L`${live ? L`${live} flow${live > 1 ? 's' : ''} in this snapshot` : L`No flow in this snapshot`}. Click a link to switch between Normal, Degraded and Down, and drag from one host to another to create a flow.` : L`Click the switch the new ${mode === 'server' ? L`server` : L`client`} will connect to. Esc cancels.`;
     return `<div class="xb">
-      <div class="xb-top"><button class="xback" type="button" data-x-back>${icon('i-chevron-right')}Experimentos</button>
-        <input class="xb-name" value="${esc(P.name)}" data-b="name" spellcheck="false" aria-label="Nome do experimento">
-        <div class="xb-acts"><span class="xb-hist"><button class="btn btn-icon" type="button" data-b-undo aria-label="Desfazer" title="Desfazer (Ctrl+Z)"${hist.at > 0 ? '' : ' disabled'}>${icon('i-undo')}</button><button class="btn btn-icon" type="button" data-b-redo aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)"${hist.at < hist.stack.length - 1 ? '' : ' disabled'}>${icon('i-redo')}</button></span><button class="btn" type="button" data-b-py>${icon('i-export')}Exportar .py</button><button class="btn" type="button" data-b-save>Salvar</button><button class="btn btn-blue" type="button" data-b-run>${icon('i-play')}Executar</button></div></div>
+      <div class="xb-top"><button class="xback" type="button" data-x-back>${L`${icon('i-chevron-right')}Experiments`}</button>
+        <input class="xb-name" value="${esc(P.name)}" data-b="name" spellcheck="false" aria-label="${L`Experiment name`}">
+        <div class="xb-acts"><span class="xb-hist"><button class="btn btn-icon" type="button" data-b-undo aria-label="${L`Undo`}" title="${L`Undo (Ctrl+Z)`}"${hist.at > 0 ? '' : ' disabled'}>${icon('i-undo')}</button><button class="btn btn-icon" type="button" data-b-redo aria-label="${L`Redo`}" title="${L`Redo (Ctrl+Shift+Z)`}"${hist.at < hist.stack.length - 1 ? '' : ' disabled'}>${icon('i-redo')}</button></span><button class="btn" type="button" data-b-py>${L`${icon('i-export')}Export .py`}</button><button class="btn" type="button" data-b-save>${L`Save`}</button><button class="btn btn-blue" type="button" data-b-run>${L`${icon('i-play')}Run`}</button></div></div>
       ${summary(P)}
       <div class="xb-body">
         <section class="xb-main">
           <div class="xb-canvas${mode !== 'links' ? ' is-adding' : ''}">
-            <div class="xb-canvas-h"><div><b>Snapshot ${k + 1}</b><span>${clock(T0)} a ${clock(T0 + P.win)} · ${hint}</span></div>
-              ${`<div class="seg xb-mode" role="group" aria-label="Ação no canvas"><button type="button" data-b-mode="links" aria-pressed="${mode === 'links'}">Links</button><button type="button" data-b-mode="client" aria-pressed="${mode === 'client'}">${icon('i-plus')}Cliente</button><button type="button" data-b-mode="server" aria-pressed="${mode === 'server'}">${icon('i-plus')}Servidor</button></div>`}</div>
+            <div class="xb-canvas-h"><div><b>Snapshot ${k + 1}</b><span>${clock(T0)}–${clock(T0 + P.win)} · ${hint}</span></div>
+              ${`<div class="seg xb-mode" role="group" aria-label="${L`Canvas action`}"><button type="button" data-b-mode="links" aria-pressed="${mode === 'links'}">Links</button><button type="button" data-b-mode="client" aria-pressed="${mode === 'client'}">${L`${icon('i-plus')}Client`}</button><button type="button" data-b-mode="server" aria-pressed="${mode === 'server'}">${L`${icon('i-plus')}Server`}</button></div>`}</div>
             ${planSvg(P, k, view.sel, mode)}
-            <div class="xb-canvas-f"><div class="legend"><span><i></i>Normal</span><span class="w"><i></i>Degradado</span><span class="d"><i></i>Fora</span><span class="f"><i class="t-iperf3"></i>iperf3</span><span class="f"><i class="t-dash"></i>DASH</span><span class="f"><i class="t-ping"></i>ping</span></div>
-              <div class="xb-tools"><button class="btn btn-plain" type="button" data-b-tool="copy">Repetir em todos</button><button class="btn btn-plain" type="button" data-b-tool="even">Só nos pares</button><button class="btn btn-plain" type="button" data-b-tool="clear">Limpar este</button></div></div>
+            <div class="xb-canvas-f"><div class="legend"><span><i></i>Normal</span><span class="w"><i></i>${L`Degraded`}</span><span class="d"><i></i>${L`Down`}</span><span class="f"><i class="t-iperf3"></i>iperf3</span><span class="f"><i class="t-dash"></i>DASH</span><span class="f"><i class="t-ping"></i>ping</span></div>
+              <div class="xb-tools"><button class="btn btn-plain" type="button" data-b-tool="copy">${L`Repeat in all`}</button><button class="btn btn-plain" type="button" data-b-tool="even">${L`Only in the even ones`}</button><button class="btn btn-plain" type="button" data-b-tool="clear">${L`Clear this one`}</button></div></div>
           </div>
           ${timeline(P, k, view.sel)}
         </section>
-        <aside class="xb-insp" aria-label="Inspetor">${inspector(P)}</aside>
+        <aside class="xb-insp" aria-label="${L`Inspector`}">${inspector(P)}</aside>
       </div>
     </div>`;
   }
@@ -539,7 +540,7 @@
     if (view.snap >= view.plan.snapshots.length - 1) view.snap = 0;
     paint();
     playTimer = setInterval(() => {
-      if (view.name !== 'builder' || R.page !== 'experimentos') { stopPlay(); return; }
+      if (view.name !== 'builder' || R.page !== 'experiments') { stopPlay(); return; }
       if (view.snap >= view.plan.snapshots.length - 1) { stopPlay(); paint(); return; }
       view.snap++;
       paint();
@@ -554,7 +555,7 @@
       P.flows = P.flows.filter(f => f.client !== o.id && f.server !== o.id);
       P.events = P.events.filter(ev => ev.host !== o.id || ev.kind === 'capture');
       const gone = n0 - P.flows.length - P.events.length;
-      if (gone) R.toast(`${o.id} removido, com ${gone} fluxo${gone > 1 ? 's ou eventos' : ' ou evento'} que dependia${gone > 1 ? 'm' : ''} dele. Ctrl+Z desfaz.`);
+      if (gone) R.toast(L`${o.id} removed, with ${gone} flow${gone > 1 ? L`s or events` : ` ${L`or event`}`} that depended on it. Ctrl+Z undoes.`);
     } else if (view.sel.type === 'flow') P.flows = P.flows.filter(f => f !== o);
     else P.events = P.events.filter(ev => ev !== o);
     view.sel = null;
@@ -567,8 +568,8 @@
     if (!A || !B || a === b) return null;
     const start = Math.min(view.snap * P.win, T - 5), f = { id: uid('f'), start, dur: Math.min(P.win * 2, T - start), rate: 20, proto: 'tcp', port: freePort(P), interval: 1 };
     if (A.role !== B.role) {
-      const c = A.role === 'Servidor' ? B : A, sv = A.role === 'Servidor' ? A : B;
-      Object.assign(f, { client: c.id, server: sv.id, reverse: A.role === 'Servidor', tool: /dash-video/.test(sv.image) && /dash-client|pydash/.test(c.image) ? 'dash' : 'iperf3' });
+      const c = A.role === 'Server' ? B : A, sv = A.role === 'Server' ? A : B;
+      Object.assign(f, { client: c.id, server: sv.id, reverse: A.role === 'Server', tool: /dash-video/.test(sv.image) && /dash-client|pydash/.test(c.image) ? 'dash' : 'iperf3' });
     } else Object.assign(f, { tool: 'ping', client: a, server: b, reverse: false });
     P.flows.push(f);
     return f;
@@ -579,27 +580,27 @@
   function phasesFor(r) {
     const n = M.nodes.length, h0 = r.hosts?.[0], build = !r.flows;
     return [
-      build ? ['Limpando containers anteriores', 'docker rm -f $(docker ps -aq --filter label=lft=1)', 3] : null,
-      build ? ['Subindo o ONOS 2.5.0', 'docker run -d --name c1 -p 8181:8181 -p 8101:8101 -p 6653:6653 onosproject/onos:2.5.0', 9] : null,
-      build ? ['Ativando apps e o link-quality (.oar)', 'onos-app 172.17.0.2 install! assets/onos_apps/link-quality.oar', 5] : null,
-      build ? [`Criando a topologia: ${R.switches().length} switches, ${R.hosts().length} hosts`, `lft topology create --path ${r.config || `${r.name}.py`}`, Math.min(14, 4 + n)] : null,
-      h0 ? [`Hosts do plano: ${r.hosts.map(h => h.id).join(', ')}`, `${hostCmds(h0)[0]} … ovs-vsctl add-port ${h0.sw} ${h0.sw}${h0.id}`, 2 + r.hosts.length * 2, makeHosts] : null,
-      build ? ['Descoberta LLDP e hosts (ARP)', `curl -s ${R.env.onos.rest}/links | jq '.links | length'`, 5] : null,
-      r.auto ? ['Subindo deployer e supervisor', 'docker compose -f ../REIN/docker-compose.yml up -d --build', 7] : null,
-      ['Estabilização', 'sleep 30', 6],
+      build ? [L`Removing the previous containers`, 'docker rm -f $(docker ps -aq --filter label=lft=1)', 3] : null,
+      build ? [L`Starting ONOS 2.5.0`, 'docker run -d --name c1 -p 8181:8181 -p 8101:8101 -p 6653:6653 onosproject/onos:2.5.0', 9] : null,
+      build ? [L`Activating apps and link-quality (.oar)`, 'onos-app 172.17.0.2 install! assets/onos_apps/link-quality.oar', 5] : null,
+      build ? [L`Creating the topology: ${R.switches().length} switches, ${R.hosts().length} hosts`, `lft topology create --path ${r.config || `${r.name}.py`}`, Math.min(14, 4 + n)] : null,
+      h0 ? [L`Hosts of the plan: ${r.hosts.map(h => h.id).join(', ')}`, `${hostCmds(h0)[0]} … ovs-vsctl add-port ${h0.sw} ${h0.sw}${h0.id}`, 2 + r.hosts.length * 2, makeHosts] : null,
+      build ? [L`LLDP discovery and hosts (ARP)`, `curl -s ${R.env.onos.rest}/links | jq '.links | length'`, 5] : null,
+      r.auto ? [L`Starting the deployer and the supervisor`, 'docker compose -f ../REIN/docker-compose.yml up -d --build', 7] : null,
+      [L`Stabilization`, 'sleep 30', 6],
     ].filter(Boolean);
   }
   function makeHosts() {
     run.created = [];
     run.hosts.forEach(h => {
-      if (R.node(h.id) || !R.node(h.sw)) { run.log.push(`[${hms()}] host ${h.id}: ${R.node(h.id) ? 'já existe' : `switch ${h.sw} ausente`}, ignorado`); return; }
+      if (R.node(h.id) || !R.node(h.sw)) { run.log.push(`[${hms()}] host ${h.id}: ${R.node(h.id) ? L`already exists` : L`switch ${h.sw} missing`}, ignorado`); return; }
       R.addHost({ id: h.id, role: h.role, sw: h.sw, ip: h.ip, image: h.image });
       run.created.push(h.id);
       run.log.push(`[${hms()}] host ${h.id} up · ${h.image} · ${h.ip}/24 · veth ${h.id}${h.sw} / ${h.sw}${h.id}`);
     });
   }
   function startRun(spec) {
-    if (run?.on) { R.toast('Já há uma execução em andamento.'); return; }
+    if (run?.on) { R.toast(L`A run is already in progress.`); return; }
     const t = new Date();
     run = { ...spec, on: true, t0: Date.now(), phaseAt: 0, win: -1, log: [], files: [], status: 'running', hooked: {} };
     run.phases = phasesFor(spec);
@@ -608,8 +609,8 @@
     store('rein-runs', runs.slice(0, 20));
     run.log.push(`[${hms()}] run ${spec.name} · ${spec.runner}${spec.mode ? ` · mode=${spec.mode}` : ''} · results ${spec.dir}/`);
     if (spec.flows) run.log.push(`[${hms()}] plan · ${spec.windows} snapshots × ${spec.winLen} s · ${spec.flows.length} flows · ${spec.hosts.length} new hosts · ${spec.events.length} events`);
-    R.notify({ source: 'Experimento', text: `${spec.name} iniciado. Resultados em ${spec.dir}/`, tone: 'ok' });
-    R.log('Testbed', `Experimento ${spec.name} iniciado (${spec.runner}).`);
+    R.notify({ source: L`Experiment`, text: L`${spec.name} started. Results in ${spec.dir}/`, tone: 'ok' });
+    R.log('Testbed', L`Experiment ${spec.name} started (${spec.runner}).`);
     view = { name: 'run' };
     paint();
     // With the testbed online the LFT runs it: api.js follows its events.jsonl into this run
@@ -665,7 +666,7 @@
         const h = R.node(e.host);
         if (e.kind === 'intent') {
           const nile = evNile(e, h?.ip);
-          const it = R.proposeIntent({ nile, client: h?.id, ask: `${run.name}: ${evText(e)} em ${clock(e.at)}`, source: 'Experimento' });
+          const it = R.proposeIntent({ nile, client: h?.id, ask: L`${run.name}: ${evText(e)} at ${clock(e.at)}`, source: 'Experiment' });
           R.intentAct(it.id, 'approve');
           run.log.push(`[${hms()}] event intent ${it.id} · ${nile}`);
         } else if (e.kind === 'capture') {
@@ -728,14 +729,14 @@
     const h = runs.find(x => x.name === run.name && x.status === 'running');
     if (h) h.status = run.status;
     store('rein-runs', runs.slice(0, 20));
-    R.notify({ source: 'Experimento', text: done ? `${run.name} concluído. ${run.dir}/` : `${run.name} interrompido na janela ${run.win + 1}.`, tone: done ? 'ok' : '' });
+    R.notify({ source: L`Experiment`, text: done ? L`${run.name} finished. ${run.dir}/` : L`${run.name} interrupted in window ${run.win + 1}.`, tone: done ? 'ok' : '' });
     paint();
   }
   function runView() {
-    if (!run) return '<div class="xc"><p class="xempty">Nenhuma execução aberta.</p></div>';
+    if (!run) return `<div class="xc"><p class="xempty">${L`No run is open.`}</p></div>`;
     return `<div class="xr">
-      <button class="xback" type="button" data-x-back>${icon('i-chevron-right')}Experimentos</button>
-      <header class="xr-head"><div><h2>${esc(run.name)}</h2><p>${esc(run.runner)}${run.mode ? ` · ${esc(run.mode)}` : ''} · ${esc(run.dir)}/</p></div><div class="xr-state" data-xr-state></div>${run.on ? `<button class="btn btn-danger" type="button" data-x-stop>${icon('i-stop')}Interromper</button>` : ''}</header>
+      <button class="xback" type="button" data-x-back>${L`${icon('i-chevron-right')}Experiments`}</button>
+      <header class="xr-head"><div><h2>${esc(run.name)}</h2><p>${esc(run.runner)}${run.mode ? ` · ${esc(run.mode)}` : ''} · ${esc(run.dir)}/</p></div><div class="xr-state" data-xr-state></div>${run.on ? `<button class="btn btn-danger" type="button" data-x-stop>${L`${icon('i-stop')}Interrupt`}</button>` : ''}</header>
       <div class="xr-body">
         <section class="xr-left">
           <ol class="xphases" data-xr-phases></ol>
@@ -746,7 +747,7 @@
         <section class="xr-right">
           <div class="xr-log-h"><b>events.log</b><code>${esc(run.dir)}/events.log</code></div>
           <pre class="term" data-xr-log></pre>
-          <div class="xr-files"><b>Arquivos</b><ul data-xr-files></ul></div>
+          <div class="xr-files"><b>${L`Files`}</b><ul data-xr-files></ul></div>
         </section>
       </div>
     </div>`;
@@ -755,14 +756,14 @@
     if (!run || !root.querySelector('[data-xr-log]')) return;
     const t = (Date.now() - run.t0) / 1000;
     const inWin = t >= run.pre, wt = t - run.pre;
-    $('[data-xr-state]', root).innerHTML = run.on ? `<span class="xr-pill"><i class="spinner"></i>${inWin ? `Janela ${run.win + 1}${run.windows ? ` de ${run.windows}` : ''} · ${clock(wt - Math.max(0, run.win) * run.winLen)} de ${clock(run.winLen)}` : run.phases[Math.max(0, run.phaseAt - 1)][0]}</span><span class="xr-el">${clock(t)} decorridos</span>` : `<span class="xr-pill ${run.status}">${icon(run.status === 'done' ? 'i-check' : 'i-x')}${run.status === 'done' ? 'Concluído' : 'Interrompido'}</span>`;
+    $('[data-xr-state]', root).innerHTML = run.on ? `<span class="xr-pill"><i class="spinner"></i>${inWin ? L`Window ${run.win + 1}${run.windows ? ` ${L`of ${run.windows}`}` : ''} · ${clock(wt - Math.max(0, run.win) * run.winLen)} of ${clock(run.winLen)}` : run.phases[Math.max(0, run.phaseAt - 1)][0]}</span><span class="xr-el">${L`${clock(t)} elapsed`}</span>` : `<span class="xr-pill ${run.status}">${icon(run.status === 'done' ? 'i-check' : 'i-x')}${run.status === 'done' ? L`Finished` : L`Interrupted`}</span>`;
     $('[data-xr-phases]', root).innerHTML = run.phases.map((p, i) => { const done = i < run.phaseAt - 1 || inWin || !run.on && run.status === 'done', cur = i === run.phaseAt - 1 && !inWin && run.on; return `<li class="${done ? 'is-done' : cur ? 'is-now' : ''}"><span class="xp-ic">${done ? icon('i-check') : cur ? '<i class="spinner"></i>' : '<i class="xp-dot"></i>'}</span><span>${esc(p[0])}</span><code>${esc(p[1])}</code></li>`; }).join('');
     const n = run.windows || Math.max(1, run.win + 1);
     $('[data-xr-wins]', root).innerHTML = `<div class="xwt">${Array.from({ length: n }, (_, k) => { const f = !inWin ? 0 : k < run.win ? 1 : k === run.win ? Math.min(1, (wt - k * run.winLen) / run.winLen) : 0; const st = run.plan ? (Object.values(run.plan[k] || {}).includes('down') ? 'down' : Object.values(run.plan[k] || {}).includes('warn') ? 'warn' : '') : run.hit?.includes(k + 1) ? (run.hindering === 'take down' ? 'down' : 'warn') : ''; return `<span class="xw ${st}${k === run.win && run.on ? ' is-now' : ''}"><i style="width:${(f * 100).toFixed(1)}%"></i><b>${k + 1}</b></span>`; }).join('')}</div>`;
     const fl = $('[data-xr-flows]', root);
     if (fl) {
       const T = run.windows * run.winLen, pct = v => `${(clamp(v, 0, T) / T * 100).toFixed(2)}%`, now = inWin ? wt : 0;
-      fl.innerHTML = `${run.flows.map(f => `<div class="xrf"><span class="xrf-l"><i class="dot t-${f.tool}"></i><b>${TOOLS[f.tool]}</b>${esc(dirText(f))}</span><span class="xrf-t"><i class="xrf-b t-${f.tool}${f.state === 'on' ? ' is-on' : ''}${f.state === 'off' ? ' is-off' : ''}" style="left:${pct(f.start)};width:${pct(f.dur)}"></i><i class="xrf-now" style="left:${pct(now)}"></i></span></div>`).join('')}${run.events.length ? `<div class="xrf"><span class="xrf-l"><i class="dot t-ev"></i><b>Eventos</b></span><span class="xrf-t">${run.events.map(e => `<i class="xrf-e k-${e.kind}${e.state ? ' is-on' : ''}" style="left:${pct(e.at)}" title="${KINDS[e.kind]}: ${esc(evText(e))}"></i>`).join('')}<i class="xrf-now" style="left:${pct(now)}"></i></span></div>` : ''}`;
+      fl.innerHTML = `${run.flows.map(f => `<div class="xrf"><span class="xrf-l"><i class="dot t-${f.tool}"></i><b>${TOOLS[f.tool]}</b>${esc(dirText(f))}</span><span class="xrf-t"><i class="xrf-b t-${f.tool}${f.state === 'on' ? ' is-on' : ''}${f.state === 'off' ? ' is-off' : ''}" style="left:${pct(f.start)};width:${pct(f.dur)}"></i><i class="xrf-now" style="left:${pct(now)}"></i></span></div>`).join('')}${run.events.length ? `<div class="xrf"><span class="xrf-l"><i class="dot t-ev"></i><b>${L`Events`}</b></span><span class="xrf-t">${run.events.map(e => `<i class="xrf-e k-${e.kind}${e.state ? ' is-on' : ''}" style="left:${pct(e.at)}" title="${KINDS[e.kind]}: ${esc(evText(e))}"></i>`).join('')}<i class="xrf-now" style="left:${pct(now)}"></i></span></div>` : ''}`;
     }
     const topo = $('[data-xr-topo]', root);
     const sig = JSON.stringify(run.states || {}) + M.nodes.length;
@@ -770,7 +771,7 @@
     const pre = $('[data-xr-log]', root), atEnd = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     pre.textContent = run.log.join('\n');
     if (atEnd) pre.scrollTop = pre.scrollHeight;
-    $('[data-xr-files]', root).innerHTML = run.files.length ? run.files.slice(-12).map(f => `<li>${icon('i-export')}<code>${esc(f)}</code></li>`).join('') : '<li class="xempty">Os arquivos aparecem ao fim de cada janela.</li>';
+    $('[data-xr-files]', root).innerHTML = run.files.length ? run.files.slice(-12).map(f => `<li>${icon('i-export')}<code>${esc(f)}</code></li>`).join('') : `<li class="xempty">${L`The files appear at the end of each window.`}</li>`;
   }
 
   // ---------------------------------------------------------------- paint and events
@@ -811,17 +812,17 @@
     if (d.bSnap) { view.snap = +d.bSnap; paint(); return; }
     if (d.bBase) { view.sel = { type: 'base', id: d.bBase }; paint(); return; }
     if (d.bFlowwith) {
-      const h = hostOf(P, d.bFlowwith), other = (h?.role === 'Servidor' ? clients(P) : servers(P)).find(x => x.id !== h.id);
-      const f = other && flowBetween(P, h.role === 'Servidor' ? other.id : h.id, h.role === 'Servidor' ? h.id : other.id);
-      if (!f) { R.toast(`Não há ${h?.role === 'Servidor' ? 'cliente' : 'servidor'} para ligar a ${h?.id}. Crie um no desenho.`); return; }
+      const h = hostOf(P, d.bFlowwith), other = (h?.role === 'Server' ? clients(P) : servers(P)).find(x => x.id !== h.id);
+      const f = other && flowBetween(P, h.role === 'Server' ? other.id : h.id, h.role === 'Server' ? h.id : other.id);
+      if (!f) { R.toast(L`There is no ${h?.role === 'Server' ? L`client` : L`server`} to connect to ${h?.id}. Create one in the drawing.`); return; }
       view.sel = { type: 'flow', id: f.id }; paint();
       return;
     }
     if (d.bMode) { view.mode = view.mode === d.bMode && d.bMode !== 'links' ? 'links' : d.bMode; paint(); return; }
     if (d.bSw !== undefined) {
       if (view.mode === 'links') return;
-      const role = view.mode === 'server' ? 'Servidor' : 'Cliente';
-      const h = { id: freeName(P, role === 'Servidor' ? 'ds' : 'cl'), role, sw: d.bSw, ip: freeIp(P), image: role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client' };
+      const role = view.mode === 'server' ? 'Server' : 'Client';
+      const h = { id: freeName(P, role === 'Server' ? 'ds' : 'cl'), role, sw: d.bSw, ip: freeIp(P), image: role === 'Server' ? 'lft-dash-video' : 'lft-dash-client' };
       P.hosts.push(h);
       view.mode = 'links'; view.sel = { type: 'host', id: h.id };
       paint();
@@ -843,7 +844,7 @@
     if (d.fs) {
       const o = selected(P);
       if (!o) return;
-      if (d.fs === 'role' && o.role !== d.v) { o.role = d.v; renameHost(P, o.id, freeName(P, d.v === 'Servidor' ? 'ds' : 'cl')); view.sel.id = o.id; }
+      if (d.fs === 'role' && o.role !== d.v) { o.role = d.v; renameHost(P, o.id, freeName(P, d.v === 'Server' ? 'ds' : 'cl')); view.sel.id = o.id; }
       else if (d.fs === 'tool') { o.tool = d.v; if (d.v !== 'ping' && !servers(P).some(h => h.id === o.server)) o.server = servers(P)[0]?.id || ''; }
       else o[d.fs] = d.fs === 'reverse' ? d.v === '1' : d.v;
       paint();
@@ -877,11 +878,11 @@
     }
     if (d.bSave !== undefined || d.bRun !== undefined) {
       const bad = P.flows.filter(f => !hostOf(P, f.client) || !hostOf(P, f.server)).length;
-      if (bad) { R.toast(`${bad} fluxo${bad > 1 ? 's' : ''} sem cliente ou servidor. Escolha os hosts ou remova o fluxo.`); return; }
+      if (bad) { R.toast(L`${bad} flow${bad > 1 ? 's' : ''} without a client or a server. Choose the hosts or remove the flow.`); return; }
       if (view.idx !== undefined) customs[view.idx] = P; else { customs.unshift(P); view.idx = 0; }
       store('rein-custom-exp', customs.slice(0, 12));
       if (d.bRun !== undefined) startRun(planSpec(P));
-      else R.notify({ source: 'Plano salvo', text: `${P.name}: ${P.snapshots.length} snapshots, ${P.flows.length} fluxos, ${P.hosts.length} hosts novos.`, tone: 'ok' });
+      else R.notify({ source: L`Plan saved`, text: L`${P.name}: ${P.snapshots.length} snapshots, ${P.flows.length} flows, ${P.hosts.length} new hosts.`, tone: 'ok' });
       return;
     }
     if (d.bPy !== undefined) {
@@ -912,11 +913,11 @@
       const v = t.type === 'number' ? +t.value : t.value.trim();
       if (k === 'id') {
         const id = v.toLowerCase();
-        if (id !== o.id && (!/^(cl|ds)\d+$/.test(id) || R.node(id) || P.hosts.some(h => h.id === id))) R.toast('Nome inválido ou em uso: cl ou ds seguido de um número.');
+        if (id !== o.id && (!/^(cl|ds)\d+$/.test(id) || R.node(id) || P.hosts.some(h => h.id === id))) R.toast(L`Invalid name or already in use: cl or ds followed by a number.`);
         else { renameHost(P, o.id, id); view.sel.id = id; }
       } else if (k === 'ip') {
         if (/^192\.168\.0\.([1-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-4])$/.test(v) && !allHosts(P).some(h => h !== o && h.ip === v)) o.ip = v;
-        else R.toast('Endereço inválido ou em uso na rede 192.168.0.0/24.');
+        else R.toast(L`Invalid address or already in use in the network 192.168.0.0/24.`);
       } else if (k === 'sw') {
         const old = `${o.sw}${o.id}`;
         o.sw = v;
@@ -984,8 +985,8 @@
       moved = true;
       const dt = (ev.clientX - x0) / W * T;
       if (isEv) { o.at = clamp(snap(s0 + dt), 0, T - 5); bar.style.left = pct(o.at); bar.dataset.tip = clock(o.at); }
-      else if (resize) { o.dur = clamp(snap(d0 + dt), 5, T - o.start); bar.style.width = pct(o.dur); bar.dataset.tip = `${clock(o.start)} a ${clock(o.start + o.dur)}`; }
-      else { o.start = clamp(snap(s0 + dt), 0, T - o.dur); bar.style.left = pct(o.start); bar.dataset.tip = `${clock(o.start)} a ${clock(o.start + o.dur)}`; }
+      else if (resize) { o.dur = clamp(snap(d0 + dt), 5, T - o.start); bar.style.width = pct(o.dur); bar.dataset.tip = `${clock(o.start)}–${clock(o.start + o.dur)}`; }
+      else { o.start = clamp(snap(s0 + dt), 0, T - o.dur); bar.style.left = pct(o.start); bar.dataset.tip = `${clock(o.start)}–${clock(o.start + o.dur)}`; }
     };
     const up = () => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
@@ -1010,7 +1011,7 @@
   });
   // Shortcuts while editing a plan: undo, redo, delete the selection, Esc to back out
   document.addEventListener('keydown', e => {
-    if (view.name !== 'builder' || R.page !== 'experimentos' || e.defaultPrevented) return;
+    if (view.name !== 'builder' || R.page !== 'experiments' || e.defaultPrevented) return;
     const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
     const mod = e.metaKey || e.ctrlKey;
     if (mod && !typing && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(e.shiftKey ? 1 : -1); return; }
@@ -1023,5 +1024,5 @@
       else if (view.sel) { view.sel = null; paint(); }
     }
   });
-  R.on((type, d) => { if (type === 'page' && d.page === 'experimentos') { if (run?.on && view.name !== 'run') view = { name: 'run' }; paint(); } });
+  R.on((type, d) => { if (type === 'page' && d.page === 'experiments') { if (run?.on && view.name !== 'run') view = { name: 'run' }; paint(); } });
 })();

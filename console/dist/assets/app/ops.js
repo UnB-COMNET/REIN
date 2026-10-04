@@ -45,8 +45,8 @@
   // What tc applies on this interface, as LFT's setInterfaceProperties writes it
   R.ifaceQdisc = i => {
     const l = i.link ? R.link(i.link) : null;
-    if (!l) return 'sem shaping (acesso)';
-    if (l.now.down) return 'link derrubado: ip link set down';
+    if (!l) return L`no shaping (access)`;
+    if (l.now.down) return L`link taken down: ip link set down`;
     return `tbf rate ${R.rateStr(l.now.rate)} · netem delay ${R.fmt(l.now.delay)}ms ${R.fmt(l.now.jitter || 0)}ms${l.now.loss ? ` loss ${R.fmt(l.now.loss)}%` : ''}`;
   };
 
@@ -55,27 +55,27 @@
     const n = R.node(id);
     if (!n) return [];
     if (n.kind === 'switch') return [
-      ['Shell do switch', `sudo docker exec -it ${n.id} bash`],
-      ['Bridge e portas', `sudo docker exec ${n.id} ovs-vsctl show`],
-      ['Fluxos OpenFlow', `sudo docker exec ${n.id} ovs-ofctl -O OpenFlow13 dump-flows ${n.id}`],
-      ['Contadores das portas', `sudo docker exec ${n.id} ovs-ofctl -O OpenFlow13 dump-ports ${n.id}`],
-      ['Controlador', `sudo docker exec ${n.id} ovs-vsctl get-controller ${n.id}`],
-      ['No ONOS', `curl -u onos:rocks ${R.env.onos.rest}/devices/${encodeURIComponent(n.dpid)}`],
+      [L`Switch shell`, `sudo docker exec -it ${n.id} bash`],
+      [L`Bridge and ports`, `sudo docker exec ${n.id} ovs-vsctl show`],
+      [L`OpenFlow flows`, `sudo docker exec ${n.id} ovs-ofctl -O OpenFlow13 dump-flows ${n.id}`],
+      [L`Port counters`, `sudo docker exec ${n.id} ovs-ofctl -O OpenFlow13 dump-ports ${n.id}`],
+      [L`Controller`, `sudo docker exec ${n.id} ovs-vsctl get-controller ${n.id}`],
+      [L`In ONOS`, `curl -u onos:rocks ${R.env.onos.rest}/devices/${encodeURIComponent(n.dpid)}`],
     ];
-    const server = n.role === 'Servidor';
-    const peer = server ? R.hosts().find(h => h.role === 'Cliente') : R.hosts().find(h => h.role === 'Servidor');
+    const server = n.role === 'Server';
+    const peer = server ? R.hosts().find(h => h.role === 'Client') : R.hosts().find(h => h.role === 'Server');
     const rows = [
-      ['Shell do host', `sudo docker exec -it ${n.id} bash`],
-      ['Endereços e rotas', `sudo ip netns exec ${n.id} ip -br addr; sudo ip netns exec ${n.id} ip route`],
+      [L`Host shell`, `sudo docker exec -it ${n.id} bash`],
+      [L`Addresses and routes`, `sudo ip netns exec ${n.id} ip -br addr; sudo ip netns exec ${n.id} ip route`],
       ['Ping', `sudo docker exec ${n.id} ping -c 4 ${peer?.ip || '192.168.0.1'}`],
     ];
-    if (server) rows.push(['Servidor iperf3', `sudo docker exec -d ${n.id} bash -lc "iperf3 -s -p 5201 --idle-timeout 5 </dev/null >/tmp/iperf3-5201.log 2>&1"`], ['Log do servidor', `sudo docker exec ${n.id} tail -f /tmp/iperf3-5201.log`]);
-    else rows.push(['Cliente iperf3', `sudo docker exec ${n.id} iperf3 -c ${peer?.ip || '192.168.0.1'} -p 5201 -t 60 -i 1 -b 35M --fq-rate 35M --forceflush -J > results/iperf/manual/${n.id}.json`]);
-    if (R.hasVideo(n)) rows.push(['Cliente DASH', `sudo docker exec ${n.id} ${n.image === 'lft-pydash-client' ? 'pydash-play' : 'dash-play'} ${peer?.ip || '192.168.0.1'} 60`]);
-    rows.push(['Pelo LFT', server ? `sudo lft traffic start --tool ping --client ${peer?.id || 'cl0'} --server ${n.id} --duration 30` : `sudo lft traffic start --client ${n.id} --server ${peer?.id || 'ds0'} --duration 30 --rate 35M`]);
+    if (server) rows.push([L`iperf3 server`, `sudo docker exec -d ${n.id} bash -lc "iperf3 -s -p 5201 --idle-timeout 5 </dev/null >/tmp/iperf3-5201.log 2>&1"`], [L`Server log`, `sudo docker exec ${n.id} tail -f /tmp/iperf3-5201.log`]);
+    else rows.push([L`iperf3 client`, `sudo docker exec ${n.id} iperf3 -c ${peer?.ip || '192.168.0.1'} -p 5201 -t 60 -i 1 -b 35M --fq-rate 35M --forceflush -J > results/iperf/manual/${n.id}.json`]);
+    if (R.hasVideo(n)) rows.push([L`DASH client`, `sudo docker exec ${n.id} ${n.image === 'lft-pydash-client' ? 'pydash-play' : 'dash-play'} ${peer?.ip || '192.168.0.1'} 60`]);
+    rows.push([L`Through LFT`, server ? `sudo lft traffic start --tool ping --client ${peer?.id || 'cl0'} --server ${n.id} --duration 30` : `sudo lft traffic start --client ${n.id} --server ${peer?.id || 'ds0'} --duration 30 --rate 35M`]);
     return rows;
   };
-  R.cliList = rows => `<div class="cli">${rows.map(([t, c]) => `<div class="cli-row"><span>${esc(t)}</span><code>${esc(c)}</code><button type="button" class="ico cli-copy" data-copy-text="${esc(c)}" aria-label="Copiar comando">${R.icon('i-copy')}</button></div>`).join('')}</div>`;
+  R.cliList = rows => `<div class="cli">${rows.map(([t, c]) => `<div class="cli-row"><span>${esc(t)}</span><code>${esc(c)}</code><button type="button" class="ico cli-copy" data-copy-text="${esc(c)}" aria-label="${L`Copy command`}">${R.icon('i-copy')}</button></div>`).join('')}</div>`;
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-copy-text]');
     if (!b) return;
@@ -93,7 +93,7 @@
     hud = document.createElement('section');
     hud.className = 'activity';
     hud.setAttribute('aria-live', 'polite');
-    hud.setAttribute('aria-label', 'Atividade');
+    hud.setAttribute('aria-label', L`Activity`);
     document.body.append(hud);
     hud.addEventListener('click', e => { const j = e.target.closest('[data-job]'); if (j) j.classList.toggle('is-open'); });
     return hud;
@@ -104,8 +104,8 @@
     const done = j.i >= j.steps.length, cur = j.steps[Math.min(j.i, j.steps.length - 1)];
     el.classList.toggle('is-done', done);
     el.classList.toggle('is-err', !!j.error);
-    el.innerHTML = `<div class="job-h"><span class="job-ic">${done ? (j.error ? R.icon('i-x') : R.icon('i-check')) : '<i class="spinner"></i>'}</span><b>${esc(j.title)}</b><em>${done ? (j.error ? 'falhou' : 'pronto') : `${j.i + 1}/${j.steps.length}`}</em></div>
-      <p class="job-s">${esc(done ? (j.error || j.doneText || 'Concluído.') : cur[0])}</p>
+    el.innerHTML = `<div class="job-h"><span class="job-ic">${done ? (j.error ? R.icon('i-x') : R.icon('i-check')) : '<i class="spinner"></i>'}</span><b>${esc(j.title)}</b><em>${done ? (j.error ? L`failed` : L`done`) : `${j.i + 1}/${j.steps.length}`}</em></div>
+      <p class="job-s">${esc(done ? (j.error || j.doneText || L`Done.`) : cur[0])}</p>
       <div class="job-bar"><i style="width:${(Math.min(j.i, j.steps.length) / j.steps.length * 100).toFixed(1)}%"></i></div>
       <pre class="job-log">${j.steps.slice(0, Math.min(j.i + 1, j.steps.length)).map(s => `<span>$ ${esc(s[1])}</span>`).join('\n')}</pre>`;
   }
@@ -153,16 +153,16 @@
         title: `${iperf ? 'iperf3' : 'DASH'} ${o.reverse || !iperf ? `${s.id} → ${c.id}` : `${c.id} → ${s.id}`}`,
         nodes: [c.id, s.id],
         steps: iperf
-          ? [[`Servidor iperf3 em ${s.id}:${o.port}`, serverCmd, 700], [`Diretório de resultados`, `mkdir -p ${o.out}`, 300], [`Cliente iperf3 em ${c.id}`, clientCmd, 900]]
-          : [[`Manifesto DASH em ${s.id}`, serverCmd, 700], [`Diretório de resultados`, `mkdir -p ${o.out}`, 300], [`dash-client em ${c.id}`, clientCmd, 900]],
-        doneText: `Gravando em ${file}`,
+          ? [[L`iperf3 server on ${s.id}:${o.port}`, serverCmd, 700], [L`Results directory`, `mkdir -p ${o.out}`, 300], [L`iperf3 client on ${c.id}`, clientCmd, 900]]
+          : [[L`DASH manifest at ${s.id}`, serverCmd, 700], [L`Results directory`, `mkdir -p ${o.out}`, 300], [L`dash-client on ${c.id}`, clientCmd, 900]],
+        doneText: L`Writing to ${file}`,
       });
       if (sess.status === 'stopped') return sess;
       sess.status = 'running'; sess.t0 = Date.now();
       const iperfHead = [`Connecting to host ${s.ip}, port ${o.port}`, o.reverse ? `Reverse mode, remote host ${s.ip} is sending` : '', `[  5] local ${c.ip} port ${43500 + seq} connected to ${s.ip} port ${o.port}`, o.proto === 'udp' ? '[ ID] Interval           Transfer     Bitrate         Total Datagrams' : '[ ID] Interval           Transfer     Bitrate         Retr  Cwnd'].filter(Boolean);
       sess.lines.client.push(...(iperf ? iperfHead : [`dash-client: negotiate http://${s.ip}/negotiate/dash`, 'dash-client: start collecting']));
       sess.lines.server.push(...(iperf ? ['-----------------------------------------------------------', `Server listening on ${o.port} (test #1)`, '-----------------------------------------------------------', `Accepted connection from ${c.ip}, port ${43499 + seq}`, `[  5] local ${s.ip} port ${o.port} connected to ${c.ip} port ${43500 + seq}`] : [`${s.ip} nginx: ready, root /usr/share/nginx/html`]));
-      R.log('Testbed', `Tráfego ${iperf ? 'iperf3' : 'DASH'} ${c.id}↔${s.id} iniciado. Saída em ${file}.`);
+      R.log('Testbed', L`${iperf ? 'iperf3' : 'DASH'} traffic ${c.id}↔${s.id} started. Output in ${file}.`);
       R.emit('traffic', { id });
       return sess;
     },
@@ -172,10 +172,10 @@
       sess.status = 'stopped';
       const secs = sess.t0 ? (Date.now() - sess.t0) / 1000 : 0;
       if (sess.tool === 'iperf3') {
-        sess.lines.client.push('- - - - - - - - - - - - - - - - - - - - - - - - -', `[  5]   0.00-${secs.toFixed(2)}  sec  ${(sess.bytes / 1048576).toFixed(1)} MBytes  ${R.fmt1(sess.bytes * 8 / 1e6 / Math.max(1, secs))} Mbits/sec                  sender`, 'iperf3: interrupt - the client has terminated', `JSON gravado em ${sess.file}`);
+        sess.lines.client.push('- - - - - - - - - - - - - - - - - - - - - - - - -', `[  5]   0.00-${secs.toFixed(2)}  sec  ${(sess.bytes / 1048576).toFixed(1)} MBytes  ${R.fmt1(sess.bytes * 8 / 1e6 / Math.max(1, secs))} Mbits/sec                  sender`, 'iperf3: interrupt - the client has terminated', L`JSON written to ${sess.file}`);
         sess.lines.server.push('-----------------------------------------------------------', `Server listening on ${sess.port} (test #2)`, '-----------------------------------------------------------');
-      } else sess.lines.client.push(`dash-client: stopped, ${sess.lines.client.length - 2} segmentos, resultado em ${sess.file}`);
-      R.log('Testbed', `Tráfego ${sess.client}↔${sess.server} parado. Resultado em ${sess.file}.`);
+      } else sess.lines.client.push(L`dash-client: stopped, ${sess.lines.client.length - 2} segments, result in ${sess.file}`);
+      R.log('Testbed', L`Traffic ${sess.client}↔${sess.server} stopped. Result in ${sess.file}.`);
       R.emit('traffic', { id });
     },
     // Current rate on each link from the running sessions (Mb/s)
@@ -204,13 +204,13 @@
       const a = x.n - 1, b = x.n;
       const iv = `${String(a.toFixed(2)).padStart(6)}-${b.toFixed(2).padEnd(6)}`;
       if (x.tool === 'iperf3') {
-        if (pol.blocked) x.lines.client.push(`[  5] ${iv} sec  0.00 Bytes  0.00 bits/sec    3   1.41 KBytes   (${x.proto.toUpperCase()} bloqueado no switch do cliente)`);
+        if (pol.blocked) x.lines.client.push(L`[  5] ${iv} sec  0.00 Bytes  0.00 bits/sec    3   1.41 KBytes   (${x.proto.toUpperCase()} blocked at the client's switch)`);
         else x.lines.client.push(`[  5] ${iv} sec  ${(x.rateNow / 8).toFixed(2)} MBytes  ${x.rateNow.toFixed(1)} Mbits/sec    ${x.proto === 'udp' ? Math.round(x.rateNow * 86) : Math.random() < .08 ? 1 : 0}    ${Math.round(160 + x.rateNow * 4)} KBytes`);
         x.lines.server.push(`[  5] ${iv} sec  ${(x.rateNow / 8).toFixed(2)} MBytes  ${x.rateNow.toFixed(1)} Mbits/sec`);
       } else {
         const rung = R.ladder.find(([, br]) => br <= x.rateNow * 0.9);
         x.lines.client.push(rung ? `{"iteration": ${Math.floor(t)}, "rate": ${rung[1] * 1000}, "elapsed": ${(rung[1] * 2 / Math.max(.2, x.rateNow)).toFixed(3)}, "speed_kbps": ${Math.round(x.rateNow * 1000)}, "resolution": "${rung[0]}"}` : `{"iteration": ${Math.floor(t)}, "error": "buffer underrun, rebuffering"}`);
-        x.lines.server.push(`${s.ip} - - [${new Date().toLocaleTimeString('pt-BR')}] "GET /dash/${rung ? rung[0] : '240p'}/seg-${Math.floor(t)}.m4s HTTP/1.1" 200 ${Math.round((rung?.[1] || .3) * 250000)}`);
+        x.lines.server.push(`${s.ip} - - [${new Date().toLocaleTimeString('en-GB')}] "GET /dash/${rung ? rung[0] : '240p'}/seg-${Math.floor(t)}.m4s HTTP/1.1" 200 ${Math.round((rung?.[1] || .3) * 250000)}`);
       }
       if (x.lines.client.length > 400) x.lines.client.splice(0, 100);
       if (x.lines.server.length > 400) x.lines.server.splice(0, 100);
@@ -223,9 +223,9 @@
   // From deployer/nile.py (GET /capabilities): cdn-qoe picks server and path; set bandwidth('max') and
   // block/allow protocol are rules at the target's own switch (deployer/edge.py).
   R.SERVICES = [
-    { id: 'cdn-qoe', name: 'CDN-QoE', ic: 'i-play', tone: 'blue', what: 'Escolhe o servidor DASH de menor RTT e o caminho de maior vazão até o cliente. O supervisor pede novo caminho quando a latência passa do limite.', status: 'ok' },
-    { id: 'bandwidth', name: 'Limite de banda', ic: 'i-bolt', tone: 'teal', what: 'Um meter OpenFlow com banda DROP no switch do alvo limita o que chega a ele. Um novo limite substitui o anterior.', status: 'ok' },
-    { id: 'acl', name: 'Bloqueio e liberação', ic: 'i-shield', tone: 'graphite', what: 'Descarta o protocolo nos dois sentidos, no switch do alvo: TCP, UDP, ICMP, ou SSH, HTTP e HTTPS pela porta TCP. Liberar desfaz o bloqueio.', status: 'ok' },
+    { id: 'cdn-qoe', name: 'CDN-QoE', ic: 'i-play', tone: 'blue', what: L`Picks the DASH server of lowest RTT and the path of highest throughput to the client. The supervisor asks for a new path when the latency goes above the limit.`, status: 'ok' },
+    { id: 'bandwidth', name: L`Bandwidth limit`, ic: 'i-bolt', tone: 'teal', what: L`An OpenFlow meter with a DROP band at the target's switch limits what reaches it. A new limit replaces the previous one.`, status: 'ok' },
+    { id: 'acl', name: L`Block and allow`, ic: 'i-shield', tone: 'graphite', what: L`Drops the protocol both ways, at the target's switch: TCP, UDP, ICMP, or SSH, HTTP and HTTPS by the TCP port. Allow undoes the block.`, status: 'ok' },
   ];
   R.serviceNile = (sid, v, id) => {
     const ep = `endpoint('${v.ip}')`;

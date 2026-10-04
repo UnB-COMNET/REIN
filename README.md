@@ -52,7 +52,7 @@ rein logs <service>
 rein down        # stops everything, --keep-testbed leaves the testbed running
 ```
 
-`rein up --topology <preset or file>` builds another testbed. Monitoramento reads what the collector module stores (`collector/`, with its OpenTelemetry collector and ClickHouse on 127.0.0.1) when the checkout has it.
+`rein up --topology <preset or file>` builds another testbed. The console is in English, with Portuguese as an option in its header. Its Monitoring page reads what the collector module stores (`collector/`, with its OpenTelemetry collector and ClickHouse on 127.0.0.1) when the checkout has it.
 
 ### The model that translates the requests
 
@@ -65,7 +65,7 @@ The models run on the machine itself, with vLLM ([`llm/compose.yml`](./llm/compo
 
 With less than 3 GB of VRAM free, or no NVIDIA GPU, no model runs. The chat then takes the intent written in Nile, which it accepts on any machine: a request that starts with `define intent` goes to approval as written, with no model.
 
-`rein model lite` puts another model in use, as the console's model menu does: the model REIN started is stopped, so its memory counts as free. One that does not fit is refused. The menu's **Nile direto** sends the intents as written, with no model.
+`rein model lite` puts another model in use, as the console's model menu does: the model REIN started is stopped, so its memory counts as free. One that does not fit is refused. The menu's **Direct Nile** sends the intents as written, with no model.
 
 A model that another machine on the network serves is declared in `llm/models.local.yaml`, a file of the machine that stays out of git ([`llm/models.local.example.yaml`](./llm/models.local.example.yaml)). It is used wherever its server answers, and REIN never starts or stops it.
 

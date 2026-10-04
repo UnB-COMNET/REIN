@@ -1,4 +1,4 @@
-/* Módulos: the REIN services and their session logs. */
+/* Modules: the REIN services and their session logs. */
 (() => {
   'use strict';
   const R = window.REIN, M = R.model, $ = R.$, $$ = R.$$, G = window.gsap;
@@ -6,7 +6,7 @@
   const esc = R.esc, icon = R.icon;
   const clock = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const clamp = (v, min, max) => Math.max(min, Math.min(max, Number(v) || min));
-  const word = a => ({ ok: 'Normal', warn: 'Degradado', down: 'Fora' }[a] || 'Normal');
+  const word = a => ({ ok: 'Normal', warn: L`Degraded`, down: L`Down` }[a] || 'Normal');
   const stateIcon = a => a === 'down' ? icon('i-x') : a === 'warn' ? icon('i-bolt') : icon('i-check');
   let motion = null, inspectMotion = null, cycleMotion = null, signalMotion = null, timelineWidth = 0;
   const timelineSize = new ResizeObserver(entries => { timelineWidth = entries[0]?.contentRect.width || 0; });
@@ -29,8 +29,8 @@
     }, el);
   }
   async function copy(text, label) {
-    try { await navigator.clipboard.writeText(text); R.toast(label || 'Copiado.'); }
-    catch { R.toast('Não foi possível copiar. Selecione o texto e copie manualmente.'); }
+    try { await navigator.clipboard.writeText(text); R.toast(label || L`Copied.`); }
+    catch { R.toast(L`Could not copy. Select the text and copy it by hand.`); }
   }
   function download(name, body) {
     const href = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' }));
@@ -40,22 +40,22 @@
   const segmented = (name, options, current, attr) => `<div class="st-segment" role="group" aria-label="${name}" style="--count:${options.length};--selected:${Math.max(0, options.findIndex(([v]) => v === current))}"><i aria-hidden="true"></i>${options.map(([v, label]) => `<button type="button" ${attr}="${v}" aria-pressed="${v === current}">${label}</button>`).join('')}</div>`;
 
   // --------------------------------------------------------------- experiment plan
-  // Experiments moved to experiments.js; this file keeps the Módulos page.
+  // Experiments moved to experiments.js; this file keeps the Modules page.
 
   // --------------------------------------------------------------- service constellation
   const SERVICES = [
-    {id:'profiler',name:'Intent profiler',short:'Profiler',verb:'Compreende',icon:'i-chat',port:5300,source:'Profiler',intro:'Profiling e tradução para Nile.',description:'Contextualiza o pedido no inventário, consulta exemplos e traduz os requisitos para Nile. A implantação acontece depois da sua aprovação.'},
-    {id:'deployer',name:'Deployer',short:'Deployer',verb:'Implanta',icon:'i-deployer',port:5000,source:'Deployer',intro:'Validação e implantação de fluxos.',description:'Valida sintaxe e capacidade, reconstrói o grafo do ONOS e instala os fluxos. Quando necessário, recebe pedidos de recálculo do supervisor.'},
-    {id:'supervisor',name:'Supervisor',short:'Supervisor',verb:'Acompanha',icon:'i-shield',port:5151,source:'Supervisor',intro:'Monitoramento e detecção de desvios.',description:'Acompanha cada fluxo, identifica desvios de vazão e latência e solicita um novo caminho quando a intent deixa de ser atendida.'}
+    {id:'profiler',name:'Intent profiler',short:'Profiler',verb:L`Understands`,icon:'i-chat',port:5300,source:'Profiler',intro:L`Profiling and translation to Nile.`,description:L`Puts the request in the context of the inventory, looks up examples and translates the requirements to Nile. The deployment happens after your approval.`},
+    {id:'deployer',name:'Deployer',short:'Deployer',verb:L`Deploys`,icon:'i-deployer',port:5000,source:'Deployer',intro:L`Validation and deployment of flows.`,description:L`Validates syntax and capability, rebuilds ONOS's graph and installs the flows. When needed, it takes recalculation requests from the supervisor.`},
+    {id:'supervisor',name:'Supervisor',short:'Supervisor',verb:L`Follows`,icon:'i-shield',port:5151,source:'Supervisor',intro:L`Monitoring and drift detection.`,description:L`Follows each flow, identifies drifts in throughput and latency and asks for a new path when the intent is no longer met.`}
   ];
-  const baseLogs={Profiler:[['14:20:08','Index: 6.412 examples, 914 skeletons'],['14:20:09','Model qwen3.6 awake at gpu.mfcaetano.lan:8000'],['14:26:40','POST /profile thread q1, 3 steps, 1,7 s'],['14:28:10','q1 approved, sent to deployer']],Deployer:[['14:20:02','Grammar loaded from nile.lark'],['14:20:03','ONOS graph: 4 devices, 8 links'],['14:28:11',"POST /deploy q1 200: add service('cdn-qoe'), server ds0"],['14:28:12','6 flows installed']],Supervisor:[['14:20:05','SUPERVISOR_MODE=threshold'],['14:28:13','Monitor started for 192.168.0.2'],['14:31:04','Latency s0-s1 132 ms above limit','warn'],['14:31:05','POST /deploy/recalculate']]};
+  const baseLogs={Profiler:[['14:20:08','Index: 6,412 examples, 914 skeletons'],['14:20:09','Model llama awake at 127.0.0.1:8001'],['14:26:40','POST /profile thread q1, 3 steps, 1,7 s'],['14:28:10','q1 approved, sent to deployer']],Deployer:[['14:20:02','Grammar loaded from nile.lark'],['14:20:03','ONOS graph: 4 devices, 8 links'],['14:28:11',"POST /deploy q1 200: add service('cdn-qoe'), server ds0"],['14:28:12','6 flows installed']],Supervisor:[['14:20:05','SUPERVISOR_MODE=threshold'],['14:28:13','Monitor started for 192.168.0.2'],['14:31:04','Latency s0-s1 132 ms above limit','warn'],['14:31:05','POST /deploy/recalculate']]};
   let moduleId='profiler', moduleTab='overview', logQuery='', cyclePlaying=false;
   const ACCESS=/"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) \S+ HTTP\/[\d.]+" \d{3}/; // a request, as Flask's server logs it
   const service=()=>SERVICES.find(x=>x.id===moduleId);
   function facts(s) {
-    if(s.id==='profiler')return [['Endereço','127.0.0.1:5300'],['Modelo',R.state.model||'Nile direto'],['RAG','NEAT: 256.913 pares, 914 esqueletos'],['Seeds REIN','data/seeds_rein.tsv'],['Decodificação restrita','Desligada'],['Endpoints','/profile (SSE), /profile/<thread>/resume, /models, /events']];
-    if(s.id==='deployer')return [['Endereço','127.0.0.1:5000'],['Intents instaladas',M.intents.filter(i=>i.state==='deployed').length],['Grafo do ONOS',`${R.switches().length} switches, ${M.links.length} links`],['Validação','Lark / nile.lark'],['Respostas','400: sintaxe / 422: não executável'],['Endpoints','/deploy, /deploy/recalculate, /capabilities, /intents, /metrics']];
-    return [['Endereço','127.0.0.1:5151'],['Modo','threshold'],['Monitores',R.clientsList().map(c=>c.ip).join(', ')||'nenhum'],['Limite de RTT','200 ms'],['LLM','gpu.mfcaetano.lan:8000'],['Endpoints','/supervise, /metrics, /metrics/reset, /metrics/degrade']];
+    if(s.id==='profiler')return [[L`Address`,'127.0.0.1:5300'],[L`Model`,R.state.model||L`Direct Nile`],['RAG',L`NEAT: 256,913 pairs, 914 skeletons`],['Seeds REIN','data/seeds_rein.tsv'],[L`Constrained decoding`,L`Off`],['Endpoints','/profile (SSE), /profile/<thread>/resume, /models, /events']];
+    if(s.id==='deployer')return [[L`Address`,'127.0.0.1:5000'],[L`Installed intents`,M.intents.filter(i=>i.state==='deployed').length],[L`ONOS graph`,`${R.switches().length} switches, ${M.links.length} links`],[L`Validation`,'Lark / nile.lark'],[L`Answers`,L`400: syntax / 422: not executable`],['Endpoints','/deploy, /deploy/recalculate, /capabilities, /intents, /metrics']];
+    return [[L`Address`,'127.0.0.1:5151'],[L`Mode`,'threshold'],[L`Monitors`,R.clientsList().map(c=>c.ip).join(', ')||L`none`],[L`RTT limit`,'200 ms'],['LLM','127.0.0.1:8001'],['Endpoints','/supervise, /metrics, /metrics/reset, /metrics/degrade']];
   }
   function logs(s) {
     const fresh=M.events.filter(e=>e.source===s.source).slice(-12).map(e=>[e.time,e.text,e.tone]);
@@ -64,16 +64,16 @@
     return (live||[...baseLogs[s.source],...fresh,...asks]).filter(row=>!(R.state.quietLogs&&ACCESS.test(row[1]))&&row.join(' ').toLocaleLowerCase().includes(logQuery.toLocaleLowerCase()));
   }
   function logRows(s, previewOnly=false) {
-    const rows=logs(s);return (previewOnly?rows.slice(-4):rows).map(([t,text,tone])=>`<div class="st-log-row" data-level="${tone==='warn'?'warn':tone==='down'?'error':'info'}"><time>${esc(t)}</time><span>${tone==='warn'?'Aviso':tone==='down'?'Erro':'Info'}</span><code>${esc(text)}</code></div>`).join('')||'<p class="st-empty">Nenhum registro corresponde à busca.</p>';
+    const rows=logs(s);return (previewOnly?rows.slice(-4):rows).map(([t,text,tone])=>`<div class="st-log-row" data-level="${tone==='warn'?'warn':tone==='down'?'error':'info'}"><time>${esc(t)}</time><span>${tone==='warn'?L`Warning`:tone==='down'?L`Error`:'Info'}</span><code>${esc(text)}</code></div>`).join('')||`<p class="st-empty">${L`No record matches the search.`}</p>`;
   }
   function modulePanel() {
     const s=service();
-    if(moduleTab==='logs')return `<div class="st-log-view"><div class="st-detail-toolbar"><label class="st-search">${icon('i-search')}<input type="search" data-log-search aria-label="Buscar no log" placeholder="Buscar no log" value="${esc(logQuery)}"></label><div class="st-toolbar-actions"><button class="st-button" data-module-action="quiet-logs" aria-pressed="${R.state.quietLogs}">${icon('i-sliders')}Ocultar requisições</button><button class="st-button" data-module-action="copy-logs">${icon('i-copy')}Copiar log</button></div></div><div class="st-log-full" data-log-rows>${logRows(s)}</div><p class="st-small-note">Registros ilustrativos e eventos desta sessão.</p></div>`;
-    if(moduleTab==='config')return `<div class="st-configuration"><div class="st-detail-toolbar"><div><h3>Configuração do serviço</h3><p>Parâmetros disponíveis nesta demonstração.</p></div><button class="st-icon-button" data-module-action="copy-config" aria-label="Copiar configuração" title="Copiar configuração">${icon('i-copy')}</button></div><dl class="st-facts">${facts(s).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${s.id==='deployer'?`<h3 class="st-cap-heading">Capacidades</h3><ul class="st-capabilities">${[["add | remove service('cdn-qoe')",'Executa','ok'],["set | unset bandwidth('max', …)",'Executa','ok'],['block | allow protocol(…)','Executa','ok'],['add middlebox','Não executa','neutral'],['start / end date','Não executa','neutral']].map(([a,b,c])=>`<li><code>${esc(a)}</code><span data-state="${c}">${c==='ok'?icon('i-check'):c==='warn'?icon('i-info'):icon('i-minus')}${b}</span></li>`).join('')}</ul>`:''}</div>`;
-    return `<div class="st-overview"><section class="st-module-story"><span class="st-caption">${s.verb} a intenção</span><h3>${s.intro}</h3><p>${s.description}</p><dl class="st-module-facts">${facts(s).slice(1,3).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><button class="st-text-button" data-module-tab="config">Ver configuração ${icon('i-chevron-right')}</button></section><section class="st-recent"><div><h3>Atividade recente</h3><button class="st-icon-button" data-module-tab="logs" aria-label="Abrir log completo" title="Abrir log completo">${icon('i-chevron-right')}</button></div><div data-log-rows>${logRows(s,true)}</div><p class="st-small-note">Dados de demonstração</p></section></div>`;
+    if(moduleTab==='logs')return `<div class="st-log-view"><div class="st-detail-toolbar"><label class="st-search">${icon('i-search')}<input type="search" data-log-search aria-label="${L`Search the log`}" placeholder="${L`Search the log`}" value="${esc(logQuery)}"></label><div class="st-toolbar-actions"><button class="st-button" data-module-action="quiet-logs" aria-pressed="${R.state.quietLogs}">${L`${icon('i-sliders')}Hide requests`}</button><button class="st-button" data-module-action="copy-logs">${L`${icon('i-copy')}Copy log`}</button></div></div><div class="st-log-full" data-log-rows>${logRows(s)}</div><p class="st-small-note">${L`Illustrative records and events of this session.`}</p></div>`;
+    if(moduleTab==='config')return `<div class="st-configuration"><div class="st-detail-toolbar"><div><h3>${L`Service configuration`}</h3><p>${L`Parameters available in this demonstration.`}</p></div><button class="st-icon-button" data-module-action="copy-config" aria-label="${L`Copy configuration`}" title="${L`Copy configuration`}">${icon('i-copy')}</button></div><dl class="st-facts">${facts(s).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${s.id==='deployer'?`<h3 class="st-cap-heading">${L`Capabilities`}</h3><ul class="st-capabilities">${[["add | remove service('cdn-qoe')",L`Executes`,'ok'],["set | unset bandwidth('max', …)",L`Executes`,'ok'],['block | allow protocol(…)',L`Executes`,'ok'],['add middlebox',L`Does not execute`,'neutral'],['start / end date',L`Does not execute`,'neutral']].map(([a,b,c])=>`<li><code>${esc(a)}</code><span data-state="${c}">${c==='ok'?icon('i-check'):c==='warn'?icon('i-info'):icon('i-minus')}${b}</span></li>`).join('')}</ul>`:''}</div>`;
+    return `<div class="st-overview"><section class="st-module-story"><span class="st-caption">${L`${s.verb} the intent`}</span><h3>${s.intro}</h3><p>${s.description}</p><dl class="st-module-facts">${facts(s).slice(1,3).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><button class="st-text-button" data-module-tab="config">${L`See the ${icon('i-chevron-right')} configuration`}</button></section><section class="st-recent"><div><h3>${L`Recent activity`}</h3><button class="st-icon-button" data-module-tab="logs" aria-label="${L`Open the full log`}" title="${L`Open the full log`}">${icon('i-chevron-right')}</button></div><div data-log-rows>${logRows(s,true)}</div><p class="st-small-note">${L`Demonstration data`}</p></section></div>`;
   }
   function renderModules(animate=false) {
-    mods.innerHTML=`<div class="st-modules"><section class="st-service-stage" data-enter><div class="st-service-heading"><div><span class="st-caption">Ciclo da intent</span><h2>Serviços do REIN</h2></div><button class="st-button" data-module-action="cycle">${icon('i-play')}<span>Observar ciclo</span></button></div><div class="st-constellation" role="tablist" aria-label="Serviços do REIN"><div class="st-service-wire" aria-hidden="true"><i data-cycle-line></i><b data-cycle-packet></b></div>${SERVICES.map(s=>`<button class="st-service" type="button" id="service-${s.id}" role="tab" aria-controls="service-detail" aria-selected="${s.id===moduleId}" tabindex="${s.id===moduleId?0:-1}" data-service="${s.id}"><span class="st-service-object">${icon(s.icon)}<i class="st-service-check">${icon('i-check')}</i></span><strong>${s.short}</strong><span>${s.verb}</span><small>Ativo <i></i> :${s.port}</small></button>`).join('')}</div><div class="st-cycle-caption" data-cycle-caption aria-live="polite">Selecione um serviço para inspecionar sua configuração.</div></section><section class="st-module-detail" role="tabpanel" id="service-detail" aria-labelledby="service-${moduleId}" data-enter><header class="st-module-detail-head"><div><h2 data-service-title>${service().name}</h2><button class="st-endpoint" data-module-action="copy-address" title="Copiar endereço">127.0.0.1:<span data-service-port>${service().port}</span>${icon('i-copy')}</button></div><span class="st-health">${icon('i-check')}Ativo na demonstração</span></header><div class="st-module-tabs" role="tablist" aria-label="Inspeção do módulo"><i data-module-indicator aria-hidden="true"></i>${[['overview','Visão geral'],['config','Configuração'],['logs','Log da sessão']].map(([v,t],i)=>`<button role="tab" id="service-tab-${v}" aria-controls="service-content" aria-selected="${moduleTab===v}" tabindex="${moduleTab===v?0:-1}" data-module-tab="${v}">${t}</button>`).join('')}</div><div id="service-content" role="tabpanel" aria-labelledby="service-tab-${moduleTab}" data-module-content>${modulePanel()}</div></section></div>`;
+    mods.innerHTML=`<div class="st-modules"><section class="st-service-stage" data-enter><div class="st-service-heading"><div><span class="st-caption">${L`Intent cycle`}</span><h2>${L`REIN services`}</h2></div><button class="st-button" data-module-action="cycle">${icon('i-play')}<span>${L`Watch the cycle`}</span></button></div><div class="st-constellation" role="tablist" aria-label="${L`REIN services`}"><div class="st-service-wire" aria-hidden="true"><i data-cycle-line></i><b data-cycle-packet></b></div>${SERVICES.map(s=>`<button class="st-service" type="button" id="service-${s.id}" role="tab" aria-controls="service-detail" aria-selected="${s.id===moduleId}" tabindex="${s.id===moduleId?0:-1}" data-service="${s.id}"><span class="st-service-object">${icon(s.icon)}<i class="st-service-check">${icon('i-check')}</i></span><strong>${s.short}</strong><span>${s.verb}</span><small>${L`Up`} <i></i> :${s.port}</small></button>`).join('')}</div><div class="st-cycle-caption" data-cycle-caption aria-live="polite">${L`Select a service to inspect its configuration.`}</div></section><section class="st-module-detail" role="tabpanel" id="service-detail" aria-labelledby="service-${moduleId}" data-enter><header class="st-module-detail-head"><div><h2 data-service-title>${service().name}</h2><button class="st-endpoint" data-module-action="copy-address" title="${L`Copy address`}">127.0.0.1:<span data-service-port>${service().port}</span>${icon('i-copy')}</button></div><span class="st-health">${L`${icon('i-check')}Up in the demonstration`}</span></header><div class="st-module-tabs" role="tablist" aria-label="${L`Module inspection`}"><i data-module-indicator aria-hidden="true"></i>${[['overview',L`Overview`],['config',L`Configuration`],['logs',L`Session log`]].map(([v,t],i)=>`<button role="tab" id="service-tab-${v}" aria-controls="service-content" aria-selected="${moduleTab===v}" tabindex="${moduleTab===v?0:-1}" data-module-tab="${v}">${t}</button>`).join('')}</div><div id="service-content" role="tabpanel" aria-labelledby="service-tab-${moduleTab}" data-module-content>${modulePanel()}</div></section></div>`;
     positionModuleIndicator(false);if(animate)entrance(mods);
   }
   function positionModuleIndicator(animate=true) {
@@ -96,19 +96,19 @@
   }
   function stopCycle() {
     cycleMotion?.revert();cycleMotion=null;cyclePlaying=false;
-    const b=$('[data-module-action="cycle"]',mods);if(b)b.innerHTML=icon('i-play')+'<span>Observar ciclo</span>';
+    const b=$('[data-module-action="cycle"]',mods);if(b)b.innerHTML=icon('i-play')+`<span>${L`Watch the cycle`}</span>`;
     $$('.st-service',mods).forEach(el=>el.classList.remove('is-processing'));
-    const caption=$('[data-cycle-caption]',mods);if(caption)caption.textContent='Selecione um serviço para inspecionar sua configuração.';
+    const caption=$('[data-cycle-caption]',mods);if(caption)caption.textContent=L`Select a service to inspect its configuration.`;
   }
   function playCycle() {
     if(cyclePlaying){stopCycle();return;}cycleMotion?.revert();cyclePlaying=true;
-    const b=$('[data-module-action="cycle"]',mods);b.innerHTML='<span class="st-stop"></span><span>Parar prévia</span>';
+    const b=$('[data-module-action="cycle"]',mods);b.innerHTML=`<span class="st-stop"></span><span>${L`Stop preview`}</span>`;
     const stages=$$('.st-service',mods),caption=$('[data-cycle-caption]',mods),line=$('[data-cycle-line]',mods),packet=$('[data-cycle-packet]',mods);
-    const states=['O profiler contextualiza e traduz o pedido.','O deployer valida a Nile e instala os fluxos.','O supervisor acompanha e detecta desvios.'];
+    const states=[L`The profiler puts the request in context and translates it.`,L`The deployer validates the Nile and installs the flows.`,L`The supervisor follows and detects drifts.`];
     const show=i=>{stages.forEach((s,k)=>s.classList.toggle('is-processing',k===i));caption.textContent=states[i];};
-    if(!G||R.reduced.matches){show(2);b.innerHTML=icon('i-refresh')+'<span>Rever ciclo</span>';cyclePlaying=false;return;}
+    if(!G||R.reduced.matches){show(2);b.innerHTML=icon('i-refresh')+`<span>${L`Watch the cycle again`}</span>`;cyclePlaying=false;return;}
     cycleMotion=G.context(()=>{
-      const tl=G.timeline({onComplete:()=>{cyclePlaying=false;b.innerHTML=icon('i-refresh')+'<span>Rever ciclo</span>';caption.textContent='Ciclo concluído. O supervisor mantém a observação.';stages.forEach(s=>s.classList.remove('is-processing'));G.set(stages.map(s=>s.querySelector('.st-service-object')),{clearProps:'transform'});}});
+      const tl=G.timeline({onComplete:()=>{cyclePlaying=false;b.innerHTML=icon('i-refresh')+`<span>${L`Watch the cycle again`}</span>`;caption.textContent=L`Cycle finished. The supervisor keeps watching.`;stages.forEach(s=>s.classList.remove('is-processing'));G.set(stages.map(s=>s.querySelector('.st-service-object')),{clearProps:'transform'});}});
       tl.set(line,{scaleX:0,transformOrigin:'left'}).set(packet,{x:0,autoAlpha:0});
       stages.forEach((s,i)=>{tl.call(()=>show(i),[],i*1.3).fromTo(s.querySelector('.st-service-object'),{y:0,scale:1},{y:-6,scale:1.04,duration:.5,ease:'power2.out',yoyo:true,repeat:1},i*1.3);});
       tl.to(line,{scaleX:1,duration:2.6,ease:'power1.inOut'},.5).to(packet,{autoAlpha:1,duration:.15},.5).to(packet,{x:()=>line.parentElement.clientWidth-8,duration:2.6,ease:'power1.inOut'},.5).to(packet,{autoAlpha:0,duration:.3},3.1);
@@ -119,9 +119,9 @@
     const tab=e.target.closest('[data-module-tab]');if(tab){selectModuleTab(tab.dataset.moduleTab);return;}
     const action=e.target.closest('[data-module-action]')?.dataset.moduleAction;
     if(action==='cycle')playCycle();
-    if(action==='copy-address')copy(`127.0.0.1:${service().port}`,'Endereço copiado.');
-    if(action==='copy-config')copy(JSON.stringify(Object.fromEntries(facts(service())),null,2),'Configuração copiada.');
-    if(action==='copy-logs')copy(logs(service()).map(row=>row.slice(0,2).join('  ')).join('\n'),'Log copiado.');
+    if(action==='copy-address')copy(`127.0.0.1:${service().port}`,L`Address copied.`);
+    if(action==='copy-config')copy(JSON.stringify(Object.fromEntries(facts(service())),null,2),L`Configuration copied.`);
+    if(action==='copy-logs')copy(logs(service()).map(row=>row.slice(0,2).join('  ')).join('\n'),L`Log copied.`);
     if(action==='quiet-logs'){ // the logs without the requests each service answered; the choice is kept in this browser
       R.state.quietLogs=!R.state.quietLogs;
       try{localStorage.setItem('rein.logs.quiet',R.state.quietLogs?'1':'0');}catch{/* private mode */}
@@ -136,12 +136,12 @@
     if(type==='page'){
       motion?.revert();inspectMotion?.revert();signalMotion?.kill();stopCycle();
       
-      if(d.page==='modulos')renderModules(true);
+      if(d.page==='modules')renderModules(true);
     }
-    if(['log','logs','chat','intent'].includes(type)&&R.page==='modulos'&&moduleTab!=='config') {const box=$('[data-log-rows]',mods);if(box)box.innerHTML=logRows(service(),moduleTab==='overview');}
+    if(['log','logs','chat','intent'].includes(type)&&R.page==='modules'&&moduleTab!=='config') {const box=$('[data-log-rows]',mods);if(box)box.innerHTML=logRows(service(),moduleTab==='overview');}
   });
   R.reduced.addEventListener('change',()=>{motion?.revert();inspectMotion?.revert();signalMotion?.kill();stopCycle();const signal=$('[data-signal]',exp);if(G&&signal)G.set(signal,{clearProps:'transform'});});
-  addEventListener('resize',()=>{if(R.page==='modulos')positionModuleIndicator(false);});
+  addEventListener('resize',()=>{if(R.page==='modules')positionModuleIndicator(false);});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCycle();});
   // Native button feedback and page-scoped timelines avoid permanent animation loops.
 })();

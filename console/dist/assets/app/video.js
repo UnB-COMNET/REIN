@@ -41,7 +41,7 @@
         ctx.filter = 'none';
         const u = W / 640;
         ctx.font = `600 ${13 * u}px Inter, sans-serif`;
-        const label = q.stalled ? 'Sem segmentos' : `${q.res} ${R.fmt(q.bitrate)} Mbps`;
+        const label = q.stalled ? L`No segments` : `${q.res} ${R.fmt(q.bitrate)} Mbps`;
         const lw = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0,0,0,.55)';
         ctx.beginPath(); ctx.roundRect(12 * u, 12 * u, lw + 16 * u, 24 * u, 6 * u); ctx.fill();
