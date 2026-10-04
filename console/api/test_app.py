@@ -85,7 +85,7 @@ def test_the_state_reaches_the_console_in_its_model(client):
     nodes = {n["id"]: n for n in s["nodes"]}
     assert (nodes["s0"]["uf"], nodes["s0"]["pop"], nodes["s0"]["x"]) == ("SP", "PoP-SP", 10)
     assert nodes["s1"]["pop"] is None and "x" not in nodes["s1"]
-    assert (nodes["ds0"]["role"], nodes["cl0"]["role"]) == ("Servidor", "Cliente")
+    assert (nodes["ds0"]["role"], nodes["cl0"]["role"]) == ("Server", "Client")
     assert s["onos"] == {"ip": "172.17.0.2"}
 
 
@@ -102,7 +102,7 @@ def test_a_link_change_is_a_job_streaming_steps_and_the_result(client):
 
 
 def test_new_hosts_and_switches_get_the_next_free_name(client):
-    host = result(client, client.post("/api/testbed/hosts", json={"role": "Servidor", "sw": "s1", "image": "lft-dash-video"}))
+    host = result(client, client.post("/api/testbed/hosts", json={"role": "Server", "sw": "s1", "image": "lft-dash-video"}))
     assert host["args"] == ["host", "add", "ds1", "--switch", "s1", "--ip", "192.168.0.3", "--image", "lft-dash-video", "--server"]
     switch = result(client, client.post("/api/testbed/switches", json={"uf": "ba", "links": [{"to": "s0", "rate": 50}]}))
     assert switch["args"] == ["switch", "add", "s2", "--desc", "BA", "--dpid", "0000000000000003", "--link", "s0:rate=50mbit"]

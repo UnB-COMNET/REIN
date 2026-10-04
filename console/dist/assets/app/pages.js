@@ -1,5 +1,5 @@
 /* Monitoramento (what the collector module measured) and Sobre.
-   Experimentos and Módulos live in studio.js. */
+   Experiments and Modules live in experiments.js and studio.js. */
 (() => {
   'use strict';
   const R = window.REIN, M = R.model, $ = R.$, $$ = R.$$;
@@ -27,7 +27,7 @@
       if (t < 360 && t >= 300) { thr = 2.9; lat = 140; } else if (t < 300) { thr = 4.8; lat = 20; }
       series.push({ ts, thr: thr * (1 + (Math.sin(t / 7) + Math.sin(t / 3.1)) * .018), lat: lat * (1 + Math.sin(t / 5.3) * .03) });
     }
-    marks.push({ ts: now - 360000, label: 's0–s1 degradado', tone: 'warn' }, { ts: now - 358000, label: 'Desvio', tone: 'warn' }, { ts: now - 300000, label: 'Rota por s2', tone: '' });
+    marks.push({ ts: now - 360000, label: L`s0–s1 degraded`, tone: 'warn' }, { ts: now - 358000, label: L`Drift`, tone: 'warn' }, { ts: now - 300000, label: L`Route through s2`, tone: '' });
   })();
 
   R.monitor = { series, marks, stats };
@@ -104,13 +104,13 @@
     if (full || !$('[data-mon-root]', mon)) {
       mon.innerHTML = `<div data-mon-root>
         <div class="mon-top">
-          <label class="source"><span class="dot" data-src-dot></span><span data-src></span> <select class="popup" data-client aria-label="Cliente">${clients.map(c => `<option value="${c.id}"${c.id === clientId ? ' selected' : ''}>${c.id}${routeOf(c.id)[0] ? ` · ${routeOf(c.id)[0]}` : ''}</option>`).join('') || '<option>Nenhum cliente</option>'}</select></label>
-          <div class="seg" role="group" aria-label="Período">${[[300, '5 min'], [900, '15 min'], [3600, '1 h']].map(([s, l]) => `<button type="button" data-range="${s}" aria-pressed="${s === range}">${l}</button>`).join('')}</div>
+          <label class="source"><span class="dot" data-src-dot></span><span data-src></span> <select class="popup" data-client aria-label="${L`Client`}">${clients.map(c => `<option value="${c.id}"${c.id === clientId ? ' selected' : ''}>${c.id}${routeOf(c.id)[0] ? ` · ${routeOf(c.id)[0]}` : ''}</option>`).join('') || `<option>${L`No client`}</option>`}</select></label>
+          <div class="seg" role="group" aria-label="${L`Period`}">${[[300, '5 min'], [900, '15 min'], [3600, '1 h']].map(([s, l]) => `<button type="button" data-range="${s}" aria-pressed="${s === range}">${l}</button>`).join('')}</div>
         </div>
-        <div class="chart-card reveal" style="--d:1"><div class="chart-head"><h3>Vazão<small>Entregue a ${R.esc(clientId || 'cliente')}</small></h3><span class="now" data-now-thr></span></div><div class="chart" data-chart="thr"></div></div>
-        <div class="chart-card reveal" style="--d:2"><div class="chart-head"><h3>RTT do caminho<small>${route ? `${R.esc(route.path.slice(1, -1).join(' · '))}, limite de ${R.esc(intent)}: 200 ms` : 'Sem intent para este cliente'}</small></h3><span class="now" data-now-lat></span></div><div class="chart" data-chart="lat"></div></div>
+        <div class="chart-card reveal" style="--d:1"><div class="chart-head"><h3>${L`Throughput`}<small>${L`Delivered to ${R.esc(clientId || L`client`)}`}</small></h3><span class="now" data-now-thr></span></div><div class="chart" data-chart="thr"></div></div>
+        <div class="chart-card reveal" style="--d:2"><div class="chart-head"><h3>${L`Path RTT`}<small>${route ? L`${R.esc(route.path.slice(1, -1).join(' · '))}, limit of ${R.esc(intent)}: 200 ms` : L`No intent for this client`}</small></h3><span class="now" data-now-lat></span></div><div class="chart" data-chart="lat"></div></div>
         <dl class="obs reveal" style="--d:3" data-obs></dl>
-        <h2 class="section-title reveal" style="--d:4">Eventos</h2>
+        <h2 class="section-title reveal" style="--d:4">${L`Events`}</h2>
         <ol class="group ev-list reveal" style="--d:4" data-ev></ol>
       </div>`;
       mon.querySelectorAll('.reveal').forEach(e => e.classList.add('is-in'));
@@ -122,14 +122,14 @@
     $('[data-chart="thr"]', mon).innerHTML = charts.thr.svg;
     $('[data-chart="lat"]', mon).innerHTML = charts.lat.svg;
     const age = stats.last ? Math.max(0, Math.round((Date.now() - stats.last) / 1000)) : null, live = !stats.down && age !== null && age < 30;
-    $('[data-src]', mon).textContent = stats.down ? 'Collector fora do ar' : live ? 'Collector' : 'Collector sem amostras';
+    $('[data-src]', mon).textContent = stats.down ? L`Collector down` : live ? 'Collector' : L`Collector without samples`;
     $('[data-src-dot]', mon).style.setProperty('--tc', `var(--${live ? 'green' : stats.down ? 'red' : 'orange'})`);
-    const drifts = marks.filter(m => m.label === 'Desvio' && m.ts >= Date.now() - range * 1000);
+    const drifts = marks.filter(m => m.label === L`Drift` && m.ts >= Date.now() - range * 1000);
     $('[data-obs]', mon).innerHTML = `
-      <div><dt>Requisições ao ONOS</dt><dd>${stats.requests.toLocaleString('pt-BR')}</dd></div>
-      <div><dt>Pacotes descartados</dt><dd>${stats.drops.toLocaleString('pt-BR')}</dd></div>
-      <div><dt>Desvios</dt><dd>${drifts.length}${drifts.length ? `<small>último ${fmtT(drifts.at(-1).ts)}</small>` : ''}</dd></div>
-      <div><dt>Última amostra</dt><dd>${age === null ? 'nenhuma' : `${age}<small>s</small>`}</dd></div>`;
+      <div><dt>${L`Requests to ONOS`}</dt><dd>${stats.requests.toLocaleString(L.locale)}</dd></div>
+      <div><dt>${L`Packets dropped`}</dt><dd>${stats.drops.toLocaleString(L.locale)}</dd></div>
+      <div><dt>${L`Drifts`}</dt><dd>${drifts.length}${drifts.length ? `<small>${L`last ${fmtT(drifts.at(-1).ts)}`}</small>` : ''}</dd></div>
+      <div><dt>${L`Last sample`}</dt><dd>${age === null ? L`never` : `${age}<small>s</small>`}</dd></div>`;
     const ic = { Deployer: 'i-deployer', Supervisor: 'i-eye', Testbed: 'i-bolt' };
     if (entering) {
       // Opening the page: the lines draw themselves and the numbers count up
@@ -138,7 +138,7 @@
       if (!R.reduced.matches) $$('.chart .area', mon).forEach(a => a.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: 700, fill: 'backwards' }));
       countUp($('[data-now-thr]', mon), last.thr, R.fmt1, '<small>Mb/s</small>');
       countUp($('[data-now-lat]', mon), last.lat, v => R.fmt(v, 0), '<small>ms</small>');
-      countUp($('[data-obs] dd', mon), stats.requests, v => Math.round(v).toLocaleString('pt-BR'), '');
+      countUp($('[data-obs] dd', mon), stats.requests, v => Math.round(v).toLocaleString(L.locale), '');
     }
     $('[data-ev]', mon).innerHTML = M.events.slice(-8).reverse().map(e => `<li class="act ${e.tone || ''}"><span class="act-ic">${R.icon(ic[e.source] || 'i-bolt')}</span><span class="act-text"><b>${R.esc(e.source)}</b> ${R.esc(e.text)}</span><time>${e.time}</time></li>`).join('');
   }
@@ -165,9 +165,9 @@
 
   R.on((type, d) => {
     if (type === 'log') {
-      if (d.source === 'Testbed' && /degrad|derrub|em .* Mb\/s/i.test(d.text)) marks.push({ ts: Date.now(), label: d.text.split(' ')[0] + (/derrub/.test(d.text) ? ' fora' : ' alterado'), tone: 'warn' });
-      if (d.source === 'Supervisor' && !R.api?.online) marks.push({ ts: Date.now(), label: 'Desvio', tone: 'warn' });   // online: the deployer's events (api.js)
-      if (d.source === 'Deployer' && /Rota/.test(d.text)) marks.push({ ts: Date.now(), label: 'Nova rota', tone: '' });
+      if (d.source === 'Testbed' && /degrad|derrub|taken down|(em|at) .* Mb\/s/i.test(d.text)) marks.push({ ts: Date.now(), label: d.text.split(' ')[0] + (/derrub|taken down/.test(d.text) ? ` ${L`down`}` : ` ${L`changed`}`), tone: 'warn' });
+      if (d.source === 'Supervisor' && !R.api?.online) marks.push({ ts: Date.now(), label: L`Drift`, tone: 'warn' });   // online: the deployer's events (api.js)
+      if (d.source === 'Deployer' && /Rota|Route/.test(d.text)) marks.push({ ts: Date.now(), label: L`New route`, tone: '' });
       if (R.page === 'monitor') renderMonitor();
     }
     if (type === 'change' && R.page === 'monitor') renderMonitor(true);
@@ -179,46 +179,46 @@
   // ============================================================ Sobre
   // A small product page: the promise, then figures drawn like those of the Lumi paper
   // (Jacobs et al., IEEE TNSM 2025), then the components.
-  const about = $('[data-page="sobre"] .page-scroll');
+  const about = $('[data-page="about"] .page-scroll');
   const COMPONENTS = [
-    ['Console', 'Esta interface: topologia, intents, experimentos.', ':3000', 'i-topo', 'graphite', 'https://github.com/UnB-COMNET/REIN'],
-    ['Intent profiler', 'Conversa, grounding no inventário e tradução para Nile.', ':5300', 'i-chat', 'orange', 'https://github.com/UnB-COMNET/REIN'],
-    ['Deployer', 'Valida a Nile, escolhe o caminho e instala os fluxos.', ':5000', 'i-deployer', 'blue', 'https://github.com/UnB-COMNET/deployer'],
-    ['Supervisor', 'Mede vazão e latência e detecta desvios.', ':5151', 'i-eye', 'green', 'https://github.com/UnB-COMNET/supervisor'],
-    ['ONOS', 'Controlador SDN que programa os switches.', ':8181', 'i-modules', 'teal', 'https://opennetworking.org/onos/'],
-    ['LFT', 'Emula a rede e roda os experimentos.', 'testbed', 'i-flask', 'ink', 'https://github.com/UnB-COMNET/lft'],
+    ['Console', L`This interface: topology, intents, experiments.`, ':3000', 'i-topo', 'graphite', 'https://github.com/UnB-COMNET/REIN'],
+    ['Intent profiler', L`Chat, grounding in the inventory and translation to Nile.`, ':5300', 'i-chat', 'orange', 'https://github.com/UnB-COMNET/REIN'],
+    ['Deployer', L`Validates the Nile, picks the path and installs the flows.`, ':5000', 'i-deployer', 'blue', 'https://github.com/UnB-COMNET/deployer'],
+    ['Supervisor', L`Measures throughput and latency and detects drifts.`, ':5151', 'i-eye', 'green', 'https://github.com/UnB-COMNET/supervisor'],
+    ['ONOS', L`SDN controller that programs the switches.`, ':8181', 'i-modules', 'teal', 'https://opennetworking.org/onos/'],
+    ['LFT', L`Emulates the network and runs the experiments.`, 'testbed', 'i-flask', 'ink', 'https://github.com/UnB-COMNET/lft'],
   ];
   about.innerHTML = `<div class="ab">
     <section class="ab-hero">
       <div class="ab-copy reveal">
-        <p class="eyebrow">REIN · Rede de intenções</p>
-        <h2 class="ab-title">Diga o que a rede precisa garantir.<span>O REIN traduz, implanta e vigia.</span></h2>
-        <p class="ab-lead">Você escreve o pedido em português. O REIN o traduz para <b>Nile</b>, pede sua aprovação, instala os fluxos no <b>ONOS</b> e acompanha o resultado, recalculando a rota quando a intent deixa de ser cumprida.</p>
-        <div class="ab-cta"><a class="btn btn-blue btn-lg" href="#topologia">Abrir a topologia</a><a class="btn btn-plain btn-lg" href="https://github.com/UnB-COMNET/REIN" target="_blank" rel="noreferrer">Código no GitHub ↗</a></div>
+        <p class="eyebrow">${L`REIN · Intent network`}</p>
+        <h2 class="ab-title">${L`Say what the network must guarantee.`}<span>${L`REIN translates, deploys and watches.`}</span></h2>
+        <p class="ab-lead">${L`You write the request in plain language. REIN translates it to`} <b>Nile</b>${L`, asks for your approval, installs the flows in`} <b>ONOS</b> ${L`and follows the result, recalculating the route when the intent is no longer met.`}</p>
+        <div class="ab-cta"><a class="btn btn-blue btn-lg" href="#topology">${L`Open the topology`}</a><a class="btn btn-plain btn-lg" href="https://github.com/UnB-COMNET/REIN" target="_blank" rel="noreferrer">${L`Code on GitHub ↗`}</a></div>
       </div>
-      <figure class="ab-art reveal" style="--d:2" data-art><img src="assets/img/about-glass-network.webp" srcset="assets/img/about-glass-network-720.webp 640w, assets/img/about-glass-network.webp 1040w" sizes="(max-width: 899px) 90vw, 560px" width="1040" height="780" alt="Esferas de vidro ligadas por filamentos de luz; um caminho azul mais intenso atravessa três delas." decoding="async"></figure>
+      <figure class="ab-art reveal" style="--d:2" data-art><img src="assets/img/about-glass-network.webp" srcset="assets/img/about-glass-network-720.webp 640w, assets/img/about-glass-network.webp 1040w" sizes="(max-width: 899px) 90vw, 560px" width="1040" height="780" alt="${L`Glass spheres linked by filaments of light. A brighter blue path crosses three of them.`}" decoding="async"></figure>
     </section>
 
     <section class="ab-sec">
-      <header class="ab-sec-head reveal"><h3>Do pedido ao fluxo instalado.</h3><p>Cinco etapas, três pedidos. Da esquerda para a direita, o que cada etapa produz.</p></header>
-      <figure class="pfig reveal" style="--d:1">${R.figures.fig1()}<figcaption><span class="fig-n">Fig. 1.</span> O pipeline do <span class="sc">REIN</span>, de relance.</figcaption></figure>
+      <header class="ab-sec-head reveal"><h3>${L`From the request to the installed flow.`}</h3><p>${L`Five stages, three requests. From left to right, what each stage produces.`}</p></header>
+      <figure class="pfig reveal" style="--d:1">${R.figures.fig1()}<figcaption><span class="fig-n">Fig. 1.</span> ${L`The pipeline of`} <span class="sc">REIN</span>${L`, at a glance.`}</figcaption></figure>
     </section>
 
     <section class="ab-sec">
-      <header class="ab-sec-head reveal"><h3>Quando a rede muda.</h3><p>A intent continua valendo depois de implantada: o supervisor mede e o deployer corrige.</p></header>
-      <figure class="pfig reveal" style="--d:1">${R.figures.fig2()}<figcaption><span class="fig-n">Fig. 2.</span> Garantia da intent q1: a rota inicial por MG (esquerda); o supervisor detecta a latência de 130 ms em s0–s1 como desvio (meio); o deployer instala a nova rota por RJ (direita).</figcaption></figure>
+      <header class="ab-sec-head reveal"><h3>${L`When the network changes.`}</h3><p>${L`The intent keeps holding after it is deployed: the supervisor measures and the deployer corrects.`}</p></header>
+      <figure class="pfig reveal" style="--d:1">${R.figures.fig2()}<figcaption><span class="fig-n">Fig. 2.</span> ${L`Assurance of intent q1: the first route through MG (left), the supervisor detects the 130 ms latency in s0–s1 as a drift (middle), and the deployer installs the new route through RJ (right).`}</figcaption></figure>
     </section>
 
     <section class="ab-sec">
-      <header class="ab-sec-head reveal"><h3>Arquitetura.</h3><p>Cada serviço roda no testbed e fala com o seguinte por HTTP; o ONOS programa os switches por OpenFlow.</p></header>
-      <figure class="pfig reveal" style="--d:1">${R.figures.fig3()}<figcaption><span class="fig-n">Fig. 3.</span> Os serviços do <span class="sc">REIN</span> e as portas em que escutam.</figcaption></figure>
+      <header class="ab-sec-head reveal"><h3>${L`Architecture.`}</h3><p>${L`Each service runs in the testbed and talks to the next over HTTP, and ONOS programs the switches over OpenFlow.`}</p></header>
+      <figure class="pfig reveal" style="--d:1">${R.figures.fig3()}<figcaption><span class="fig-n">Fig. 3.</span> ${L`The services of`} <span class="sc">REIN</span> ${L`and the ports they listen on.`}</figcaption></figure>
     </section>
 
     <section class="ab-sec">
-      <header class="ab-sec-head reveal"><h3>Componentes.</h3><p>Cada peça roda como um serviço e pode ser usada sozinha.</p></header>
-      <div class="bento">${COMPONENTS.map(([name, desc, port, ic, tone, href], i) => `<a class="tile reveal" style="--d:${i}" href="${href}" target="_blank" rel="noreferrer" data-tilt><span class="sq ${tone}">${R.icon(ic)}</span><b>${name}</b><span class="tile-d">${desc}</span><span class="tile-f"><code>${port}</code><em>Abrir ↗</em></span></a>`).join('')}</div>
+      <header class="ab-sec-head reveal"><h3>${L`Components.`}</h3><p>${L`Each piece runs as a service and can be used on its own.`}</p></header>
+      <div class="bento">${COMPONENTS.map(([name, desc, port, ic, tone, href], i) => `<a class="tile reveal" style="--d:${i}" href="${href}" target="_blank" rel="noreferrer" data-tilt><span class="sq ${tone}">${R.icon(ic)}</span><b>${name}</b><span class="tile-d">${desc}</span><span class="tile-f"><code>${port}</code><em>${L`Open ↗`}</em></span></a>`).join('')}</div>
     </section>
-    <p class="fine reveal">Figuras no estilo de Jacobs et al., “Establishing Trust for Using Natural Language for Intent-Based Networking”, IEEE TNSM 22(5), 2025. Ciclo de IBN segundo Leivadeas e Falkner (IEEE COMST, 2023).</p>
+    <p class="fine reveal">${L`Figures in the style of Jacobs et al., “Establishing Trust for Using Natural Language for Intent-Based Networking”, IEEE TNSM 22(5), 2025. IBN cycle after Leivadeas and Falkner (IEEE COMST, 2023).`}</p>
   </div>`;
 
   // Tiles tilt a little toward the pointer and catch a light where it rests

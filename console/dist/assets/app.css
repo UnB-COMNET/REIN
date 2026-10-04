@@ -71,8 +71,8 @@ code, pre, kbd, .mono { font-family: var(--mono); }
 /* Headings receive focus from code when a page opens; they need no ring */
 [tabindex="-1"]:focus { outline: none; }
 /* Sobre opens with its own headline; the page title stays for screen readers */
-.page[data-page="sobre"] .page-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.page[data-page="sobre"] .page-scroll { padding-top: 40px; }
+.page[data-page="about"] .page-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.page[data-page="about"] .page-scroll { padding-top: 40px; }
 .skip { position: fixed; left: 12px; top: 10px; z-index: 200; padding: 8px 12px; border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-2); opacity: 0; pointer-events: none; }
 .skip:focus { opacity: 1; pointer-events: auto; }
 
@@ -769,7 +769,7 @@ input[type="range"]:disabled { opacity: .35; }
 
 
 /* ---------------------------------------------------------- about, v2 */
-.page[data-page="sobre"] .page-scroll { padding: 26px 44px 48px; }
+.page[data-page="about"] .page-scroll { padding: 26px 44px 48px; }
 .ab { max-width: 1080px; margin: 0 auto; }
 .ab-hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: 12px; min-height: 440px; }
 .ab-copy .eyebrow { font-size: 14px; font-weight: 600; color: var(--orange-text); letter-spacing: -.005em; }
@@ -911,7 +911,7 @@ input[type="range"]:disabled { opacity: .35; }
   .ab-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .ab-title { font-size: 36px; }
   .ab-art { margin: 0; }
-  .page[data-page="sobre"] .page-scroll { padding: 20px 18px 40px; }
+  .page[data-page="about"] .page-scroll { padding: 20px 18px 40px; }
   .fsteps { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
   .fs b { font-size: 11px; }
   .fs span { display: none; }

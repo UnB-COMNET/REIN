@@ -2,23 +2,23 @@
 (() => {
   'use strict';
   const R = window.REIN, $ = R.$, $$ = R.$$;
-  const PAGES = ['topologia', 'intents', 'monitor', 'experimentos', 'modulos', 'sobre'];
-  const TITLES = { topologia: 'Topologia', intents: 'Intents', monitor: 'Monitoramento', experimentos: 'Experimentos', modulos: 'Módulos', sobre: 'Sobre' };
+  const PAGES = ['topology', 'intents', 'monitor', 'experiments', 'modules', 'about'];
+  const TITLES = { topology: L`Topology`, intents: 'Intents', monitor: L`Monitoring`, experiments: L`Experiments`, modules: L`Modules`, about: L`About` };
   const composer = $('[data-composer]');
 
   function go(page, focus = false) {
-    if (!PAGES.includes(page)) page = 'topologia';
+    if (!PAGES.includes(page)) page = 'topology';
     const changed = R.page !== page;
     R.page = page;
     $$('.page').forEach(p => { const active = p.dataset.page === page; p.classList.toggle('is-on', active); p.inert = !active; });
     $$('.nav a').forEach(a => { if (a.dataset.nav === page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     placeIndicator();
     $$('.w-tools[data-for]').forEach(t => { const active = t.dataset.for === page; t.classList.toggle('is-on', active); t.inert = !active; });
-    composer.hidden = !(page === 'topologia' || page === 'intents');
+    composer.hidden = !(page === 'topology' || page === 'intents');
     // On the Intents page the composer becomes the chat field: centred on the column, round send button
     composer.dataset.page = page;
-    $('[data-send]', composer).setAttribute('aria-label', page === 'intents' ? 'Enviar' : 'Revisar');
-    document.title = page === 'topologia' ? 'REIN' : `${TITLES[page]} · REIN`;
+    $('[data-send]', composer).setAttribute('aria-label', page === 'intents' ? L`Send` : L`Review`);
+    document.title = page === 'topology' ? 'REIN' : `${TITLES[page]} · REIN`;
     R.pop.close(true);
     if (changed) R.emit('page', { page });
     if (changed) {
@@ -28,7 +28,7 @@
       const ic = $('.nav a[aria-current] svg');
       if (ic && !R.reduced.matches && R.booted) ic.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.22) translateY(-2px)' }, { transform: 'scale(.94)' }, { transform: 'none' }], { duration: 560, easing: 'cubic-bezier(.32,.72,0,1)' });
     }
-    if (page === 'topologia') requestAnimationFrame(() => R.topology.fit(false));
+    if (page === 'topology') requestAnimationFrame(() => R.topology.fit(false));
     if (focus) $(`.page[data-page="${page}"] h1, .page[data-page="${page}"] [tabindex="-1"]`)?.focus({ preventScroll: true });
   }
   addEventListener('hashchange', () => go(location.hash.slice(1), true));
@@ -72,9 +72,9 @@
   let unmount = null;
   R.openVideo = id => {
     const n = R.node(id);
-    $('[data-video-title]').textContent = `Vídeo em ${id}`;
+    $('[data-video-title]').textContent = L`Video on ${id}`;
     const route = R.routeOf(id)?.[1];
-    $('[data-video-sub]').textContent = route ? `Servido por ${route.server}, caminho ${route.path.slice(1, -1).join(', ')}. ${n.image}.` : 'Sem intent de vídeo para este cliente.';
+    $('[data-video-sub]').textContent = route ? L`Served by ${route.server}, path ${route.path.slice(1, -1).join(', ')}. ${n.image}.` : L`No video intent for this client.`;
     unmount?.();
     unmount = R.video.mount($('[data-video-canvas]'), id);
     sheet.dataset.client = id;
@@ -87,14 +87,14 @@
     const q = R.qoe(id);
     sheet.dataset.tone = q.tone;
     $('[data-video-meta]').innerHTML = `
-      <div><dt>Resolução</dt><dd data-res>${q.stalled ? 'Parado' : q.res}</dd></div>
+      <div><dt>${L`Resolution`}</dt><dd data-res>${q.stalled ? L`Stopped` : q.res}</dd></div>
       <div><dt>Throughput</dt><dd>${R.fmt1(q.thr)}<small>Mb/s</small></dd></div>
       <div><dt>Buffer</dt><dd>${R.fmt1(q.buffer)}<small>s</small></dd></div>
-      <div><dt>Travamentos</dt><dd>${q.stalls}</dd></div>`;
+      <div><dt>${L`Stalls`}</dt><dd>${q.stalls}</dd></div>`;
   }
   sheet.addEventListener('close', () => { unmount?.(); unmount = null; });
   sheet.addEventListener('click', e => { if (e.target === sheet || e.target.closest('[data-close-sheet]')) sheet.close(); });
-  $('[data-video-play]').addEventListener('click', () => R.toast('O player dash.js toca:', `/video/${sheet.dataset.client}/manifest.mpd`));
+  $('[data-video-play]').addEventListener('click', () => R.toast(L`The dash.js player plays:`, `/video/${sheet.dataset.client}/manifest.mpd`));
   R.on(type => { if (type === 'change') meta(); });
   setInterval(meta, 1000);
 
@@ -120,7 +120,7 @@
     const LOGO = $('#rein-logo').innerHTML;
     const slice = (x0, x1, cls) => `<svg class="ri-p ${cls}" viewBox="${x0} 0 ${x1 - x0} 400" style="--w:${x1 - x0}" aria-hidden="true">${LOGO}</svg>`;
     ov.innerHTML = `<div class="ri" data-ri>${slice(0, 565, 'ri-mark')}${slice(565, 899.5, 'ri-l')}${slice(899.5, 1181.5, 'ri-l')}<span class="ri-x" data-x>${split('DE DE ')}</span>${slice(1181.5, 1306, 'ri-l')}${slice(1306, 1614, 'ri-l')}<span class="ri-x" data-x>${split('TENÇÕES')}</span></div>
-      <p class="ri-tag" data-ri-tag>Console de redes baseadas em intenções</p>`;
+      <p class="ri-tag" data-ri-tag>${L`Console for intent-based networks`}</p>`;
     const ri = $('[data-ri]', ov), markSvg = $('.ri-mark', ov), mark = $('.ri-mark path', ov), xs = $$('[data-x]', ov), letters = $$('.ri-l', ov), tag = $('[data-ri-tag]', ov);
     const anims = [], t0 = performance.now();
     const A = (el, kf, opt) => { if (!el) return; const a = el.animate(kf, { fill: 'both', ...opt }); a.off = performance.now() - t0; anims.push(a); return a; };
@@ -177,7 +177,7 @@
       tools.forEach((t, i) => A(t, [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 500, delay: w0 + 800 + i * 45, easing: 'ease-out' }));
     }
     if (!comp.hidden) A(comp, reduced ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(50px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: reduced ? 500 : 1100, delay: w0 + (reduced ? 0 : 1500), easing: spring });
-    if (R.page === 'topologia') anims.push(...R.topology.intro(w0 + 600));
+    if (R.page === 'topology') anims.push(...R.topology.intro(w0 + 600));
     else stage.classList.add('is-live');
     root.classList.remove('is-opening');
     const skip = () => anims.forEach(a => a.finish());
@@ -201,7 +201,7 @@
 
   // Start
   R.page = null;
-  go(location.hash.slice(1) || 'topologia');
+  go(location.hash.slice(1) || 'topology');
   R.topology.render();
   R.topology.fit(false);
   R.intents.render();
@@ -216,10 +216,10 @@
     node: () => R.topology.openNode('cl0'),
     video: () => R.openVideo('cl0'),
     host: () => R.openHostSheet(),
-    card: () => R.profile('Bloqueie SSH para o cliente de SP'),
-    chat: () => { location.hash = 'intents'; setTimeout(() => R.profile('Bloqueie SSH para o cliente de SP', 'Intents'), 300); },
-    chatask: () => { location.hash = 'intents'; setTimeout(() => R.profile('Melhore o vídeo', 'Intents'), 300); },
-    ask: () => R.profile('Melhore o vídeo'),
+    card: () => R.profile(L`Block SSH for the client in SP`),
+    chat: () => { location.hash = 'intents'; setTimeout(() => R.profile(L`Block SSH for the client in SP`, 'Intents'), 300); },
+    chatask: () => { location.hash = 'intents'; setTimeout(() => R.profile(L`Improve the video`, 'Intents'), 300); },
+    ask: () => R.profile(L`Improve the video`),
     switch: () => { $('[data-tool="add"]').click(); setTimeout(() => $('[data-pop="add"] [data-add="switch"]').click(), 100); },
     services: () => R.openServices('acl'),
     traffic: () => R.openTraffic('cl0'),
@@ -229,11 +229,11 @@
     help: () => { location.hash = 'intents'; setTimeout(() => { $('[data-help]').click(); $('[data-hsec="bnf"]').click(); }, 300); },
     helpex: () => { location.hash = 'intents'; setTimeout(() => { $('[data-help]').click(); $('[data-hsec="ex"]').click(); }, 300); },
     applied: () => { location.hash = 'intents'; setTimeout(() => $('[data-imode="applied"]').click(), 300); },
-    xcfg: () => { location.hash = 'experimentos'; setTimeout(() => $('[data-x-config="diamond"]').click(), 300); },
-    xnew: () => { location.hash = 'experimentos'; setTimeout(() => { $('[data-x-new]').click(); setTimeout(() => $('.xtl-col[data-b-snap="1"]')?.click(), 100); }, 300); },
+    xcfg: () => { location.hash = 'experiments'; setTimeout(() => $('[data-x-config="diamond"]').click(), 300); },
+    xnew: () => { location.hash = 'experiments'; setTimeout(() => { $('[data-x-new]').click(); setTimeout(() => $('.xtl-col[data-b-snap="1"]')?.click(), 100); }, 300); },
     // builder with a plan client on s2, a second flow to it and a capture event
-    xplan: () => { location.hash = 'experimentos'; setTimeout(() => { $('[data-x-new]').click(); const q = s => $(`[data-slot="experiments"] ${s}`); setTimeout(() => { q('[data-b-mode="client"]').click(); q('[data-b-sw="s2"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })); q('[data-b-sel=""]')?.click(); q('[data-b-add="flow"]').click(); q('[data-b-add="event"]').click(); q('[data-fs="kind"][data-v="capture"]')?.click(); q('.xtl-bar:not(.is-sel)')?.closest('.xtl-row')?.querySelector('.xtl-lab')?.click(); q('.xtl-col[data-b-snap="2"]')?.click(); }, 150); }, 300); },
-    xrun: () => { location.hash = 'experimentos'; setTimeout(() => { $('[data-x-config="diamond"]').click(); setTimeout(() => $('[data-x-start]').click(), 100); }, 300); },
+    xplan: () => { location.hash = 'experiments'; setTimeout(() => { $('[data-x-new]').click(); const q = s => $(`[data-slot="experiments"] ${s}`); setTimeout(() => { q('[data-b-mode="client"]').click(); q('[data-b-sw="s2"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })); q('[data-b-sel=""]')?.click(); q('[data-b-add="flow"]').click(); q('[data-b-add="event"]').click(); q('[data-fs="kind"][data-v="capture"]')?.click(); q('.xtl-bar:not(.is-sel)')?.closest('.xtl-row')?.querySelector('.xtl-lab')?.click(); q('.xtl-col[data-b-snap="2"]')?.click(); }, 150); }, 300); },
+    xrun: () => { location.hash = 'experiments'; setTimeout(() => { $('[data-x-config="diamond"]').click(); setTimeout(() => $('[data-x-start]').click(), 100); }, 300); },
     rnp: async () => { R.importPy(await (await fetch('samples/rnp.py')).text(), 'rnp.py'); if (!R.topology.mapMode) $('[data-tool="map"]').click(); },
   }[demo] || (() => {}))(), 900);
 })();

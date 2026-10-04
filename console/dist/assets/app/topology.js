@@ -76,7 +76,7 @@
   // a server's LEDs blink and its bays stream, a client's screen shows the bitrate bars
   const SERVER = '<svg class="hg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></g><circle class="led" cx="7.6" cy="7.5" r="1.3" fill="currentColor"/><circle class="led" cx="7.6" cy="16.5" r="1.3" fill="currentColor"/><path class="io" d="M11 7.5h5.6M11 16.5h5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray=".1 2.4"/></svg>';
   const CLIENT = '<svg class="hg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="10" rx="1.8"/><path d="M3 18.5h18"/></g><g class="eq" fill="currentColor"><rect x="8.7" y="7.9" width="1.6" height="4.9" rx=".8"/><rect x="11.2" y="7.9" width="1.6" height="4.9" rx=".8"/><rect x="13.7" y="7.9" width="1.6" height="4.9" rx=".8"/></g></svg>';
-  const glyph = n => n.kind === 'switch' ? '<span class="core"></span>' : n.role === 'Servidor' ? SERVER : CLIENT;
+  const glyph = n => n.kind === 'switch' ? '<span class="core"></span>' : n.role === 'Server' ? SERVER : CLIENT;
   const sub = n => n.kind === 'switch' ? (n.uf || n.pop?.replace(/^PoP-/, '') || 'Switch') : n.ip;
   const els = new Map();
   let gen = 0, layers = null;
@@ -87,7 +87,7 @@
     const used = new Set(R.switches().map(s => s.uf).filter(Boolean));
     const BR = window.REIN_BR;
     const map = `<svg class="map-layer" data-map width="${BR.w * MAPK}" height="${BR.h * MAPK}" viewBox="0 0 ${BR.w} ${BR.h}" aria-hidden="true">${Object.entries(BR.states).map(([uf, d]) => `<path class="${used.has(uf) ? 'is-used' : ''}" d="${d}"/>`).join('')}</svg>`;
-    const nodes = M.nodes.map(n => `<button type="button" class="node ${n.kind}${n.kind === 'host' ? (n.role === 'Servidor' ? ' server' : ' client') : ''}${n.isNew ? ' is-new' : ''}${openKey === `n:${n.id}` ? ' is-open' : ''}${mapMode && n.kind === 'switch' ? ' is-pinned' : ''}${n.pending ? ' is-provisioning' : ''}" data-node="${n.id}" aria-label="${n.kind === 'switch' ? 'Switch' : n.role} ${n.id}, ${sub(n)}. Arraste para mover, Enter para detalhes.">${glyph(n)}<span class="n-label"><b><i>${R.icon('i-check')}</i>${n.id}</b><span>${R.esc(sub(n))}</span></span></button>`).join('');
+    const nodes = M.nodes.map(n => `<button type="button" class="node ${n.kind}${n.kind === 'host' ? (n.role === 'Server' ? ' server' : ' client') : ''}${n.isNew ? ' is-new' : ''}${openKey === `n:${n.id}` ? ' is-open' : ''}${mapMode && n.kind === 'switch' ? ' is-pinned' : ''}${n.pending ? ' is-provisioning' : ''}" data-node="${n.id}" aria-label="${L`${n.kind === 'switch' ? 'Switch' : L(n.role)} ${n.id}, ${sub(n)}. Drag to move, Enter for details.`}">${glyph(n)}<span class="n-label"><b><i>${R.icon('i-check')}</i>${n.id}</b><span>${R.esc(sub(n))}</span></span></button>`).join('');
     const pills = M.links.map(l => `<button type="button" class="pill" data-link="${l.id}" data-keep-pop><span class="pl-t"></span><i class="pl-bar"><b></b></i></button>`).join('');
     world.innerHTML = `${map}<svg class="wires" data-wires aria-hidden="true"><g data-l="pipes"></g><g data-l="access"></g><g data-l="links"></g><g data-l="beads"></g><g data-l="flow"></g><g data-l="hits"></g></svg>${pills}${nodes}`;
     const svg = $('[data-wires]', world);
@@ -191,8 +191,8 @@
       const mode = l.now.down ? 'down' : look.metric;
       const cls = `pill m-${mode}${st !== 'ok' ? ` ${st}` : ''}${openKey === `l:${l.id}` ? ' is-open' : ''}${el.classList.contains('is-hover') ? ' is-hover' : ''}`;
       if (el.className !== cls) el.className = cls;
-      if (mode !== 'use') { const t = mode === 'down' ? 'Fora' : mode === 'latency' ? `${R.fmt(l.now.delay)} ms` : `${R.fmt(l.now.rate)} Mb/s`; const tEl = el.firstChild; if (tEl.textContent !== t) tEl.textContent = t; }
-      el.setAttribute('aria-label', `Link ${l.a}–${l.b}: ${R.stateWord[st]}, capacidade ${R.fmt(l.now.rate)} Mb/s, tráfego ${R.fmt1(loads.get(l.id) || 0)} Mb/s, atraso ${R.fmt(l.now.delay)} ms. Enter para editar.`);
+      if (mode !== 'use') { const t = mode === 'down' ? L`Down` : mode === 'latency' ? `${R.fmt(l.now.delay)} ms` : `${R.fmt(l.now.rate)} Mb/s`; const tEl = el.firstChild; if (tEl.textContent !== t) tEl.textContent = t; }
+      el.setAttribute('aria-label', L`Link ${l.a}–${l.b}: ${R.stateWord[st]}, capacity ${R.fmt(l.now.rate)} Mb/s, traffic ${R.fmt1(loads.get(l.id) || 0)} Mb/s, delay ${R.fmt(l.now.delay)} ms. Enter to edit.`);
     });
     tickNumbers();
     if (hoverKey) drawDots();
@@ -224,7 +224,7 @@
 
   // Small physical reactions: a link that changes state pulses, one that falls shakes, a new route lights up
   function react(d) {
-    if (R.reduced.matches || R.page !== 'topologia') return;
+    if (R.reduced.matches || R.page !== 'topology') return;
     if (d.link) {
       const l = R.link(d.link), st = R.linkState(l), pill = world.querySelector(`.pill[data-link="${d.link}"]`), wire = els.get(`l:${d.link}`);
       pill?.animate(st === 'down' ? [{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(-2px)' }, { transform: 'none' }] : [{ transform: 'scale(1)' }, { transform: 'scale(1.22)' }, { transform: 'scale(1)' }], { duration: st === 'down' ? 420 : 560, easing: 'cubic-bezier(.32,.72,0,1)' });
@@ -402,7 +402,7 @@
   });
   document.addEventListener('keydown', e => {
     const a = document.activeElement;
-    if (R.page !== 'topologia' || e.ctrlKey || e.metaKey || e.altKey || (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]')) return;
+    if (R.page !== 'topology' || e.ctrlKey || e.metaKey || e.altKey || (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]')) return;
     const [x, y] = center();
     if (e.key === '+' || e.key === '=') zoomAt(1.4, x, y);
     else if (e.key === '-') zoomAt(1 / 1.4, x, y);
@@ -412,12 +412,12 @@
   function status() {
     const up = M.nodes.filter(n => !n.off).length, off = M.nodes.filter(n => n.off).length;
     const warn = M.links.filter(l => R.linkState(l) === 'warn').length, down = M.links.filter(l => R.linkState(l) === 'down').length;
-    $('[data-net-status]').innerHTML = `<span class="status"><span class="dot"></span>${up} nós UP</span>${off ? `<span class="status down"><span class="dot down"></span>${off} desligado${off > 1 ? 's' : ''}</span>` : ''}${down ? `<span class="status down"><span class="dot down"></span>${down} link${down > 1 ? 's' : ''} fora</span>` : ''}${warn ? `<span class="status warn"><span class="dot warn"></span>${warn} link${warn > 1 ? 's' : ''} degradado${warn > 1 ? 's' : ''}</span>` : ''}`;
+    $('[data-net-status]').innerHTML = `<span class="status"><span class="dot"></span>${L`${up} nodes UP`}</span>${off ? `<span class="status down"><span class="dot down"></span>${L`${off} off`}</span>` : ''}${down ? `<span class="status down"><span class="dot down"></span>${L`${down} link${down > 1 ? 's' : ''} down`}</span>` : ''}${warn ? `<span class="status warn"><span class="dot warn"></span>${L`${warn} link${warn > 1 ? 's' : ''} degraded`}</span>` : ''}`;
   }
 
   // ------------------------------------------------------------ opening: the network assembles from the server outwards
   function intro(delay = 0) {
-    const start = R.hosts().find(h => h.role === 'Servidor') || M.nodes[0];
+    const start = R.hosts().find(h => h.role === 'Server') || M.nodes[0];
     if (!start || R.reduced.matches) return [];
     const adj = new Map(M.nodes.map(n => [n.id, []]));
     M.links.forEach(l => { adj.get(l.a)?.push(l.b); adj.get(l.b)?.push(l.a); });
@@ -507,24 +507,24 @@
   // ------------------------------------------------------------ link popover
   const popLink = $('[data-pop="link"]');
   let draft = null;
-  const sliders = { rate: [0.1, 100, 0.1, 'Mb/s', 'Capacidade'], delay: [0, 500, 1, 'ms', 'Atraso'], jitter: [0, 100, 1, 'ms', 'Jitter'], loss: [0, 20, 0.5, '%', 'Perda'] };
+  const sliders = { rate: [0.1, 100, 0.1, 'Mb/s', L`Capacity`], delay: [0, 500, 1, 'ms', L`Delay`], jitter: [0, 100, 1, 'ms', 'Jitter'], loss: [0, 20, 0.5, '%', L`Loss`] };
   function openLink(id) {
     const l = R.link(id);
     draft = { ...l.now };
     openKey = `l:${id}`;
     const maxRate = Math.max(100, l.base.rate * 1.2);
     popLink.innerHTML = `
-      <div class="pop-head"><div><h2>${l.a}–${l.b}</h2><p class="pop-sub" data-lp-sub></p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
-      <div class="seg" role="group" aria-label="Estado do link">
-        <button type="button" data-quick="normal">Normal</button><button type="button" data-quick="degraded" data-tone="warn">Degradado</button><button type="button" data-quick="down" data-tone="down">Fora</button>
+      <div class="pop-head"><div><h2>${l.a}–${l.b}</h2><p class="pop-sub" data-lp-sub></p></div><button class="close" type="button" data-close aria-label="${L`Close`}">${R.icon('i-x')}</button></div>
+      <div class="seg" role="group" aria-label="${L`Link state`}">
+        <button type="button" data-quick="normal">Normal</button><button type="button" data-quick="degraded" data-tone="warn">${L`Degraded`}</button><button type="button" data-quick="down" data-tone="down">${L`Down`}</button>
       </div>
-      <div class="vals"><div><span class="l">Capacidade</span><span class="v"><output data-o="rate"></output><small>Mb/s</small></span></div><div><span class="l">Tráfego</span><span class="v"><output data-o="load"></output><small>Mb/s</small></span><i class="util"><b data-o="util"></b></i></div><div><span class="l">Atraso</span><span class="v"><output data-o="delay"></output><small>ms</small></span></div></div>
+      <div class="vals"><div><span class="l">${L`Capacity`}</span><span class="v"><output data-o="rate"></output><small>Mb/s</small></span></div><div><span class="l">${L`Traffic`}</span><span class="v"><output data-o="load"></output><small>Mb/s</small></span><i class="util"><b data-o="util"></b></i></div><div><span class="l">${L`Delay`}</span><span class="v"><output data-o="delay"></output><small>ms</small></span></div></div>
       <div class="sliders">
         ${Object.entries(sliders).map(([k, [min, max, step, unit, label]]) => `<label class="slider-row"><span>${label}</span><input type="range" min="${min}" max="${k === 'rate' ? maxRate : max}" step="${step}" data-k="${k}"><span class="sv"><output data-o2="${k}"></output> ${unit}</span></label>`).join('')}
       </div>
-      <label class="slider-row" style="margin-bottom:14px"><span>Preset</span><select class="popup" data-preset style="grid-column: 2 / 4"><option value="">Personalizado</option>${Object.entries(R.presets).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select></label>
-      <p class="pop-note">Base ${R.fmt(l.base.rate)} Mb/s, ${R.fmt(l.base.delay)} ms. Interfaces ${l.a}${l.b} e ${l.b}${l.a}.</p>
-      <div class="pop-actions"><button class="btn" type="button" data-restore>Restaurar</button><button class="btn btn-blue" type="button" data-apply>Aplicar</button></div>`;
+      <label class="slider-row" style="margin-bottom:14px"><span>Preset</span><select class="popup" data-preset style="grid-column: 2 / 4"><option value="">${L`Custom`}</option>${Object.entries(R.presets).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select></label>
+      <p class="pop-note">${L`Base ${R.fmt(l.base.rate)} Mb/s, ${R.fmt(l.base.delay)} ms. Interfaces ${l.a}${l.b} and ${l.b}${l.a}.`}</p>
+      <div class="pop-actions"><button class="btn" type="button" data-restore>${L`Restore`}</button><button class="btn btn-blue" type="button" data-apply>${L`Apply`}</button></div>`;
     sync();
     const c = curve(l.a, l.b, l.id), [x, y] = toScreen(c.mid);
     R.pop.open(popLink, x, y, { prefer: y > innerHeight * .55 ? 'above' : 'below', trigger: $(`.pill[data-link="${id}"]`, world), key: openKey, onClose: () => { openKey = null; draw(); } });
@@ -560,11 +560,11 @@
     // Changes go through tc on both ends of the veth pair, visibly
     const commit = (v, label) => {
       const cmd = (ns, dev) => v.down ? `sudo ip -n ${ns} link set ${dev} down` : `sudo ip netns exec ${ns} tc qdisc change dev ${dev} parent 1:1 netem delay ${R.fmt(v.delay)}ms ${R.fmt(v.jitter || 0)}ms${v.loss ? ` loss ${v.loss}%` : ''} && sudo ip netns exec ${ns} tc qdisc change dev ${dev} root tbf rate ${R.rateStr(v.rate)} burst 32kbit latency 400ms`;
-      R.job({ title: `${label} ${l.a}–${l.b}`, steps: [[`${l.a}${l.b} em ${l.a}`, cmd(l.a, `${l.a}${l.b}`), 280], [`${l.b}${l.a} em ${l.b}`, cmd(l.b, `${l.b}${l.a}`), 280]] }).then(() => { R.apply(id, v); sync(); R.toast('', `PUT /api/testbed/links/${id}`); });
+      R.job({ title: `${label} ${l.a}–${l.b}`, steps: [[L`${l.a}${l.b} on ${l.a}`, cmd(l.a, `${l.a}${l.b}`), 280], [L`${l.b}${l.a} on ${l.b}`, cmd(l.b, `${l.b}${l.a}`), 280]] }).then(() => { R.apply(id, v); sync(); R.toast('', `PUT /api/testbed/links/${id}`); });
     };
     if (q) { draft = R.presets[q.dataset.quick][1](l.base); commit(draft, q.textContent.trim()); sync(); return; }
-    if (e.target.closest('[data-apply]')) commit(draft, 'Aplicando');
-    if (e.target.closest('[data-restore]')) { draft = { ...l.base, down: false }; commit(draft, 'Restaurando'); }
+    if (e.target.closest('[data-apply]')) commit(draft, L`Applying`);
+    if (e.target.closest('[data-restore]')) { draft = { ...l.base, down: false }; commit(draft, L`Restoring`); }
   });
 
   // ------------------------------------------------------------ node popover: summary, interfaces, CLI
@@ -572,27 +572,27 @@
   let unmountVideo = null, nodeTab = 'sum', swConfirm = null;
   const kvRows = rows => `<dl class="kv">${rows.filter(Boolean).map(([k, v, mono]) => `<div><dt>${k}</dt><dd${mono ? ' class="mono"' : ''}>${v}</dd></div>`).join('')}</dl>`;
   function nodeBody(n) {
-    const tabs = `<div class="seg ptabs" role="tablist" aria-label="Seções">${[['sum', 'Resumo'], ['if', 'Interfaces'], ['cli', 'CLI']].map(([k, t]) => `<button type="button" role="tab" data-ntab="${k}" aria-pressed="${nodeTab === k}">${t}</button>`).join('')}</div>`;
+    const tabs = `<div class="seg ptabs" role="tablist" aria-label="${L`Sections`}">${[['sum', L`Summary`], ['if', 'Interfaces'], ['cli', 'CLI']].map(([k, t]) => `<button type="button" role="tab" data-ntab="${k}" aria-pressed="${nodeTab === k}">${t}</button>`).join('')}</div>`;
     const ifs = R.ifaces(n.id);
-    const ifList = `<div class="iflist">${ifs.map(i => { const l = i.link ? R.link(i.link) : null; const ld = l ? loads.get(l.id) || 0 : 0; return `<button type="button" class="ifrow" data-open-if="${i.name}"><span class="ifname mono">${i.name}</span><span class="ifpeer">par ${i.peer} em ${i.peerNode}</span><span class="ifq">${R.esc(R.ifaceQdisc(i))}</span>${l ? `<span class="ifload">${R.fmt1(ld)} Mb/s</span>` : ''}${R.icon('i-chevron-right', 'chev')}</button>`; }).join('') || '<p class="pop-note">Sem interfaces.</p>'}</div>`;
-    const cli = `${R.cliList(R.nodeCli(n.id))}<p class="pop-note">Os namespaces ficam em /var/run/netns/${n.id}; o LFT cria o link ao instanciar o container.</p>`;
+    const ifList = `<div class="iflist">${ifs.map(i => { const l = i.link ? R.link(i.link) : null; const ld = l ? loads.get(l.id) || 0 : 0; return `<button type="button" class="ifrow" data-open-if="${i.name}"><span class="ifname mono">${i.name}</span><span class="ifpeer">${L`peer ${i.peer} in ${i.peerNode}`}</span><span class="ifq">${R.esc(R.ifaceQdisc(i))}</span>${l ? `<span class="ifload">${R.fmt1(ld)} Mb/s</span>` : ''}${R.icon('i-chevron-right', 'chev')}</button>`; }).join('') || `<p class="pop-note">${L`No interfaces.`}</p>`}</div>`;
+    const cli = `${R.cliList(R.nodeCli(n.id))}<p class="pop-note">${L`The namespaces are in /var/run/netns/${n.id}, and LFT creates the link when it instantiates the container.`}</p>`;
     let sum;
     if (n.kind === 'switch') {
       const hs = R.hosts().filter(h => h.sw === n.id).map(h => h.id);
-      sum = kvRows([['Container', `${n.id} · Open vSwitch`, true], ['Datapath', n.dpid, true], ['dp-desc', R.esc(n.uf || '–')], ['Controlador', `${R.env.onos.controller} · OpenFlow 1.3`, true], ['Portas', `${ifs.length}, ${ifs.map(i => i.name).join(', ')}`, true], ['Hosts', hs.join(', ') || 'nenhum']])
+      sum = kvRows([['Container', `${n.id} · Open vSwitch`, true], ['Datapath', n.dpid, true], ['dp-desc', R.esc(n.uf || '–')], [L`Controller`, `${R.env.onos.controller} · OpenFlow 1.3`, true], [L`Ports`, `${ifs.length}, ${ifs.map(i => i.name).join(', ')}`, true], ['Hosts', hs.join(', ') || L`none`]])
         + (swConfirm === n.id
-          ? `<div class="pop-confirm" role="alertdialog" aria-label="Confirmar remoção"><p><b>Remover ${n.id}?</b> O container e ${((k) => `${k} link${k === 1 ? '' : 's'}`)(M.links.filter(l => l.a === n.id || l.b === n.id).length)} deixam de existir${hs.length ? `; ${hs.join(', ')} ${hs.length > 1 ? 'saem' : 'sai'} junto` : ''}.</p><div><button class="btn" type="button" data-act="sw-cancel">Cancelar</button><button class="btn btn-destroy" type="button" data-act="sw-remove-yes">Remover</button></div></div>`
-          : `<div class="pop-actions"><button class="btn btn-danger" type="button" data-act="sw-remove">Remover</button><button class="btn" type="button" data-act="sw-power">${n.off ? 'Ligar' : 'Desligar'}</button><button class="btn btn-blue" type="button" data-act="add-here"${n.off ? ' disabled' : ''}>Adicionar host aqui</button></div>`);
+          ? `<div class="pop-confirm" role="alertdialog" aria-label="${L`Confirm removal`}"><p><b>${L`Remove ${n.id}?`}</b> ${L`The container and ${((k) => `${k} link${k === 1 ? '' : 's'}`)(M.links.filter(l => l.a === n.id || l.b === n.id).length)} cease to exist${hs.length ? L`; ${hs.join(', ')} ${hs.length > 1 ? L`leave` : L`leaves`} too` : ''}.`}</p><div><button class="btn" type="button" data-act="sw-cancel">${L`Cancel`}</button><button class="btn btn-destroy" type="button" data-act="sw-remove-yes">${L`Remove`}</button></div></div>`
+          : `<div class="pop-actions"><button class="btn btn-danger" type="button" data-act="sw-remove">${L`Remove`}</button><button class="btn" type="button" data-act="sw-power">${n.off ? L`Turn on` : L`Turn off`}</button><button class="btn btn-blue" type="button" data-act="add-here"${n.off ? ' disabled' : ''}>${L`Add a host here`}</button></div>`);
     } else {
       const route = R.routeOf(n.id)?.[1] || Object.values(M.routes).find(r => r.server === n.id);
       const video = R.hasVideo(n), q = video ? R.qoe(n.id) : null, i = ifs[0];
       const sess = R.traffic.sessions.filter(x => x.status === 'running' && (x.client === n.id || x.server === n.id));
-      sum = `${video ? `<div class="video-box"><canvas data-canvas aria-label="Vídeo que ${n.id} está recebendo"></canvas></div>` : ''}`
-        + kvRows([['Container', `${n.id} · ${R.esc(n.image)}`, true], ['Interface', i ? `${i.name} ↔ ${i.peer}` : '–', true], ['Endereço', `${n.ip}/24 · ${i?.mac || ''}`, true], ['Switch', n.sw], route?.path && ['Caminho', route.path.slice(1, -1).join(', ')], q && ['Vídeo', `${q.stalled ? 'parado' : q.res}, ${R.fmt1(q.thr)} Mb/s`], sess.length && ['Tráfego', sess.map(x => `${x.tool} ${R.fmt1(x.rateNow)} Mb/s`).join(', ')]])
-        + `<div class="pop-actions"><button class="btn btn-danger" type="button" data-act="remove">Remover</button><button class="btn" type="button" data-act="edit">Editar</button><button class="btn" type="button" data-act="traffic-here">Tráfego</button>${video ? '<button class="btn btn-blue" type="button" data-act="watch">Vídeo</button>' : ''}</div>`;
+      sum = `${video ? `<div class="video-box"><canvas data-canvas aria-label="${L`Video that ${n.id} is receiving`}"></canvas></div>` : ''}`
+        + kvRows([['Container', `${n.id} · ${R.esc(n.image)}`, true], ['Interface', i ? `${i.name} ↔ ${i.peer}` : '–', true], [L`Address`, `${n.ip}/24 · ${i?.mac || ''}`, true], ['Switch', n.sw], route?.path && [L`Path`, route.path.slice(1, -1).join(', ')], q && [L`Video`, `${q.stalled ? L`stopped` : q.res}, ${R.fmt1(q.thr)} Mb/s`], sess.length && [L`Traffic`, sess.map(x => `${x.tool} ${R.fmt1(x.rateNow)} Mb/s`).join(', ')]])
+        + `<div class="pop-actions"><button class="btn btn-danger" type="button" data-act="remove">${L`Remove`}</button><button class="btn" type="button" data-act="edit">${L`Edit`}</button><button class="btn" type="button" data-act="traffic-here">${L`Traffic`}</button>${video ? `<button class="btn btn-blue" type="button" data-act="watch">${L`Video`}</button>` : ''}</div>`;
     }
-    const sub = n.kind === 'switch' ? `${n.off ? 'DESLIGADO' : 'UP'} · ${R.esc(n.pop || 'switch')}` : `${n.role} · ${n.ip}`;
-    return `<div class="pop-head"><div><h2>${n.id}</h2><p class="pop-sub"><span class="dot${n.off ? ' down' : ''}"></span>${sub}</p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>${tabs}<div class="ptab-body">${nodeTab === 'sum' ? sum : nodeTab === 'if' ? ifList : cli}</div>`;
+    const sub = n.kind === 'switch' ? `${n.off ? L`OFF` : 'UP'} · ${R.esc(n.pop || 'switch')}` : `${L(n.role)} · ${n.ip}`;
+    return `<div class="pop-head"><div><h2>${n.id}</h2><p class="pop-sub"><span class="dot${n.off ? ' down' : ''}"></span>${sub}</p></div><button class="close" type="button" data-close aria-label="${L`Close`}">${R.icon('i-x')}</button></div>${tabs}<div class="ptab-body">${nodeTab === 'sum' ? sum : nodeTab === 'if' ? ifList : cli}</div>`;
   }
   function openNode(id, keepTab = false) {
     const n = R.node(id);
@@ -631,23 +631,23 @@
       swConfirm = null;
       R.pop.close(true);
       const hs = R.hosts().filter(h => h.sw === id).map(h => h.id);
-      R.job({ title: `Removendo ${id}`, nodes: [id, ...hs], steps: [[`Removendo o container ${id}${hs.length ? ` e ${hs.join(', ')}` : ''}`, `sudo docker rm -f ${[id, ...hs].join(' ')}`, 800], ['Os pares veth somem com os namespaces', `sudo ip -br link | grep -cE '${id}s[0-9]+|s[0-9]+${id}'`, 400], ['O ONOS esquece o device', `curl -s -u onos:rocks -X DELETE ${R.env.onos.rest}/devices/${sw.dpid}`, 500]] })
+      R.job({ title: L`Removing ${id}`, nodes: [id, ...hs], steps: [[L`Removing the container ${id}${hs.length ? ` e ${hs.join(', ')}` : ''}`, `sudo docker rm -f ${[id, ...hs].join(' ')}`, 800], [L`The veth pairs go away with the namespaces`, `sudo ip -br link | grep -cE '${id}s[0-9]+|s[0-9]+${id}'`, 400], [L`ONOS forgets the device`, `curl -s -u onos:rocks -X DELETE ${R.env.onos.rest}/devices/${sw.dpid}`, 500]] })
         .then(() => { R.removeSwitch(id); R.toast('', `DELETE /api/testbed/switches/${id}`); });
     }
     if (act === 'sw-power') {
       R.pop.close(true);
       const ls = M.links.filter(l => l.a === id || l.b === id), far = l => (l.a === id ? l.b : l.a), hs = R.hosts().filter(h => h.sw === id);
       if (!sw.off) {
-        R.job({ title: `Desligando ${id}`, nodes: [id], steps: [[`Parando o container ${id}`, `sudo docker stop ${id}`, 800], [`${ls.length} links caem com o namespace`, ls.map(l => `${far(l)}${id}`).join(', ') + ' somem nos vizinhos', 400], ['O ONOS marca o device como indisponível', `curl -s -u onos:rocks ${R.env.onos.rest}/devices/${sw.dpid} | jq .available`, 500]] })
+        R.job({ title: L`Turning off ${id}`, nodes: [id], steps: [[L`Stopping the container ${id}`, `sudo docker stop ${id}`, 800], [L`${ls.length} links go down with the namespace`, ls.map(l => `${far(l)}${id}`).join(', ') + ` ${L`gone in the neighbours`}`, 400], [L`ONOS marks the device as unavailable`, `curl -s -u onos:rocks ${R.env.onos.rest}/devices/${sw.dpid} | jq .available`, 500]] })
           .then(() => { R.setSwitchPower(id, false); R.toast('', `POST /api/testbed/switches/${id}/stop`); });
       } else {
-        R.job({ title: `Ligando ${id}`, nodes: [id], steps: [[`Iniciando o container ${id}`, `sudo docker start ${id}`, 700], ['Refazendo os pares veth', ls.map(l => `ip link add ${id}${far(l)} type veth peer name ${far(l)}${id}`).join('; ') || 'nenhum link', 700], ['Filas tc em cada ponta', ls.map(l => `tc qdisc add dev ${id}${far(l)} root netem delay ${R.fmt(l.base.delay)}ms rate ${R.rateStr(l.base.rate)}`).join('; ') || '-', 500], hs.length ? ['Religando os hosts', hs.map(h => `ip link add ${h.id}${id} type veth peer name ${id}${h.id}`).join('; '), 500] : null, ['Controlador', `docker exec ${id} ovs-vsctl set-controller ${id} ${R.env.onos.controller}`, 500]].filter(Boolean) })
+        R.job({ title: L`Turning on ${id}`, nodes: [id], steps: [[L`Starting the container ${id}`, `sudo docker start ${id}`, 700], [L`Recreating the veth pairs`, ls.map(l => `ip link add ${id}${far(l)} type veth peer name ${far(l)}${id}`).join('; ') || L`no link`, 700], [L`tc queues at each end`, ls.map(l => `tc qdisc add dev ${id}${far(l)} root netem delay ${R.fmt(l.base.delay)}ms rate ${R.rateStr(l.base.rate)}`).join('; ') || '-', 500], hs.length ? [L`Reconnecting the hosts`, hs.map(h => `ip link add ${h.id}${id} type veth peer name ${id}${h.id}`).join('; '), 500] : null, [L`Controller`, `docker exec ${id} ovs-vsctl set-controller ${id} ${R.env.onos.controller}`, 500]].filter(Boolean) })
           .then(() => { R.setSwitchPower(id, true); R.toast('', `POST /api/testbed/switches/${id}/start`); });
       }
     }
     if (act === 'remove') {
       R.pop.close(true);
-      R.job({ title: `Removendo ${id}`, nodes: [id], steps: [[`Parando o container ${id}`, `sudo docker rm -f ${id}`, 700], ['Removendo o par veth', `sudo ip link del ${R.ifaces(id)[0]?.peer || id}`, 400]] }).then(() => { R.removeHost(id); R.toast('', `DELETE /api/testbed/hosts/${id}`); });
+      R.job({ title: L`Removing ${id}`, nodes: [id], steps: [[L`Stopping the container ${id}`, `sudo docker rm -f ${id}`, 700], [L`Removing the veth pair`, `sudo ip link del ${R.ifaces(id)[0]?.peer || id}`, 400]] }).then(() => { R.removeHost(id); R.toast('', `DELETE /api/testbed/hosts/${id}`); });
     }
   });
 
@@ -676,7 +676,7 @@
     pts.forEach(({ i, p }) => {
       keep.add(i.name);
       let d = box.querySelector(`[data-if="${i.name}"]`);
-      if (!d) { d = document.createElement('button'); d.type = 'button'; d.className = 'ifdot'; d.dataset.if = i.name; d.dataset.keepPop = ''; d.setAttribute('aria-label', `Interface ${i.name} em ${i.node}. Clique para ver como capturar o tráfego.`); d.innerHTML = `<span>${i.name}</span>`; box.append(d); }
+      if (!d) { d = document.createElement('button'); d.type = 'button'; d.className = 'ifdot'; d.dataset.if = i.name; d.dataset.keepPop = ''; d.setAttribute('aria-label', L`Interface ${i.name} in ${i.node}. Click to see how to capture the traffic.`); d.innerHTML = `<span>${i.name}</span>`; box.append(d); }
       d.style.left = `${p[0]}px`; d.style.top = `${p[1]}px`;
     });
     [...box.children].forEach(d => { if (!keep.has(d.dataset.if)) { d.classList.add('is-leaving'); setTimeout(() => d.remove(), 180); } });
@@ -696,14 +696,14 @@
     const i = R.iface(name);
     if (!i) return '';
     const l = i.link ? R.link(i.link) : null, ld = l ? loads.get(l.id) || 0 : 0;
-    const client = R.hosts().find(h => h.role === 'Cliente');
+    const client = R.hosts().find(h => h.role === 'Client');
     const cmds = R.ifaceCmds(i, client?.ip || '');
     const labels = { tcpdump: 'tcpdump', tshark: 'tshark', pcap: 'Wireshark', tc: 'tc', ip: 'ip' };
-    const notes = { tcpdump: 'Pacotes em tempo real, sem gravar. Ctrl+C encerra.', tshark: `Campos por pacote, filtrados para ${client?.ip || 'um host'}.`, pcap: 'Captura crua pelo docker exec e abre direto no Wireshark local.', tc: 'Filas e contadores: tbf limita a banda, netem aplica atraso, jitter e perda.', ip: 'Estado, MAC e contadores de bytes e pacotes da interface.' };
-    return `<div class="pop-head"><div><h2 class="mono">${i.name}</h2><p class="pop-sub"><span class="dot${l?.now.down ? ' down' : ''}"></span>veth em ${i.node} · par ${i.peer} em ${i.peerNode}</p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
-      ${kvRows([['MAC', i.mac, true], i.ip && ['Endereço', i.ip, true], ['Fila', R.esc(R.ifaceQdisc(i))], l && ['Tráfego agora', `${R.fmt1(ld)} Mb/s de ${R.fmt(l.now.rate)} Mb/s`], ['Namespace', `/var/run/netns/${i.node}`, true]])}
-      <div class="seg ptabs" role="tablist" aria-label="Ferramenta">${Object.entries(labels).map(([k, t]) => `<button type="button" role="tab" data-iftab="${k}" aria-pressed="${ifTab === k}">${t}</button>`).join('')}</div>
-      <div class="cmdbox"><code>${R.esc(cmds[ifTab])}</code><button type="button" class="ico" data-copy-text="${R.esc(cmds[ifTab])}" aria-label="Copiar comando">${R.icon('i-copy')}</button></div>
+    const notes = { tcpdump: L`Packets in real time, without recording. Ctrl+C ends it.`, tshark: L`Fields per packet, filtered for ${client?.ip || L`a host`}.`, pcap: L`Raw capture through docker exec that opens straight in the local Wireshark.`, tc: L`Queues and counters: tbf limits the bandwidth, netem applies delay, jitter and loss.`, ip: L`State, MAC and byte and packet counters of the interface.` };
+    return `<div class="pop-head"><div><h2 class="mono">${i.name}</h2><p class="pop-sub"><span class="dot${l?.now.down ? ' down' : ''}"></span>${L`veth in ${i.node} · peer ${i.peer} in ${i.peerNode}`}</p></div><button class="close" type="button" data-close aria-label="${L`Close`}">${R.icon('i-x')}</button></div>
+      ${kvRows([['MAC', i.mac, true], i.ip && [L`Address`, i.ip, true], [L`Queue`, R.esc(R.ifaceQdisc(i))], l && [L`Traffic now`, L`${R.fmt1(ld)} Mb/s of ${R.fmt(l.now.rate)} Mb/s`], ['Namespace', `/var/run/netns/${i.node}`, true]])}
+      <div class="seg ptabs" role="tablist" aria-label="${L`Tool`}">${Object.entries(labels).map(([k, t]) => `<button type="button" role="tab" data-iftab="${k}" aria-pressed="${ifTab === k}">${t}</button>`).join('')}</div>
+      <div class="cmdbox"><code>${R.esc(cmds[ifTab])}</code><button type="button" class="ico" data-copy-text="${R.esc(cmds[ifTab])}" aria-label="${L`Copy command`}">${R.icon('i-copy')}</button></div>
       <p class="pop-note">${notes[ifTab]}</p>`;
   }
   function openIface(name, x, y) {
@@ -738,58 +738,58 @@
   const sheet = $('[data-sheet="host"]'), form = $('[data-host-form]');
   const hostCli = () => {
     const f = form.elements, img = f.image.value === '__other' ? (f.custom.value.trim() || 'ubuntu:22.04') : f.image.value, id = f.name.value.trim() || 'cl?', sw = f.sw.value;
-    return [`docker run -d --name=${id} --network=none --cap-add=NET_ADMIN --entrypoint sleep ${img} infinity`, `ip link add ${id}${sw} type veth peer name ${sw}${id}`, `ip link set ${id}${sw} netns ${id}; ip link set ${sw}${id} netns ${sw}`, `ip -n ${id} addr add ${f.ip.value.trim() || '192.168.0.x'}/24 dev ${id}${sw}`, `docker exec ${sw} ovs-vsctl add-port ${sw} ${sw}${id}`, `# pelo LFT: sudo lft host add ${id} --switch ${sw} --ip ${f.ip.value.trim() || '192.168.0.x'} --image ${img}${f.role.value === 'Servidor' ? ' --server' : ''}`];
+    return [`docker run -d --name=${id} --network=none --cap-add=NET_ADMIN --entrypoint sleep ${img} infinity`, `ip link add ${id}${sw} type veth peer name ${sw}${id}`, `ip link set ${id}${sw} netns ${id}; ip link set ${sw}${id} netns ${sw}`, `ip -n ${id} addr add ${f.ip.value.trim() || '192.168.0.x'}/24 dev ${id}${sw}`, `docker exec ${sw} ovs-vsctl add-port ${sw} ${sw}${id}`, L`# through LFT: sudo lft host add ${id} --switch ${sw} --ip ${f.ip.value.trim() || '192.168.0.x'} --image ${img}${f.role.value === 'Server' ? ' --server' : ''}`];
   };
   const paintHostCli = () => { $('[data-host-cli]').textContent = hostCli().map(c => (c.startsWith('#') ? c : `$ ${c}`)).join('\n'); };
   function openHostSheet(id = null, sw = null) {
     const n = id ? R.node(id) : null;
     form.dataset.edit = id || '';
-    $('[data-host-title]').textContent = n ? `Editar ${n.id}` : 'Adicionar host';
+    $('[data-host-title]').textContent = n ? L`Edit ${n.id}` : L`Add host`;
     $('[data-host-remove]').hidden = !n;
-    form.querySelector('[type="submit"]').textContent = n ? 'Aplicar' : 'Criar host';
+    form.querySelector('[type="submit"]').textContent = n ? L`Apply` : L`Create host`;
     const f = form.elements;
     f.sw.innerHTML = R.switches().map(s => `<option value="${s.id}">${s.id}${s.uf ? ` · ${s.uf}` : ''}</option>`).join('');
-    const role = n?.role || 'Cliente';
+    const role = n?.role || 'Client';
     $$('[data-role]', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.role === role)));
     f.role.value = role;
     f.name.value = n?.id || R.nextName(role);
     f.sw.value = n?.sw || sw || R.switches().at(-1)?.id;
     f.ip.value = n?.ip || R.nextIp();
     const known = [...f.image.options].some(o => o.value === n?.image);
-    f.image.value = n ? (known ? n.image : '__other') : (role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client');
+    f.image.value = n ? (known ? n.image : '__other') : (role === 'Server' ? 'lft-dash-video' : 'lft-dash-client');
     f.custom.value = known ? '' : (n?.image || '');
     $('[data-custom-image]').hidden = f.image.value !== '__other';
     hint(); paintHostCli();
     sheet.showModal();
   }
   R.openHostSheet = openHostSheet;
-  const hint = () => { const img = form.elements.image.value; $('[data-image-hint]').textContent = R.IMAGES.find(([k]) => k === img)?.[1] || 'Uma imagem de CONSOLE_IMAGES, presente em docker images.'; };
+  const hint = () => { const img = form.elements.image.value; $('[data-image-hint]').textContent = R.IMAGES.find(([k]) => k === img)?.[1] || L`An image from CONSOLE_IMAGES, present in docker images.`; };
   form.addEventListener('input', paintHostCli);
   form.addEventListener('click', e => {
     const b = e.target.closest('[data-role]');
     if (b) {
       $$('[data-role]', form).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       form.elements.role.value = b.dataset.role;
-      if (!form.dataset.edit) { form.elements.name.value = R.nextName(b.dataset.role); form.elements.image.value = b.dataset.role === 'Servidor' ? 'lft-dash-video' : 'lft-dash-client'; hint(); }
+      if (!form.dataset.edit) { form.elements.name.value = R.nextName(b.dataset.role); form.elements.image.value = b.dataset.role === 'Server' ? 'lft-dash-video' : 'lft-dash-client'; hint(); }
       paintHostCli();
     }
-    if (e.target.closest('[data-host-remove]')) { const id = form.dataset.edit; sheet.close(); R.job({ title: `Removendo ${id}`, nodes: [id], steps: [[`Parando o container ${id}`, `sudo docker rm -f ${id}`, 700]] }).then(() => R.removeHost(id)); }
+    if (e.target.closest('[data-host-remove]')) { const id = form.dataset.edit; sheet.close(); R.job({ title: L`Removing ${id}`, nodes: [id], steps: [[L`Stopping the container ${id}`, `sudo docker rm -f ${id}`, 700]] }).then(() => R.removeHost(id)); }
     if (e.target.closest('[data-close-sheet]')) sheet.close();
   });
   form.elements.image.addEventListener('change', () => { $('[data-custom-image]').hidden = form.elements.image.value !== '__other'; hint(); paintHostCli(); });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const f = form.elements, id = f.name.value.trim(), edit = form.dataset.edit;
-    if (R.node(id) && id !== edit) { f.name.setCustomValidity('Esse nome já existe na topologia.'); f.name.reportValidity(); f.name.setCustomValidity(''); return; }
+    if (R.node(id) && id !== edit) { f.name.setCustomValidity(L`This name already exists in the topology.`); f.name.reportValidity(); f.name.setCustomValidity(''); return; }
     if (!form.reportValidity()) return;
     const image = f.image.value === '__other' ? (f.custom.value.trim() || 'ubuntu:22.04') : f.image.value;
     const data = { id, role: f.role.value, sw: f.sw.value, ip: f.ip.value.trim() || R.nextIp(), image };
-    const steps = hostCli().filter(c => !c.startsWith('#')).map((c, k) => [['Criando o container', 'Criando o par veth', 'Movendo as pontas para os namespaces', 'Endereçando a interface', 'Porta no Open vSwitch'][k], c, [1300, 500, 500, 400, 600][k]]);
+    const steps = hostCli().filter(c => !c.startsWith('#')).map((c, k) => [[L`Creating the container`, L`Creating the veth pair`, L`Moving the ends to the namespaces`, L`Addressing the interface`, L`Port in Open vSwitch`][k], c, [1300, 500, 500, 400, 600][k]]);
     sheet.close();
-    if (edit) { await R.job({ title: `Atualizando ${edit}`, nodes: [edit], steps: [[`Recriando ${edit}`, `sudo docker rm -f ${edit}`, 600], ...steps] }); R.updateHost(edit, data); R.toast('', `PUT /api/testbed/hosts/${edit}`); return; }
+    if (edit) { await R.job({ title: L`Updating ${edit}`, nodes: [edit], steps: [[L`Recreating ${edit}`, `sudo docker rm -f ${edit}`, 600], ...steps] }); R.updateHost(edit, data); R.toast('', `PUT /api/testbed/hosts/${edit}`); return; }
     const n = R.addHost({ ...data, pending: true });
     requestAnimationFrame(() => world.querySelector(`[data-node="${n.id}"]`)?.classList.add('is-provisioning'));
-    await R.job({ title: `Criando ${id}`, nodes: [id], steps: [...steps, ['Esperando o ONOS ver o host (ARP)', `curl -s ${R.env.onos.rest}/hosts | jq '.hosts[] | select(.ipAddresses[]=="${data.ip}")'`, 1100]], doneText: `${id} disponível em ${data.sw}` });
+    await R.job({ title: L`Creating ${id}`, nodes: [id], steps: [...steps, [L`Waiting for ONOS to see the host (ARP)`, `curl -s ${R.env.onos.rest}/hosts | jq '.hosts[] | select(.ipAddresses[]=="${data.ip}")'`, 1100]], doneText: L`${id} available on ${data.sw}` });
     delete n.pending; R.save(); render(); draw();
     R.toast('', 'POST /api/testbed/hosts');
   });
@@ -801,7 +801,7 @@
   let conns = [];
   function connRow(c, k) {
     const opts = R.switches().map(s => `<option value="${s.id}"${s.id === c.to ? ' selected' : ''}>${s.id}${s.uf ? ` · ${s.uf}` : ''}</option>`).join('');
-    return `<div class="conn-row" data-k="${k}"><select aria-label="Switch vizinho" data-c="to">${opts}</select><label class="unitf"><input type="number" min="0.1" step="0.1" value="${c.rate}" data-c="rate" aria-label="Capacidade"><em>Mb/s</em></label><label class="unitf"><input type="number" min="0" step="1" value="${c.delay}" data-c="delay" aria-label="Atraso"><em>ms</em></label><label class="unitf"><input type="number" min="0" max="100" step="0.5" value="${c.loss}" data-c="loss" aria-label="Perda"><em>%</em></label><button type="button" class="ico" data-del-conn="${k}" aria-label="Remover link">${R.icon('i-minus')}</button></div>`;
+    return `<div class="conn-row" data-k="${k}"><select aria-label="${L`Neighbour switch`}" data-c="to">${opts}</select><label class="unitf"><input type="number" min="0.1" step="0.1" value="${c.rate}" data-c="rate" aria-label="${L`Capacity`}"><em>Mb/s</em></label><label class="unitf"><input type="number" min="0" step="1" value="${c.delay}" data-c="delay" aria-label="${L`Delay`}"><em>ms</em></label><label class="unitf"><input type="number" min="0" max="100" step="0.5" value="${c.loss}" data-c="loss" aria-label="${L`Loss`}"><em>%</em></label><button type="button" class="ico" data-del-conn="${k}" aria-label="${L`Remove link`}">${R.icon('i-minus')}</button></div>`;
   }
   const swCli = () => {
     const f = swForm.elements, id = f.name.value.trim() || 's?', uf = f.uf.value, idx = +id.slice(1) || 0, dp = (idx + 1).toString(16).padStart(16, '0');
@@ -809,7 +809,7 @@
       ...conns.flatMap(c => [`ip link add ${id}${c.to} type veth peer name ${c.to}${id}`, `tc qdisc add dev ${id}${c.to} root handle 1: tbf rate ${R.rateStr(+c.rate)} burst 32kbit latency 400ms; tc qdisc add dev ${id}${c.to} parent 1:1 netem delay ${c.delay}ms${+c.loss ? ` loss ${c.loss}%` : ''}`])];
   };
   function paintSw() {
-    $('[data-conns]', swForm).innerHTML = conns.map(connRow).join('') || '<p class="conn-empty">Sem links. Um switch isolado não recebe fluxos.</p>';
+    $('[data-conns]', swForm).innerHTML = conns.map(connRow).join('') || `<p class="conn-empty">${L`No links. An isolated switch receives no flows.`}</p>`;
     const f = swForm.elements, idx = +f.name.value.slice(1) || 0;
     $('[data-dpid]', swForm).textContent = `datapath of:${(idx + 1).toString(16).padStart(16, '0')}`;
     $('[data-sw-cli]', swForm).textContent = swCli().map(c => `$ ${c}`).join('\n');
@@ -836,14 +836,14 @@
   swForm.addEventListener('submit', async e => {
     e.preventDefault();
     const f = swForm.elements, id = f.name.value.trim();
-    if (R.node(id)) { f.name.setCustomValidity('Esse nome já existe.'); f.name.reportValidity(); f.name.setCustomValidity(''); return; }
+    if (R.node(id)) { f.name.setCustomValidity(L`This name already exists.`); f.name.reportValidity(); f.name.setCustomValidity(''); return; }
     if (!swForm.reportValidity()) return;
     const uniq = [...new Map(conns.filter(c => c.to).map(c => [c.to, c])).values()];
     swSheet.close();
     const n = R.addSwitch({ id, uf: f.uf.value, links: uniq });
     n.pending = true; render(); draw();
     const cmds = swCli();
-    await R.job({ title: `Criando ${id}`, nodes: [id], steps: [['Subindo o container Open vSwitch', cmds[0], 1500], ['Criando a bridge e o datapath', cmds[1], 700], ['Ligando ao controlador ONOS', cmds[2], 800], ...uniq.map((c, k) => [`Link ${id}–${c.to}: veth e filas tc`, cmds[3 + k * 2] + ' && ' + cmds[4 + k * 2], 700]), ['Esperando o ONOS (device AVAILABLE, LLDP)', `curl -s ${R.env.onos.rest}/devices/of:${(+id.slice(1) + 1).toString(16).padStart(16, '0')}`, 1400]], doneText: `${id} AVAILABLE no ONOS` });
+    await R.job({ title: L`Creating ${id}`, nodes: [id], steps: [[L`Starting the Open vSwitch container`, cmds[0], 1500], [L`Creating the bridge and the datapath`, cmds[1], 700], [L`Connecting to the ONOS controller`, cmds[2], 800], ...uniq.map((c, k) => [L`Link ${id}–${c.to}: veth and tc queues`, cmds[3 + k * 2] + ' && ' + cmds[4 + k * 2], 700]), [L`Waiting for ONOS (device AVAILABLE, LLDP)`, `curl -s ${R.env.onos.rest}/devices/of:${(+id.slice(1) + 1).toString(16).padStart(16, '0')}`, 1400]], doneText: L`${id} AVAILABLE in ONOS` });
     delete n.pending; R.save(); render(); draw();
     R.toast('', 'POST /api/testbed/switches');
   });
@@ -854,26 +854,26 @@
   let svc = 'cdn-qoe', svcVals = {}, svcIntent = null;
   const hostOpts = (sel, clientsOnly) => (clientsOnly ? R.clientsList() : R.hosts()).map(h => `<option value="${h.ip}"${h.ip === sel ? ' selected' : ''}>${h.id} · ${h.ip}</option>`).join('');
   function paintSvc() {
-    svcList.innerHTML = R.SERVICES.map(s => { const live = M.intents.filter(i => i.state === 'deployed' && (R.nileInfo(i.nile).kind === s.id || (s.id === 'acl' && R.nileInfo(i.nile).kind === 'acl'))).length; return `<button type="button" class="svc-item" data-svc="${s.id}" aria-current="${s.id === svc}"><span class="sq ${s.tone}">${R.icon(s.ic)}</span><span><b>${s.name}</b><em>${live ? `${live} ativa${live > 1 ? 's' : ''}` : 'Disponível'}</em></span></button>`; }).join('');
+    svcList.innerHTML = R.SERVICES.map(s => { const live = M.intents.filter(i => i.state === 'deployed' && (R.nileInfo(i.nile).kind === s.id || (s.id === 'acl' && R.nileInfo(i.nile).kind === 'acl'))).length; return `<button type="button" class="svc-item" data-svc="${s.id}" aria-current="${s.id === svc}"><span class="sq ${s.tone}">${R.icon(s.ic)}</span><span><b>${s.name}</b><em>${live ? L`${live} active` : L`Available`}</em></span></button>`; }).join('');
     const s = R.SERVICES.find(x => x.id === svc), v = svcVals;
     const clients = R.clientsList();
     v.ip ||= clients[0]?.ip || R.hosts()[0]?.ip || '';
     v.mbps ||= 10; v.action ||= 'block'; v.proto ||= 'udp';
-    const target = (label = 'Cliente', clientsOnly = true) => `<label class="frow"><span class="flabel">${label}</span><span class="fctl"><select data-v="ip" aria-label="${label}">${hostOpts(v.ip, clientsOnly)}</select></span></label>`;
+    const target = (label = 'Client', clientsOnly = true) => `<label class="frow"><span class="flabel">${label}</span><span class="fctl"><select data-v="ip" aria-label="${label}">${hostOpts(v.ip, clientsOnly)}</select></span></label>`;
     const seg = (key, opts, label) => `<div class="frow"><span class="flabel">${label}</span><div class="seg" role="group" aria-label="${label}">${opts.map(([val, t]) => `<button type="button" data-sv="${key}" data-val="${val}" aria-pressed="${v[key] === val}">${t}</button>`).join('')}</div></div>`;
     let fields = '';
     if (svc === 'cdn-qoe') fields = target();
-    if (svc === 'bandwidth') fields = target('Alvo', false) + `<label class="frow"><span class="flabel">Limite máximo</span><span class="fctl unitf"><input type="number" min="1" step="1" value="${v.mbps}" data-v="mbps" aria-label="Limite em Mb/s"><em>Mb/s</em></span></label>`;
-    if (svc === 'acl') fields = target('Alvo', false) + seg('action', [['block', 'Bloquear'], ['allow', 'Liberar']], 'Ação') + seg('proto', [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], 'Protocolo');
+    if (svc === 'bandwidth') fields = target(L`Target`, false) + `<label class="frow"><span class="flabel">${L`Maximum limit`}</span><span class="fctl unitf"><input type="number" min="1" step="1" value="${v.mbps}" data-v="mbps" aria-label="${L`Limit in Mb/s`}"><em>Mb/s</em></span></label>`;
+    if (svc === 'acl') fields = target(L`Target`, false) + seg('action', [['block', L`Block`], ['allow', L`Allow`]], L`Action`) + seg('proto', [['tcp', 'TCP'], ['udp', 'UDP'], ['icmp', 'ICMP'], ['ssh', 'SSH'], ['http', 'HTTP'], ['https', 'HTTPS']], L`Protocol`);
     const nile = R.serviceNile(svc, v, `q${M.intents.length + 1}`);
     const live = M.intents.filter(i => ['deployed', 'checking'].includes(i.state) && R.nileInfo(i.nile).kind === (svc === 'acl' ? 'acl' : svc));
     const it = svcIntent && M.intents.find(i => i.id === svcIntent);
     svcForm.innerHTML = `<header class="svc-head"><span class="sq lg ${s.tone}">${R.icon(s.ic)}</span><div><h3>${s.name}</h3><p>${s.what}</p></div></header>
       <div class="fgrid">${fields}</div>
-      <div class="code"><div class="code-head"><span>Nile gerada</span><button type="button" class="code-copy" data-copy-text="${R.esc(nile)}">${R.icon('i-copy')}<span>Copiar</span></button></div><pre class="nile">${R.highlight(nile)}</pre></div>
-      ${it ? `<div class="svc-status st-${it.state}">${it.state === 'checking' ? '<i class="spinner"></i>Verificando no deployer' : it.state === 'deployed' ? `${R.icon('i-check')}${it.id} implantada às ${it.when}: ${R.esc(it.effect || '')}` : it.state === 'rejected' ? `${R.icon('i-x')}Recusada (${it.code || 422}): ${R.esc(it.error)}` : ''}</div>` : ''}
-      ${live.length ? `<div class="svc-live"><span class="flabel">Em vigor</span>${live.map(i => `<div class="svc-live-row"><code>${R.highlight(i.nile)}</code><button type="button" class="btn btn-danger" data-revoke="${i.id}">Revogar</button></div>`).join('')}</div>` : ''}
-      <div class="sheet-foot"><button type="button" class="btn" data-close-sheet>Fechar</button><button type="submit" class="btn btn-blue">Implantar</button></div>`;
+      <div class="code"><div class="code-head"><span>${L`Nile generated`}</span><button type="button" class="code-copy" data-copy-text="${R.esc(nile)}">${R.icon('i-copy')}<span>${L`Copy`}</span></button></div><pre class="nile">${R.highlight(nile)}</pre></div>
+      ${it ? `<div class="svc-status st-${it.state}">${it.state === 'checking' ? `<i class="spinner"></i>${L`Checking with the deployer`}` : it.state === 'deployed' ? L`${R.icon('i-check')}${it.id} deployed at ${it.when}: ${R.esc(it.effect || '')}` : it.state === 'rejected' ? L`${R.icon('i-x')}Refused (${it.code || 422}): ${R.esc(it.error)}` : ''}</div>` : ''}
+      ${live.length ? `<div class="svc-live"><span class="flabel">${L`In force`}</span>${live.map(i => `<div class="svc-live-row"><code>${R.highlight(i.nile)}</code><button type="button" class="btn btn-danger" data-revoke="${i.id}">${L`Revoke`}</button></div>`).join('')}</div>` : ''}
+      <div class="sheet-foot"><button type="button" class="btn" data-close-sheet>${L`Close`}</button><button type="submit" class="btn btn-blue">${L`Deploy`}</button></div>`;
   }
   function openServices(id) { if (id) svc = id; svcIntent = null; paintSvc(); svcSheet.showModal(); }
   svcSheet.addEventListener('click', e => {
@@ -887,7 +887,7 @@
     e.preventDefault();
     const h = R.hosts().find(x => x.ip === svcVals.ip);
     const s = R.SERVICES.find(x => x.id === svc);
-    const it = R.proposeIntent({ nile: R.serviceNile(svc, svcVals, 'q0'), client: h?.id, ask: `${s.name} em ${h?.id || svcVals.ip}, pelo painel de serviços` });
+    const it = R.proposeIntent({ nile: R.serviceNile(svc, svcVals, 'q0'), client: h?.id, ask: L`${s.name} on ${h?.id || svcVals.ip}, from the services panel` });
     svcIntent = it.id;
     paintSvc();
     const p = R.intentAct(it.id, 'approve');
@@ -902,41 +902,41 @@
   let tr = {};
   // DASH: the client's image is the player, the server's image the video (LFT's docker/)
   const PLAYERS = { 'lft-dash-client': 'dash-play', 'lft-pydash-client': 'pydash-play' };
-  const VIDEOS = { 'lft-dash-video': 'o vídeo de teste (7 qualidades, 60 s em loop)', 'lft-dash-live': 'a transmissão ao vivo (5 qualidades)', 'lft-pydash-server': 'o Big Buck Bunny (6 qualidades)' };
+  const VIDEOS = { 'lft-dash-video': L`the test video (7 qualities, 60 s in a loop)`, 'lft-dash-live': L`the live stream (5 qualities)`, 'lft-pydash-server': L`Big Buck Bunny (6 qualities)` };
   const trHosts = kind => R.hosts().filter(h => tr.tool !== 'dash' || (kind === 'server' ? R.DASH_SERVERS : R.DASH_CLIENTS).has(h.image));
   // What a DASH session plays, and the images no host runs yet
   function dashWhat() {
     const c = R.node(tr.client), s = R.node(tr.server);
-    if (!c || !s) return `Nenhum ${!s ? 'servidor' : 'cliente'} DASH no testbed: adicione um host com ${[...(!s ? R.DASH_SERVERS : R.DASH_CLIENTS)].join(', ')}.`;
-    if (c.image === 'lft-pydash-client' && s.image !== 'lft-pydash-server') return 'O pydash só toca o lft-pydash-server.';
-    return `${c.id} toca ${VIDEOS[s.image]} com o ${PLAYERS[c.image]}, que escolhe a qualidade pela vazão.`;
+    if (!c || !s) return L`No DASH ${!s ? L`server` : L`client`} in the testbed: add a host with ${[...(!s ? R.DASH_SERVERS : R.DASH_CLIENTS)].join(', ')}.`;
+    if (c.image === 'lft-pydash-client' && s.image !== 'lft-pydash-server') return L`pydash only plays lft-pydash-server.`;
+    return L`${c.id} plays ${VIDEOS[s.image]} with ${PLAYERS[c.image]}, which picks the quality by the throughput.`;
   }
   const dashMissing = () => {
     const have = new Set(R.hosts().map(h => h.image)), missing = [...R.DASH_SERVERS, ...R.DASH_CLIENTS].filter(i => !have.has(i));
-    return missing.length ? `Nenhum host usa ${missing.join(', ').replace(/, ([^,]+)$/, ' ou $1')} ainda; crie um em Adicionar host para tocá-lo aqui.` : '';
+    return missing.length ? L`No host uses ${missing.join(', ').replace(/, ([^,]+)$/, ` ${L`or $1`}`)} yet. Create one in Add host to play it here.` : '';
   };
   const trCli = () => {
     const c = R.node(tr.client), s = R.node(tr.server);
     if (!c || !s) return '';
     const file = tr.tool === 'iperf3' ? `${tr.out}/${c.id}-${s.id}.json` : `${tr.out}/${c.id}.jsonl`;
     return tr.tool === 'iperf3'
-      ? [`# servidor, em segundo plano, log em /tmp/iperf3-${tr.port}.log`, `sudo docker exec -d ${s.id} bash -lc "iperf3 -s -p ${tr.port} --idle-timeout 5 </dev/null >/tmp/iperf3-${tr.port}.log 2>&1"`, '# cliente, JSON no diretório de resultados', `mkdir -p ${tr.out} && sudo docker exec ${c.id} iperf3 -c ${s.ip} -p ${tr.port} ${tr.dir === 'down' ? '-R ' : ''}${tr.proto === 'udp' ? '-u ' : ''}-t ${tr.duration || 86400} -i 1 -b ${tr.rate}M --fq-rate ${tr.rate}M --forceflush -J > ${file}`, `# acompanhar: sudo docker exec ${s.id} tail -f /tmp/iperf3-${tr.port}.log`].join('\n')
-      : [`sudo lft traffic start --tool dash --client ${c.id} --server ${s.id} --duration ${tr.duration} --out ${tr.out}`, `# no cliente, uma linha JSON por segmento em ${file}: ${PLAYERS[c.image] || 'dash-play'} ${s.ip} ${tr.duration}`, `# acesso no servidor: sudo docker exec ${s.id} tail -f /var/log/nginx/access.log`].join('\n');
+      ? [L`# server, in the background, log in /tmp/iperf3-${tr.port}.log`, `sudo docker exec -d ${s.id} bash -lc "iperf3 -s -p ${tr.port} --idle-timeout 5 </dev/null >/tmp/iperf3-${tr.port}.log 2>&1"`, L`# client, JSON in the results directory`, `mkdir -p ${tr.out} && sudo docker exec ${c.id} iperf3 -c ${s.ip} -p ${tr.port} ${tr.dir === 'down' ? '-R ' : ''}${tr.proto === 'udp' ? '-u ' : ''}-t ${tr.duration || 86400} -i 1 -b ${tr.rate}M --fq-rate ${tr.rate}M --forceflush -J > ${file}`, `# acompanhar: sudo docker exec ${s.id} tail -f /tmp/iperf3-${tr.port}.log`].join('\n')
+      : [`sudo lft traffic start --tool dash --client ${c.id} --server ${s.id} --duration ${tr.duration} --out ${tr.out}`, L`# on the client, one JSON line per segment in ${file}: ${PLAYERS[c.image] || 'dash-play'} ${s.ip} ${tr.duration}`, `# acesso no servidor: sudo docker exec ${s.id} tail -f /var/log/nginx/access.log`].join('\n');
   };
   function paintTr() {
     const iperf = tr.tool === 'iperf3';
     ['server', 'client'].forEach(k => { if (!trHosts(k).some(h => h.id === tr[k])) tr[k] = trHosts(k)[0]?.id; });
     const opts = k => trHosts(k).map(h => `<option value="${h.id}">${h.id} · ${iperf ? h.ip : h.image}</option>`).join('');
     $('[data-traffic-fields]', trForm).innerHTML = `
-      <div class="frow"><span class="flabel">Ferramenta</span><div class="seg" role="group" aria-label="Ferramenta"><button type="button" data-tv="tool" data-val="iperf3" aria-pressed="${iperf}">iperf3</button><button type="button" data-tv="tool" data-val="dash" aria-pressed="${!iperf}">DASH</button></div></div>
-      <label class="frow"><span class="flabel">${iperf ? 'Servidor (iperf3 -s)' : 'Servidor DASH'}</span><span class="fctl"><select data-t="server" aria-label="Servidor">${opts('server')}</select>${iperf ? '' : `<small>${R.esc(dashMissing())}</small>`}</span></label>
-      <label class="frow"><span class="flabel">${iperf ? 'Cliente (iperf3 -c)' : 'Cliente DASH'}</span><span class="fctl"><select data-t="client" aria-label="Cliente">${opts('client')}</select>${iperf ? '' : '<small data-tr-what></small>'}</span></label>
-      ${iperf ? `<div class="frow"><span class="flabel">Sentido</span><div class="seg" role="group" aria-label="Sentido"><button type="button" data-tv="dir" data-val="down" aria-pressed="${tr.dir === 'down'}">Servidor → cliente</button><button type="button" data-tv="dir" data-val="up" aria-pressed="${tr.dir === 'up'}">Cliente → servidor</button></div></div>
-      <div class="frow"><span class="flabel">Protocolo</span><div class="seg" role="group" aria-label="Protocolo"><button type="button" data-tv="proto" data-val="tcp" aria-pressed="${tr.proto === 'tcp'}">TCP</button><button type="button" data-tv="proto" data-val="udp" aria-pressed="${tr.proto === 'udp'}">UDP</button></div></div>
-      <label class="frow"><span class="flabel">Taxa alvo</span><span class="fctl unitf"><input type="number" min="0.1" step="0.1" value="${tr.rate}" data-t="rate" aria-label="Taxa em Mb/s"><em>Mb/s</em></span></label>
-      <label class="frow"><span class="flabel">Porta</span><span class="fctl unitf"><input type="number" min="1024" max="65535" value="${tr.port}" data-t="port" aria-label="Porta"><em>TCP/UDP no servidor</em></span></label>` : ''}
-      <label class="frow"><span class="flabel">Duração</span><span class="fctl unitf"><input type="number" min="0" step="10" value="${tr.duration}" data-t="duration" aria-label="Duração em segundos"><em>s, 0 até parar</em></span></label>
-      <label class="frow"><span class="flabel">Salvar em</span><span class="fctl"><input type="text" value="${R.esc(tr.out)}" data-t="out" spellcheck="false" aria-label="Diretório de resultados"><small data-tr-file></small></span></label>`;
+      <div class="frow"><span class="flabel">${L`Tool`}</span><div class="seg" role="group" aria-label="${L`Tool`}"><button type="button" data-tv="tool" data-val="iperf3" aria-pressed="${iperf}">iperf3</button><button type="button" data-tv="tool" data-val="dash" aria-pressed="${!iperf}">DASH</button></div></div>
+      <label class="frow"><span class="flabel">${iperf ? L`Server (iperf3 -s)` : L`DASH server`}</span><span class="fctl"><select data-t="server" aria-label="${L`Server`}">${opts('server')}</select>${iperf ? '' : `<small>${R.esc(dashMissing())}</small>`}</span></label>
+      <label class="frow"><span class="flabel">${iperf ? L`Client (iperf3 -c)` : L`DASH client`}</span><span class="fctl"><select data-t="client" aria-label="${L`Client`}">${opts('client')}</select>${iperf ? '' : '<small data-tr-what></small>'}</span></label>
+      ${iperf ? `<div class="frow"><span class="flabel">${L`Direction`}</span><div class="seg" role="group" aria-label="${L`Direction`}"><button type="button" data-tv="dir" data-val="down" aria-pressed="${tr.dir === 'down'}">${L`Server → client`}</button><button type="button" data-tv="dir" data-val="up" aria-pressed="${tr.dir === 'up'}">${L`Client → server`}</button></div></div>
+      <div class="frow"><span class="flabel">${L`Protocol`}</span><div class="seg" role="group" aria-label="${L`Protocol`}"><button type="button" data-tv="proto" data-val="tcp" aria-pressed="${tr.proto === 'tcp'}">TCP</button><button type="button" data-tv="proto" data-val="udp" aria-pressed="${tr.proto === 'udp'}">UDP</button></div></div>
+      <label class="frow"><span class="flabel">${L`Target rate`}</span><span class="fctl unitf"><input type="number" min="0.1" step="0.1" value="${tr.rate}" data-t="rate" aria-label="${L`Rate in Mb/s`}"><em>Mb/s</em></span></label>
+      <label class="frow"><span class="flabel">${L`Port`}</span><span class="fctl unitf"><input type="number" min="1024" max="65535" value="${tr.port}" data-t="port" aria-label="${L`Port`}"><em>${L`TCP/UDP on the server`}</em></span></label>` : ''}
+      <label class="frow"><span class="flabel">${L`Duration`}</span><span class="fctl unitf"><input type="number" min="0" step="10" value="${tr.duration}" data-t="duration" aria-label="${L`Duration in seconds`}"><em>${L`s, 0 until stopped`}</em></span></label>
+      <label class="frow"><span class="flabel">${L`Save in`}</span><span class="fctl"><input type="text" value="${R.esc(tr.out)}" data-t="out" spellcheck="false" aria-label="${L`Results directory`}"><small data-tr-file></small></span></label>`;
     $('[data-t="server"]', trForm).value = tr.server; $('[data-t="client"]', trForm).value = tr.client;
     paintTrCli();
   }
@@ -945,12 +945,12 @@
     const what = $('[data-tr-what]', trForm);
     if (what) what.textContent = dashWhat();
     const f = $('[data-tr-file]', trForm);
-    if (f) f.textContent = `Arquivo: ${tr.tool === 'iperf3' ? `${tr.out}/${tr.client}-${tr.server}.json` : `${tr.out}/${tr.client}.jsonl`}`;
+    if (f) f.textContent = L`File: ${tr.tool === 'iperf3' ? `${tr.out}/${tr.client}-${tr.server}.json` : `${tr.out}/${tr.client}.jsonl`}`;
   }
   function openTraffic(nodeId) {
     const n = nodeId && R.node(nodeId);
-    const server = n?.role === 'Servidor' ? n.id : R.hosts().find(h => h.role === 'Servidor')?.id;
-    const client = n?.role === 'Cliente' ? n.id : R.hosts().find(h => h.role === 'Cliente' && h.id !== server)?.id || R.hosts().find(h => h.id !== server)?.id;
+    const server = n?.role === 'Server' ? n.id : R.hosts().find(h => h.role === 'Server')?.id;
+    const client = n?.role === 'Client' ? n.id : R.hosts().find(h => h.role === 'Client' && h.id !== server)?.id || R.hosts().find(h => h.id !== server)?.id;
     tr = { tool: 'iperf3', server, client, dir: 'down', proto: 'tcp', rate: 35, port: 5201, duration: 60, out: R.traffic.defaults('iperf3') };
     paintTr();
     trSheet.showModal();
@@ -965,7 +965,7 @@
   trForm.addEventListener('change', e => { const k = e.target.dataset.t; if (k) { tr[k] = e.target.type === 'number' ? +e.target.value : e.target.value; paintTrCli(); } });
   trForm.addEventListener('submit', e => {
     e.preventDefault();
-    if (!tr.client || !tr.server || tr.client === tr.server) { R.toast('Escolha um cliente e um servidor diferentes.'); return; }
+    if (!tr.client || !tr.server || tr.client === tr.server) { R.toast(L`Choose a different client and server.`); return; }
     trSheet.close();
     R.traffic.start({ tool: tr.tool, client: tr.client, server: tr.server, reverse: tr.dir === 'down', proto: tr.tool === 'dash' ? 'tcp' : tr.proto, rate: +tr.rate || 35, port: +tr.port || 5201, duration: +tr.duration || 0, out: tr.out.trim() || R.traffic.defaults(tr.tool) });
   });
@@ -981,10 +981,10 @@
     const list = R.traffic.sessions.slice(0, 5);
     tpanel.hidden = !list.length;
     if (!list.length) return;
-    tpanel.innerHTML = `<header><b>Tráfego</b><span>${R.traffic.sessions.filter(x => x.status === 'running').length} em curso</span><button type="button" class="ico" data-tp-new aria-label="Iniciar tráfego">${R.icon('i-plus')}</button></header>${list.map(x => {
+    tpanel.innerHTML = `<header><b>${L`Traffic`}</b><span>${L`${R.traffic.sessions.filter(x => x.status === 'running').length} running`}</span><button type="button" class="ico" data-tp-new aria-label="${L`Start traffic`}">${R.icon('i-plus')}</button></header>${list.map(x => {
       const on = x.status === 'running', t = x.t0 ? (Date.now() - x.t0) / 1000 : 0;
       const from = x.tool === 'dash' || x.reverse ? x.server : x.client, to = x.tool === 'dash' || x.reverse ? x.client : x.server;
-      return `<div class="tp-row st-${x.status}"><span class="tp-ic">${x.status === 'starting' ? '<i class="spinner"></i>' : R.icon(x.tool === 'dash' ? 'i-play' : 'i-traffic')}</span><span class="tp-main"><b>${from} → ${to}</b><em>${x.tool}${x.tool === 'iperf3' ? ` ${x.proto.toUpperCase()}` : ''} · ${on ? `${R.fmt1(x.rateNow)} Mb/s · ${mmss(t)}` : x.status === 'starting' ? 'iniciando' : x.status === 'failed' ? 'não alcançou o servidor' : `salvo em ${x.file}`}</em></span><button type="button" class="ico" data-tp-log="${x.id}" aria-label="Ver log">${R.icon('i-terminal')}</button>${on || x.status === 'starting' ? `<button type="button" class="ico" data-tp-stop="${x.id}" aria-label="Parar">${R.icon('i-stop')}</button>` : `<button type="button" class="ico" data-tp-drop="${x.id}" aria-label="Remover da lista">${R.icon('i-x')}</button>`}</div>`;
+      return `<div class="tp-row st-${x.status}"><span class="tp-ic">${x.status === 'starting' ? '<i class="spinner"></i>' : R.icon(x.tool === 'dash' ? 'i-play' : 'i-traffic')}</span><span class="tp-main"><b>${from} → ${to}</b><em>${x.tool}${x.tool === 'iperf3' ? ` ${x.proto.toUpperCase()}` : ''} · ${on ? `${R.fmt1(x.rateNow)} Mb/s · ${mmss(t)}` : x.status === 'starting' ? L`starting` : x.status === 'failed' ? L`did not reach the server` : L`saved in ${x.file}`}</em></span><button type="button" class="ico" data-tp-log="${x.id}" aria-label="${L`See log`}">${R.icon('i-terminal')}</button>${on || x.status === 'starting' ? `<button type="button" class="ico" data-tp-stop="${x.id}" aria-label="${L`Stop`}">${R.icon('i-stop')}</button>` : `<button type="button" class="ico" data-tp-drop="${x.id}" aria-label="${L`Remove from the list`}">${R.icon('i-x')}</button>`}</div>`;
     }).join('')}`;
   }
   tpanel.addEventListener('pointerdown', () => { pressing = true; });
@@ -1002,7 +1002,7 @@
     if (!x) return;
     const c = R.node(x.client), s = R.node(x.server);
     $('[data-tl-title]').textContent = `${x.tool} · ${x.client} e ${x.server}`;
-    $('[data-tl-sub]').textContent = logSide === 'client' ? `Saída do cliente em ${x.client} (${c?.ip}). ${x.clientCmd}` : `Saída do servidor em ${x.server} (${s?.ip}), arquivo ${x.serverLog} dentro do container.`;
+    $('[data-tl-sub]').textContent = logSide === 'client' ? L`Client output in ${x.client} (${c?.ip}). ${x.clientCmd}` : L`Server output in ${x.server} (${s?.ip}), file ${x.serverLog} inside the container.`;
     $('[data-tl-file]').innerHTML = `${R.icon('i-export')}<code>${R.esc(logSide === 'client' ? x.file : `${x.server}:${x.serverLog}`)}</code>`;
     const pre = $('[data-tl-log]'), atEnd = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     pre.textContent = x.lines[logSide].join('\n');
@@ -1014,7 +1014,7 @@
   logSheet.addEventListener('click', e => {
     if (e.target === logSheet || e.target.closest('[data-close-sheet]')) { logSheet.close(); return; }
     const sd = e.target.closest('[data-tl-side]'); if (sd) { logSide = sd.dataset.tlSide; paintLog(); }
-    if (e.target.closest('[data-tl-copy]')) { const x = R.traffic.sessions.find(s => s.id === logId); navigator.clipboard?.writeText(x?.file || '').catch(() => {}); R.toast('Caminho copiado.'); }
+    if (e.target.closest('[data-tl-copy]')) { const x = R.traffic.sessions.find(s => s.id === logId); navigator.clipboard?.writeText(x?.file || '').catch(() => {}); R.toast(L`Path copied.`); }
     if (e.target.closest('[data-tl-stop]')) R.traffic.stop(logId);
   });
   R.on(type => { if (type === 'traffic') { paintPanel(); if (logSheet.open) paintLog(); updateLoads(); } });
@@ -1036,7 +1036,7 @@
   const popAdd = $('[data-pop="add"]'), addBtn = $('[data-tool="add"]');
   addBtn.addEventListener('click', () => {
     if (R.pop.current?.key === 'add') { R.pop.close(); return; }
-    popAdd.innerHTML = `<div class="mlist">${[['switch', 'i-switch', 'Switch…', 'Open vSwitch com links'], ['host', 'i-laptop', 'Host…', 'Container ligado a um switch'], ['traffic', 'i-traffic', 'Tráfego…', 'iperf3 ou DASH entre hosts'], ['topology', 'i-topo', 'Nova topologia…', 'Diamante, RNP ou vazia']].map(([k, ic, t, d]) => `<button type="button" role="menuitem" data-add="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join('')}</div>`;
+    popAdd.innerHTML = `<div class="mlist">${[['switch', 'i-switch', 'Switch…', L`Open vSwitch with links`], ['host', 'i-laptop', 'Host…', L`Container connected to a switch`], ['traffic', 'i-traffic', L`Traffic…`, L`iperf3 or DASH between hosts`], ['topology', 'i-topo', L`New topology…`, L`Diamond, RNP or empty`]].map(([k, ic, t, d]) => `<button type="button" role="menuitem" data-add="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join('')}</div>`;
     const r = addBtn.getBoundingClientRect();
     R.pop.open(popAdd, r.left + r.width / 2, r.bottom - 6, { trigger: addBtn, key: 'add' });
   });
@@ -1061,11 +1061,11 @@
   lookBtn.addEventListener('click', () => {
     if (R.pop.current?.key === 'look') { R.pop.close(); return; }
     popLook.innerHTML = `
-      <div class="pop-head"><h2>Aparência</h2><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
-      <div class="look-row"><span>Nomes dos nós</span><button class="toggle" type="button" role="switch" aria-checked="${look.labels}" data-look="labels" aria-label="Nomes dos nós"></button></div>
-      <div class="look-row look-metric"><span>Rótulo dos links</span><div class="seg" role="group" aria-label="Rótulo dos links">${[['use', 'Uso'], ['latency', 'Latência'], ['capacity', 'Capacidade']].map(([v, t]) => `<button type="button" data-metric="${v}" aria-pressed="${look.metric === v}">${t}</button>`).join('')}</div></div>
-      <div class="look-row"><span>Mostrar rótulos</span><button class="toggle" type="button" role="switch" aria-checked="${look.latency}" data-look="latency" aria-label="Mostrar rótulos dos links"></button></div>
-      <button class="btn btn-plain look-fit" type="button" data-look-fit>Enquadrar a rede</button>`;
+      <div class="pop-head"><h2>${L`Appearance`}</h2><button class="close" type="button" data-close aria-label="${L`Close`}">${R.icon('i-x')}</button></div>
+      <div class="look-row"><span>${L`Node names`}</span><button class="toggle" type="button" role="switch" aria-checked="${look.labels}" data-look="labels" aria-label="${L`Node names`}"></button></div>
+      <div class="look-row look-metric"><span>${L`Link labels`}</span><div class="seg" role="group" aria-label="${L`Link labels`}">${[['use', L`Usage`], ['latency', L`Latency`], ['capacity', L`Capacity`]].map(([v, t]) => `<button type="button" data-metric="${v}" aria-pressed="${look.metric === v}">${t}</button>`).join('')}</div></div>
+      <div class="look-row"><span>${L`Show labels`}</span><button class="toggle" type="button" role="switch" aria-checked="${look.latency}" data-look="latency" aria-label="${L`Show link labels`}"></button></div>
+      <button class="btn btn-plain look-fit" type="button" data-look-fit>${L`Fit the network`}</button>`;
     const r = lookBtn.getBoundingClientRect();
     R.pop.open(popLook, r.left + r.width / 2, r.bottom - 6, { trigger: lookBtn, key: 'look' });
   });
@@ -1086,11 +1086,11 @@
   connBtn.addEventListener('click', () => {
     if (R.pop.current?.key === 'conn') { R.pop.close(); return; }
     const running = R.traffic.sessions.filter(x => x.status === 'running').length;
-    popConn.innerHTML = `<div class="pop-head"><div><h2>Testbed ${R.env.testbed}</h2><p class="pop-sub"><span class="dot"></span>LFT, ${R.switches().length} switches, ${R.hosts().length} hosts, ${running} fluxo${running === 1 ? '' : 's'} de teste</p></div><button class="close" type="button" data-close aria-label="Fechar">${R.icon('i-x')}</button></div>
-      <div class="look-row conn-fwd"><span><b>Encaminhamento reativo</b><em>Desligado, só passa tráfego onde um intent instalou o caminho.</em></span><button class="toggle" type="button" role="switch" aria-checked="${R.fwd.active}" data-fwd aria-label="Encaminhamento reativo do ONOS"></button></div>
-      ${kvRows([['ONOS', `${location.hostname}:8181 · OpenFlow 6653`, true], ['Deployer', `${location.hostname}:5000`, true], ['Supervisor', `${location.hostname}:5151`, true], ['Intent profiler', `${location.hostname}:5300`, true], ['Console API', `${location.hostname}:4180`, true], ['Resultados', `${R.env.results}/iperf, ${R.env.results}/dash`, true]])}
-      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], ['Karaf do ONOS', R.env.onos.karaf]])}
-      <div class="pop-actions"><a class="btn" href="${R.env.onos.gui}" target="_blank" rel="noreferrer">${R.icon('i-external')}GUI2 do ONOS</a></div>`;
+    popConn.innerHTML = `<div class="pop-head"><div><h2>Testbed ${R.env.testbed}</h2><p class="pop-sub"><span class="dot"></span>${L`LFT, ${R.switches().length} switches, ${R.hosts().length} hosts, ${running} test flow${running === 1 ? '' : 's'}`}</p></div><button class="close" type="button" data-close aria-label="${L`Close`}">${R.icon('i-x')}</button></div>
+      <div class="look-row conn-fwd"><span><b>${L`Reactive forwarding`}</b><em>${L`Off: traffic passes only where an intent installed the path.`}</em></span><button class="toggle" type="button" role="switch" aria-checked="${R.fwd.active}" data-fwd aria-label="${L`ONOS reactive forwarding`}"></button></div>
+      ${kvRows([['ONOS', `${location.hostname}:8181 · OpenFlow 6653`, true], ['Deployer', `${location.hostname}:5000`, true], ['Supervisor', `${location.hostname}:5151`, true], ['Intent profiler', `${location.hostname}:5300`, true], ['Console API', `${location.hostname}:4180`, true], [L`Results`, `${R.env.results}/iperf, ${R.env.results}/dash`, true]])}
+      ${R.cliList([['Containers', 'sudo docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}"'], [L`ONOS Karaf`, R.env.onos.karaf]])}
+      <div class="pop-actions"><a class="btn" href="${R.env.onos.gui}" target="_blank" rel="noreferrer">${L`${R.icon('i-external')}ONOS GUI2`}</a></div>`;
     const r = connBtn.getBoundingClientRect();
     R.pop.open(popConn, r.left + r.width / 2, r.bottom - 6, { trigger: connBtn, key: 'conn' });
     R.fwd.refresh().then(paintFwd);
@@ -1108,12 +1108,12 @@
   function importTopology(text, name) {
     try {
       const s = R.importPy(text, name);
-      const parts = [s.throughput && 'vazão', s.rtt && 'RTT', s.loss && 'perda'].filter(Boolean);
-      R.notify({ source: 'Topologia importada', text: `${s.switches} switches, ${s.hosts} hosts, ${s.links} links. ${parts.length ? `Por link: ${parts.join(', ')}.` : 'Links com os valores padrão do CONFIG.'}`, tone: 'ok' });
+      const parts = [s.throughput && L`throughput`, s.rtt && 'RTT', s.loss && L`loss`].filter(Boolean);
+      R.notify({ source: L`Topology imported`, text: `${s.switches} switches, ${s.hosts} hosts, ${s.links} links. ${parts.length ? L`Per link: ${parts.join(', ')}.` : L`Links with the CONFIG's default values.`}`, tone: 'ok' });
       if (s.switches && s.geo === s.switches && !mapMode) setMap(true);
       else if (s.geo < s.switches && mapMode) setMap(false);
     } catch (err) {
-      R.notify({ source: 'Não foi possível importar', text: err.message, tone: 'down' });
+      R.notify({ source: L`Could not import`, text: err.message, tone: 'down' });
     }
   }
   file.addEventListener('change', async () => {
@@ -1125,7 +1125,7 @@
   // A new topology: a preset (the console's samples, built like any imported file), an empty one
   // (only ONOS), or none at all (every testbed container goes)
   const ntSheet = $('[data-sheet="newtopo"]'), ntForm = $('[data-newtopo-form]'), cleanBtn = $('[data-topo-clean]');
-  const PRESETS = [['diamond', 'i-topo', 'Diamante', '4 PoPs; servidor de vídeo em ES, cliente em SP'], ['rnp', 'i-map', 'RNP', 'O backbone da RNP; 2 clientes e 4 servidores de vídeo'], ['empty', 'i-plus', 'Vazia', 'Só o ONOS; você cria os switches e os hosts']];
+  const PRESETS = [['diamond', 'i-topo', L`Diamond`, L`4 PoPs, video server in ES, client in SP`], ['rnp', 'i-map', 'RNP', L`RNP's backbone, 2 clients and 4 video servers`], ['empty', 'i-plus', L`Empty`, L`Only ONOS, you create the switches and the hosts`]];
   const EMPTY = 'POPS = ()\nADJACENCY_MATRIX = ()\nCONFIG = {"pops": POPS, "adjacency_matrix": ADJACENCY_MATRIX, "throughput": "35mbit", "delay": "10ms", "jitter": "1ms"}\n';
   let preset = 'diamond';
   const paintPresets = () => { $('[data-presets]', ntForm).innerHTML = PRESETS.map(([k, ic, t, d]) => `<button type="button" role="radio" aria-checked="${k === preset}" data-preset="${k}"><span class="mi-ic">${R.icon(ic)}</span><span><b>${t}</b><em>${d}</em></span></button>`).join(''); };
@@ -1133,7 +1133,7 @@
     preset = 'diamond';
     paintPresets();
     delete cleanBtn.dataset.armed;
-    cleanBtn.textContent = 'Limpar a topologia';
+    cleanBtn.textContent = L`Clear the topology`;
     ntSheet.showModal();
   }
   ntForm.addEventListener('click', e => {
@@ -1141,7 +1141,7 @@
     const b = e.target.closest('[data-preset]');
     if (b) { preset = b.dataset.preset; paintPresets(); return; }
     if (e.target.closest('[data-topo-clean]')) {
-      if (!cleanBtn.dataset.armed) { cleanBtn.dataset.armed = '1'; cleanBtn.textContent = 'Remover todos os containers?'; return; }
+      if (!cleanBtn.dataset.armed) { cleanBtn.dataset.armed = '1'; cleanBtn.textContent = L`Remove all the containers?`; return; }
       ntSheet.close();
       R.cleanTopology();
     }
@@ -1150,7 +1150,7 @@
     e.preventDefault();
     ntSheet.close();
     const text = preset === 'empty' ? EMPTY : await (await fetch(`samples/${preset}.py`)).text();
-    importTopology(text, `${preset === 'empty' ? 'vazia' : preset}.py`);
+    importTopology(text, `${preset === 'empty' ? L`empty` : preset}.py`);
   });
   ntSheet.addEventListener('click', e => { if (e.target === ntSheet) ntSheet.close(); });
   $('[data-tool="export"]').addEventListener('click', () => {
@@ -1160,7 +1160,7 @@
     a.download = `${M.name || 'rein'}_topology.py`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    R.notify({ source: 'Topologia exportada', text: `${a.download}. Carregue com sudo lft topology create --path ${a.download}`, tone: 'ok' });
+    R.notify({ source: L`Topology exported`, text: L`${a.download}. Load it with sudo lft topology create --path ${a.download}`, tone: 'ok' });
   });
 
   // ------------------------------------------------------------ reactions
@@ -1170,7 +1170,7 @@
   });
   let rt;
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { R.pop.close(true); if (!moved) fit(false); else paint(); }, 80); });
-  setInterval(() => { if (R.page === 'topologia' && !document.hidden) updateLoads(); }, 1000);
+  setInterval(() => { if (R.page === 'topology' && !document.hidden) updateLoads(); }, 1000);
   loads = R.linkLoad();
   if (geoReady()) setMap(true, false);
   R.topology = { render, fit, intro, openLink, openNode, zoomAt, makeRoom, setMap, get mapMode() { return mapMode; }, get view() { return { ...view }; } };
