@@ -1,42 +1,49 @@
 # REIN Console
 
-Interface web do REIN: topologia do testbed LFT, intents, monitoramento e experimentos. É um front-end estático (HTML, CSS e JavaScript, sem build nem CDN) servido pelo `console-api`, que executa cada ação com a CLI do LFT e mostra a saída. Sem a API, a interface usa uma emulação no navegador e indica **testbed offline**.
+REIN's web interface: the topology of the LFT testbed, intents, monitoring and experiments. It is a static front end (HTML, CSS and JavaScript, with no build step and no CDN) served by `console-api`, which runs each action with LFT's CLI and shows the output. Without the API, the interface uses an emulation in the browser and says **testbed offline**.
 
-## Executar
+## Running
 
-O jeito simples é o `rein`: `./rein setup` uma vez, na raiz do REIN, e depois `rein up` sobe o testbed, os serviços e o console (ver o README principal).
+The simple way is `rein`: `./rein setup` once, at the root of REIN, and then `rein up` starts the testbed, the services and the console (see the main README).
 
-À mão, o console requer o LFT clonado ao lado do REIN e instalado, `sudo` sem senha para o `lft` e o `docker`, e Flask e requests no Python. `LFT_BIN` aponta para o `lft` (padrão `/usr/local/bin/lft`; com o `dependencies.sh` do LFT, `<lft>/.venv/bin/lft`) e `LFT_RESULTS_ROOT` para os resultados (padrão `../lft/results`, ao lado do REIN).
+By hand, the console needs LFT cloned next to REIN and installed, `sudo` without a password for `lft` and `docker`, and Flask and requests in Python. `LFT_BIN` points to `lft` (default `/usr/local/bin/lft`; with LFT's `dependencies.sh`, `<lft>/.venv/bin/lft`) and `LFT_RESULTS_ROOT` to the results (default `../lft/results`, next to REIN).
 
 ```bash
 python3 api/app.py
 ```
 
-Abra `http://localhost:4180`. Como serviço do systemd, a unit `api/rein-console.service` é instalada pelo `./rein setup`, com o usuário e os caminhos desta máquina.
+Open `http://localhost:4180`. As a systemd service, the unit `api/rein-console.service` is installed by `./rein setup`, with this machine's user and paths.
 
-Só a interface, sem testbed: `python3 -m http.server 4180 --bind 127.0.0.1 --directory dist`.
+Only the interface, with no testbed: `python3 -m http.server 4180 --bind 127.0.0.1 --directory dist`.
+
+## Language
+
+The console is in English. Portuguese is an option: the button at the right of the header switches between `EN` and `PT`, and the choice is kept in the browser.
+
+The scripts write the English text, marked with `` L`...` `` (`dist/assets/app/i18n.js`). `dist/assets/app/pt.js` holds the Portuguese of each text: a text without an entry there stays in English.
 
 ## API
 
-`api/app.py` (Flask, `127.0.0.1:4180`) valida cada pedido e roda `sudo lft ... --json`; o estado genérico do LFT chega à interface no modelo dela (papéis, UF, posições em `~/.rein-console/layout.json`). Ações que mudam o testbed viram jobs: `POST` devolve `{job}` e `GET /api/jobs/<id>/events` transmite por SSE os passos, a saída e o resultado. Mudanças de topologia rodam uma por vez; tráfego e capturas, em paralelo. Profiler, deployer e supervisor ficam em `/api/profiler`, `/api/deployer` e `/api/supervisor`; seus logs, em `/api/rein/logs/<serviço>`.
+`api/app.py` (Flask, `127.0.0.1:4180`) validates each request and runs `sudo lft ... --json`. LFT's generic state reaches the interface in its own model (roles, state, positions in `~/.rein-console/layout.json`). Actions that change the testbed become jobs: `POST` answers `{job}` and `GET /api/jobs/<id>/events` streams the steps, the output and the result over SSE. Topology changes run one at a time, while traffic and captures run in parallel. The profiler, the deployer and the supervisor are under `/api/profiler`, `/api/deployer` and `/api/supervisor`, and their logs under `/api/rein/logs/<service>`.
 
-| Área | Rotas | LFT |
+| Area | Routes | LFT |
 |---|---|---|
 | Testbed | `/api/testbed`, `/api/testbed/import`, `/api/testbed/export.py` | `lft topology` |
-| Links, switches e hosts | `/api/testbed/links`, `/switches`, `/hosts` | `lft link`, `lft switch`, `lft host` |
-| Interfaces e contadores | `/api/ifaces`, `/api/stats` | `lft iface ls`, `lft link stats` |
-| Tráfego e capturas | `/api/traffic`, `/api/capture` | `lft traffic`, `lft capture` |
-| Monitoramento | `/api/monitor` | (ClickHouse do módulo collector) |
-| Experimentos e planos | `/api/experiments`, `/api/experiments/plan`, `/api/runs` | `lft experiment`, `lft timeline run`, `lft results ls` |
+| Links, switches and hosts | `/api/testbed/links`, `/switches`, `/hosts` | `lft link`, `lft switch`, `lft host` |
+| Interfaces and counters | `/api/ifaces`, `/api/stats` | `lft iface ls`, `lft link stats` |
+| Traffic and captures | `/api/traffic`, `/api/capture` | `lft traffic`, `lft capture` |
+| Monitoring | `/api/monitor` | (the collector module's ClickHouse) |
+| Models | `/api/models` | (`rein model`) |
+| Experiments and plans | `/api/experiments`, `/api/experiments/plan`, `/api/runs` | `lft experiment`, `lft timeline run`, `lft results ls` |
 
-`dist/assets/app/api.js` liga a interface à API: quando `GET /api/testbed` responde, as chamadas reais substituem a emulação.
+`dist/assets/app/api.js` connects the interface to the API: when `GET /api/testbed` answers, the real calls replace the emulation.
 
-## Desenvolvimento
+## Development
 
-- `?demo=<estado>` abre um estado fixo para revisão (por exemplo `map`, `node`, `traffic`, `xrun`), sem usar a API; `?intro=0` pula a abertura.
-- Testes da API: `cd api && python3 -m pytest test_app.py`.
-- Topologias de exemplo para importar: `dist/samples/`.
+- `?demo=<state>` opens a fixed state for review (for example `map`, `node`, `traffic`, `xrun`), without the API. `?intro=0` skips the opening.
+- API tests: `cd api && python3 -m pytest test_app.py`.
+- Sample topologies to import: `dist/samples/`.
 
-## Licenças
+## Licenses
 
-Mapa: malhas do IBGE, simplificadas. Fontes Inter, IBM Plex Mono e Roboto Condensed sob SIL Open Font License (`dist/assets/fonts/`). GSAP 3.15.0.
+Map: IBGE meshes, simplified. Inter, IBM Plex Mono and Roboto Condensed fonts under the SIL Open Font License (`dist/assets/fonts/`). GSAP 3.15.0.

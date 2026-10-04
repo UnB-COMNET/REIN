@@ -46,7 +46,7 @@ UNIT = Path("/etc/systemd/system/rein-console.service")
 CONSOLE = "http://127.0.0.1:4180"
 # What up waits for and status shows: each one's address that answers once it is up
 SERVICES = {"deployer": "http://127.0.0.1:5000/", "supervisor": "http://127.0.0.1:5151/metrics",
-            "collector": "http://127.0.0.1:8123/ping",   # its database: what the console's Monitoramento reads
+            "collector": "http://127.0.0.1:8123/ping",   # its database: what the console's Monitoring page reads
             "profiler": "http://127.0.0.1:5300/health", "console": CONSOLE + "/"}
 if not (REIN / "collector").is_dir():   # the collector module is not in this checkout
     del SERVICES["collector"]
