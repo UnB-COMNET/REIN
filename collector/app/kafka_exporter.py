@@ -6,6 +6,7 @@ metrics and sum metrics. ClickHouse's Kafka table engine consumes directly
 """
 import json
 import logging
+from datetime import datetime, timezone
 
 from kafka import KafkaProducer
 from opentelemetry.sdk.metrics.export import (
@@ -26,6 +27,13 @@ def _stringify_attributes(attrs) -> dict[str, str]:
     if not attrs:
         return {}
     return {str(k): str(v) for k, v in attrs.items()}
+
+
+def _nano_to_datetime_str(ns: int) -> str:
+    """Convert unix nanoseconds to a ClickHouse-compatible datetime string"""
+    if not ns:
+        return "1970-01-01 00:00:00.000000000"
+    return datetime.fromtimestamp(ns / 1e9, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 class KafkaMetricExporter(MetricExporter):
@@ -76,8 +84,8 @@ class KafkaMetricExporter(MetricExporter):
                                 "MetricDescription": metric.description or "",
                                 "MetricUnit": metric.unit or "",
                                 "Attributes": _stringify_attributes(dp.attributes),
-                                "StartTimeUnix": (dp.start_time_unix_nano / 1e9) if dp.start_time_unix_nano else 0.0,
-                                "TimeUnix": (dp.time_unix_nano / 1e9) if dp.time_unix_nano else 0.0,
+                                "StartTimeUnix": _nano_to_datetime_str(dp.start_time_unix_nano),
+                                "TimeUnix": _nano_to_datetime_str(dp.time_unix_nano),
                                 "Value": dp.value,
                             }
                             if is_sum:
@@ -86,8 +94,7 @@ class KafkaMetricExporter(MetricExporter):
                                 topic = self._topic_sum
                             else:
                                 topic = self._topic_gauge
-                            self._producer.produce(topic, value=record)
-                            self._producer.poll(0)
+                            self._producer.send(topic, value=record)
             return MetricExportResult.SUCCESS
         except Exception as e:
             logger.error("Kafka produce failed: %s", e)
@@ -109,6 +116,14 @@ class KafkaMetricExporter(MetricExporter):
         except Exception as e:
             logger.error("Kafka shutdown failed: %s", e)
             return False
+
+    @property
+    def _preferred_temporality(self):
+        return None
+
+    @property
+    def _preferred_aggregation(self):
+        return None
 
 
 class _ResilientKafkaExporter:
