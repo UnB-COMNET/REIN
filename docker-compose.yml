@@ -86,7 +86,7 @@ services:
       retries: 10
 
   kafka:
-    image: apache/kafka:latest
+    image: apache/kafka:3.8.0
     container_name: kafka
     network_mode: "host"
     environment:
@@ -98,11 +98,14 @@ services:
       - KAFKA_CONTROLLER_QUORUM_VOTERS=0@localhost:9093
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - CLUSTER_ID=MkU3OEVBNTcwNTJENDk2OEY
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 5s
-      timeout: 5s
+      interval: 10s
+      timeout: 20s
       retries: 10
 
 volumes:
