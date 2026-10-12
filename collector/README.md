@@ -67,6 +67,40 @@ When `GNMI_STREAM_ENABLED=false`, the collector polls ONOS REST for port stats a
 
 ---
 
+## Kafka Durable Buffer
+
+Metrics flow through **Kafka** before reaching ClickHouse, providing durable buffering: if ClickHouse is down, Kafka retains the data and the consumer drains it when it recovers
+
+```
+collector → Kafka (JSONEachRow, 2 topics) → ClickHouse (Kafka table engine + materialized views)
+deployer  → OTLP/gRPC → otel-collector → ClickHouse (logs, unchanged)
+```
+
+The collector produces JSONEachRow to two Kafka topics: `otel-metrics-gauge` (gauge metrics) and `otel-metrics-sum` (sum/counter metrics). ClickHouse's Kafka table engine consumes directly — no bridge consumer or otel-collector in the metrics path. The otel-collector stays for logs only
+
+### Kafka Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KAFKA_ENABLED` | `true` | Kill-switch; set `false` to send metrics via OTLP/gRPC directly (bypass Kafka) |
+| `KAFKA_BROKERS` | `localhost:9092` | Kafka broker address |
+| `KAFKA_TOPIC_GAUGE` | `otel-metrics-gauge` | Kafka topic for gauge metrics |
+| `KAFKA_TOPIC_SUM` | `otel-metrics-sum` | Kafka topic for sum/counter metrics |
+| `KAFKA_CLIENT_ID` | `collector` | Kafka producer client ID |
+
+When `KAFKA_ENABLED=false`, the collector exports via OTLP/gRPC to the otel-collector on `OTEL_EXPORTER_OTLP_ENDPOINT` (the original pipeline)
+
+### ClickHouse Kafka Engine Tables
+
+The `clickhouse-init.sql` script creates:
+- `otel_metrics_gauge` / `otel_metrics_sum` — MergeTree storage tables (same schema as before)
+- `kafka_metrics_gauge` / `kafka_metrics_sum` — Kafka engine tables that consume JSONEachRow from the topics
+- `mv_metrics_gauge` / `mv_metrics_sum` — materialized views that pipe Kafka → MergeTree
+
+The otel-collector's `create_schema` is set to `false` — all tables are created by `clickhouse-init.sql`
+
+---
+
 ## 1. Connection
 
 ### HTTP API (recommended for applications)

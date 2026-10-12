@@ -58,6 +58,45 @@ Table "otel_metrics_sum" {
   note: "ENGINE: MergeTree | PARTITION BY toDate(TimeUnix) | ORDER BY (ServiceName, MetricName, Attributes, TimeUnix) | TTL 7 days | Indexes: bloom_filter on mapKeys/Values of ResourceAttributes/ScopeAttributes/Attributes"
 }
 
+// Kafka engine tables (consume JSONEachRow from Kafka, defined in clickhouse-init.sql)
+Table "kafka_metrics_gauge" {
+  "ResourceAttributes" varchar [note: "Map(LowCardinality(String), String). Same as otel_metrics_gauge."]
+  "ScopeName" varchar [note: "String."]
+  "ScopeAttributes" varchar [note: "Map(LowCardinality(String), String)."]
+  "ServiceName" varchar [note: "LowCardinality(String). Always 'collector'."]
+  "MetricName" varchar [note: "String. Gauge metric name."]
+  "MetricDescription" varchar [note: "String."]
+  "MetricUnit" varchar [note: "LowCardinality(String)."]
+  "Attributes" varchar [note: "Map(LowCardinality(String), String). Per-data-point attributes."]
+  "StartTimeUnix" datetime [note: "DateTime64(9). Parsed from JSON float (Unix seconds)."]
+  "TimeUnix" datetime [note: "DateTime64(9). Parsed from JSON float (Unix seconds)."]
+  "Value" float [note: "Float64. Gauge value."]
+
+  note: "ENGINE: Kafka() | kafka_broker_list=localhost:9092 | kafka_topic_list=otel-metrics-gauge | kafka_group_name=clickhouse-gauge | kafka_format=JSONEachRow"
+}
+
+Table "kafka_metrics_sum" {
+  "ResourceAttributes" varchar [note: "Map(LowCardinality(String), String). Same as otel_metrics_sum."]
+  "ScopeName" varchar [note: "String."]
+  "ScopeAttributes" varchar [note: "Map(LowCardinality(String), String)."]
+  "ServiceName" varchar [note: "LowCardinality(String). Always 'collector'."]
+  "MetricName" varchar [note: "String. Sum/counter metric name."]
+  "MetricDescription" varchar [note: "String."]
+  "MetricUnit" varchar [note: "LowCardinality(String)."]
+  "Attributes" varchar [note: "Map(LowCardinality(String), String)."]
+  "StartTimeUnix" datetime [note: "DateTime64(9)."]
+  "TimeUnix" datetime [note: "DateTime64(9)."]
+  "Value" float [note: "Float64. Delta value."]
+  "AggregationTemporality" integer [note: "Int32. 1=DELTA, 2=CUMULATIVE."]
+  "IsMonotonic" boolean [note: "Bool."]
+
+  note: "ENGINE: Kafka() | kafka_broker_list=localhost:9092 | kafka_topic_list=otel-metrics-sum | kafka_group_name=clickhouse-sum | kafka_format=JSONEachRow"
+}
+
+// Materialized views pipe Kafka engine → MergeTree:
+// - mv_metrics_gauge: kafka_metrics_gauge → otel_metrics_gauge
+// - mv_metrics_sum: kafka_metrics_sum → otel_metrics_sum
+
 // Cross-table relationships:
 // - ServiceName is a shared dimension across all three tables
 // - Attributes['device_id'] in metrics correlates with ResourceAttributes['service.name']='collector' in logs
