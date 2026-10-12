@@ -1,10 +1,91 @@
-# REIN - REdes de INtenções
+<h1 align="center">
+  <picture>
+    <source srcset=".github/assets/banner.webp" type="image/webp">
+    <img src=".github/assets/banner.gif" alt="REIN - REdes de INtenções" width="100%">
+  </picture>
+</h1>
+
+<p align="center">
+  <b>Say what the network must guarantee. REIN translates it, deploys it and keeps watch.</b><br>
+  <sub>Intent-Based Networking on ONOS: from a sentence in natural language to flow rules on the switches.</sub>
+</p>
+
+<p align="center">
+  <a href="#the-console">Console</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#modules">Modules</a> ·
+  <a href="#running-rein">Running REIN</a> ·
+  <a href="#the-model-that-translates-the-requests">Models</a> ·
+  <a href="#running-only-the-services">Services only</a>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0071E3?style=flat-square&labelColor=1D1D1F"></a>
+  <a href="https://onosproject.org"><img alt="Controller: ONOS" src="https://img.shields.io/badge/controller-ONOS-0071E3?style=flat-square&labelColor=1D1D1F"></a>
+  <a href="https://github.com/UnB-COMNET/lft"><img alt="Testbed: LFT" src="https://img.shields.io/badge/testbed-LFT-0071E3?style=flat-square&labelColor=1D1D1F"></a>
+  <img alt="Intents: Nile" src="https://img.shields.io/badge/intents-Nile-0071E3?style=flat-square&labelColor=1D1D1F">
+  <img alt="Runs with Docker Compose" src="https://img.shields.io/badge/runs%20with-Docker%20Compose-0071E3?style=flat-square&labelColor=1D1D1F">
+</p>
 
 REIN (REdes de INtenções, Portuguese for "Intent Network") is an Intent-Based Networking (IBN) system designed to simplify network management. Instead of manually configuring low-level network rules, REIN allows users to express desired network behaviors (intents) and automatically translates them into actionable configurations within the network infrastructure.
 
-REIN was developed to operate on top of the ONOS (Open Network Operating System) controller.
+REIN was developed to operate on top of the [ONOS](https://onosproject.org) (Open Network Operating System) controller.
+
+```text
+You     I want video without stalls for the client in SP
+REIN    define intent q1: for endpoint('192.168.0.2') add service('cdn-qoe')
+```
+
+## The console
+
+<p align="center">
+  <img src=".github/assets/console.webp" alt="The REIN console opening on the testbed's topology, then Intents, Monitoring, the experiment builder and the RNP backbone" width="100%">
+</p>
+
+One window to build and operate the testbed, write and approve intents, watch the network and run experiments. Every action runs through LFT's CLI on a real testbed: containers, veth pairs with tc queues and Open vSwitch under ONOS.
+
+<table>
+  <tr>
+    <td width="50%"><img src=".github/assets/screens/topology.webp" alt="The Topology page"><br><b>Topology</b><br><sub>The testbed on the map: switches by state, link capacity and the traffic on each link.</sub></td>
+    <td width="50%"><img src=".github/assets/screens/intents.webp" alt="The Intents page"><br><b>Intents</b><br><sub>A chat with the profiler: the request, the Nile it wrote and your approval before anything is deployed.</sub></td>
+  </tr>
+  <tr>
+    <td><img src=".github/assets/screens/link.webp" alt="A link's controls"><br><b>Links</b><br><sub>Normal, degraded or down in one click, with capacity, delay, jitter and loss.</sub></td>
+    <td><img src=".github/assets/screens/monitoring.webp" alt="The Monitoring page"><br><b>Monitoring</b><br><sub>Throughput and path RTT for each client, with the drifts and the reroutes.</sub></td>
+  </tr>
+  <tr>
+    <td><img src=".github/assets/screens/builder.webp" alt="The experiment builder"><br><b>Experiments</b><br><sub>Hosts, flows and link states on a timeline, exported as a <code>.py</code> plan.</sub></td>
+    <td><img src=".github/assets/screens/rnp.webp" alt="The RNP backbone on the map"><br><b>Any topology</b><br><sub>The <code>rnp</code> backbone, imported from a <code>.py</code> file.</sub></td>
+  </tr>
+</table>
+
+## How it works
+
+1. **Ask.** The operator writes the request in the console, in English or Portuguese.
+2. **Translate.** The profiler grounds the request in the network's inventory, retrieves the closest examples and has the model write one Nile intent, or ask when something is missing.
+3. **Approve.** Nothing reaches the deployer without the operator's approval.
+4. **Deploy.** The deployer checks the intent's syntax and whether it can execute it, computes the path and installs the flow rules on ONOS.
+5. **Assure.** The supervisor measures each client's path and asks for a new route when it drifts.
+
+<p align="center">
+  <img src=".github/assets/fig-assurance.png" alt="Assurance of intent q1: the first route goes through MG; the supervisor detects 130 ms of latency on s0-s1 as a drift; the deployer installs a new route through RJ" width="100%">
+</p>
+
+What the deployer executes, all for `for endpoint('<client ip>')`:
+
+| Operation | Effect |
+|-----------|--------|
+| `add service('cdn-qoe')` | Picks the CDN server and the path, installs it and hands it to the supervisor |
+| `remove service('cdn-qoe')` | Removes the client's path and stops its supervision |
+| `set bandwidth('max', '<n>', '<unit>')` | A DROP meter on what reaches the client, at the client's switch |
+| `block protocol('<p>')` | Drops `tcp`, `udp`, `icmp`, `ssh`, `http` or `https` to and from the client, at its switch |
+| `unset bandwidth(...)`, `allow protocol(...)` | Remove the policy above |
 
 ## Modules
+
+<p align="center">
+  <img src=".github/assets/fig-services.png" alt="REIN's services and the ports they listen on: console 4180, profiler 5300 with vLLM, deployer 5000, supervisor 5151, ONOS 8181 and the LFT testbed" width="100%">
+</p>
 
 - **[Deployer](./deployer)** - The engine responsible for processing Nile intents, computing optimal paths, and actively installing flow rules on the ONOS controller.
 
@@ -108,3 +189,7 @@ docker compose up --build
 * Make sure Docker is running before starting the environment.
 * Depending on the modules enabled, some services may take a few moments to become fully available.
 * Check individual module READMEs for specific configuration details and standalone execution instructions.
+
+## License
+
+[MIT](./LICENSE) © 2026 UnB-COMNET. Intents are written in Nile, the intent language of [Lumi](https://www.usenix.org/conference/atc21/presentation/jacobs) (Jacobs et al., USENIX ATC 2021).
