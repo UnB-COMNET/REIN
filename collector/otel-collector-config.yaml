@@ -3,13 +3,6 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
-  kafkametrics:
-    brokers:
-      - localhost:9092
-    topic: otel-metrics
-    protocol_version: 2.0.0
-    encoding: otlp_proto
-    group_id: otel-collector-metrics
 
 exporters:
   clickhouse:
@@ -30,7 +23,7 @@ exporters:
 service:
   pipelines:
     metrics:
-      receivers: [kafkametrics]
+      receivers: [otlp]
       exporters: [clickhouse, debug]
     logs:
       receivers: [otlp]

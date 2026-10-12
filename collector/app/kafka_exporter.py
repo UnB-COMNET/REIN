@@ -10,7 +10,6 @@ import logging
 from kafka import KafkaProducer
 from opentelemetry.exporter.otlp.proto.common.metrics_encoder import encode_metrics
 from opentelemetry.sdk.metrics.export import (
-    AggregationTemporality,
     MetricExporter,
     MetricExportResult,
     MetricsData,
@@ -75,14 +74,6 @@ class KafkaMetricExporter(MetricExporter):
         except Exception as e:
             logger.error("Kafka shutdown failed: %s", e)
             return False
-
-    @property
-    def _preferred_temporality(self) -> AggregationTemporality:
-        return AggregationTemporality.DELTA
-
-    @property
-    def _preferred_aggregation(self):
-        return None
 
 
 class _ResilientKafkaExporter:
