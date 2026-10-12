@@ -7,7 +7,7 @@ import time
 
 import requests
 
-from app import cdn_qoe, quantization
+from app import cdn_qoe, quantization, clickhouse_client
 import app.metrics as _metrics
 
 logger = logging.getLogger(__name__)
@@ -142,45 +142,24 @@ class SupervisorService:
         logger.debug("[delay] Core=%.1f ms  Access=2x%.1f ms  Total=%.1f ms", core_ms, access_delay_ms, total_ms)
         return total_ms
 
-    # Brief: Queries ONOS REST API port stats on ES (of:0000000000000001), port 3 (ES->ds0)
-    #   - Port 3 is the server-facing port: bytesSent here equals all data delivered to ds0
-    #     regardless of which upstream path (MG or RJ) was used
-    #   - Computes instantaneous throughput, appends to a sliding window, returns the window average
+    # Brief: Reads throughput from ClickHouse (sdn.port.throughput, collected by the collector)
+    #   - Queries the latest throughput for the ES device, port 3, direction=sent
+    #   - Appends to a sliding window, returns the window average
     def _measure_path_throughput(self, server_uf: str = None) -> float:
         if not server_uf or server_uf not in cdn_qoe.DEVICE_MAP:
             logger.warning("server_uf '%s' not in DEVICE_MAP - skipping throughput", server_uf)
             return 0.0
         device_id = cdn_qoe.DEVICE_MAP[server_uf]
-        url  = f"{self.onos_base_url}/statistics/ports/{device_id}"
-        auth = ("onos", "rocks")
 
         try:
-            _metrics.increment("msgs_onos_to_observer") # GET /statistics/ports
-            ports = requests.get(url, auth=auth, timeout=5).json()["statistics"][0]["ports"]
-            port = next((p for p in ports if p["port"] == 3), None)
+            bps = clickhouse_client.get_port_throughput(device_id, "3", "sent")
 
-            if port is None:
-                logger.warning("Port 3 not found on ES statistics")
-                return 0.0
+            if bps > 0:
+                self._throughput_samples.append(bps)
 
-            b2 = port["bytesSent"]
-            t2 = time.time()
-
-            if self._last_bytes is None:
-                self._last_bytes = b2
-                self._last_bytes_time = t2
-                return 0.0
-
-            if b2 == self._last_bytes:
-                bps = 0.0
-            else:
-                bps = (b2 - self._last_bytes) * 8 / (t2 - self._last_bytes_time)
-
-            self._last_bytes = b2
-            self._last_bytes_time = t2
-
-            self._throughput_samples.append(bps)
-            return sum(self._throughput_samples) / len(self._throughput_samples)
+            if self._throughput_samples:
+                return sum(self._throughput_samples) / len(self._throughput_samples)
+            return 0.0
 
         except Exception as e:
             logger.error("Throughput measure error: %s", e)
