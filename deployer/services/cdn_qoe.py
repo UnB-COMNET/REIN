@@ -6,7 +6,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from ortools.linear_solver import pywraplp
 import subprocess
-import re
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -104,23 +103,23 @@ def get_dynamic_latencies():
 
     rev_map = {v: k for k, v in device_map.items()}
 
-    # Build adjacency from ONOS links (topology, not telemetry)
-    karaf = os.environ.get(
-        "ONOS_KARAF",
-        "docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf"
-    )
+    # Build adjacency from ONOS REST /links (topology, not telemetry)
+    onos_url = os.environ.get("ONOS_BASE_URL", "http://localhost:8181")
+    onos_auth = (os.environ.get("ONOSUSER", "karaf"), os.environ.get("ONOSPASS", "karaf"))
     try:
-        output_links = subprocess.check_output(f"{karaf} 'links'", shell=True, stderr=subprocess.STDOUT).decode("utf-8")
-        for line in output_links.splitlines():
-            if "state=ACTIVE" in line:
-                m = re.search(r"src=(of:[a-f0-9]+)/\d+, dst=(of:[a-f0-9]+)/\d+", line)
-                if m:
-                    src_st = rev_map.get(m.group(1))
-                    dst_st = rev_map.get(m.group(2))
-                    if src_st and dst_st:
-                        adj_matrix[estados.index(src_st)][estados.index(dst_st)] = 1
+        resp = _req.get(f"{onos_url}/onos/v1/links", auth=onos_auth, timeout=5)
+        resp.raise_for_status()
+        for lnk in resp.json().get("links", []):
+            if lnk.get("state") != "ACTIVE":
+                continue
+            src_dpid = lnk.get("src", {}).get("device", "")
+            dst_dpid = lnk.get("dst", {}).get("device", "")
+            src_st = rev_map.get(src_dpid)
+            dst_st = rev_map.get(dst_dpid)
+            if src_st and dst_st:
+                adj_matrix[estados.index(src_st)][estados.index(dst_st)] = 1
     except Exception as e:
-        print(f" [CDN-QoE] Failed to read links from ONOS: {e}")
+        print(f" [CDN-QoE] Failed to read links from ONOS REST: {e}")
 
     # Read link latencies from ClickHouse (collected by the collector)
     latencies = clickhouse_client.get_link_latencies()

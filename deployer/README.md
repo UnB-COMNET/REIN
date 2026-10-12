@@ -16,6 +16,15 @@ Lumi Chatbot Intent Deployer
     month = jul,
 }
 ```
+
+## Data Sources
+
+- **Link latencies** — read from ClickHouse `otel_metrics_gauge` (`sdn.link.latency`), collected by the collector via gNMI streaming. Used as input to the shortest-path solver (OR-Tools SCIP)
+- **Topology** — ONOS REST `/onos/v1/devices` and `/onos/v1/links` (device discovery and adjacency matrix, still needed for path computation)
+- **Flow installation** — ONOS REST `/onos/v1/flows` (the deployer's core function as the SDN controller interface)
+
+The deployer no longer queries ONOS Karaf CLI `link-latencies` directly — link latencies come from ClickHouse
+
 # Running
 cd into the deployer's directory.
 ### Create a .env file with the necessary credentials
