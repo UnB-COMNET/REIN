@@ -6,8 +6,16 @@ Monitors QoS KPIs from path deployed by the deployer and requests recalculation 
 
 1. The deployer POSTs the calculated path and access delay to `/supervise`
 2. The supervisor stores the path as the current baseline and starts a 5-second monitor loop
-3. Every 5s, the supervisor measures end-to-end delay by summing per-edge RTTs from the ONOS link-latencies app (plus `2 × access_delay_ms` for client/server access links) and computes a moving-average throughput from the server-facing port statistics on ES (`of:0000000000000001`, port 3)
+3. Every 5s, the supervisor reads link RTT latencies and port throughput from ClickHouse (collected by the collector) and computes end-to-end delay by summing per-edge RTTs along the deployed path (plus `2 × access_delay_ms` for client/server access links) and a moving-average throughput from the server-facing port on ES
 4. After a recalculate request, the loop pauses until the deployer sends a new path via `/supervise`
+
+## Data Sources
+
+- **Link latencies** — read from ClickHouse `otel_metrics_gauge` (`sdn.link.latency`), collected by the collector via gNMI streaming
+- **Port throughput** — read from ClickHouse `otel_metrics_gauge` (`sdn.port.throughput`), collected by the collector via gNMI rate paths
+- **Topology** — ONOS REST `/onos/v1/devices` (device discovery, still needed for path awareness)
+
+The supervisor no longer queries ONOS Karaf CLI or ONOS REST `/statistics/ports` directly — all telemetry comes from ClickHouse
 
 
 ## Where to add new drift rules?
