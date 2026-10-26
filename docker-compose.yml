@@ -12,6 +12,8 @@ services:
     tty: true
     env_file:
       - ./deployer/.env
+    environment:
+      - ONOS_KARAF=${ONOS_KARAF:-docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -23,65 +25,27 @@ services:
       dockerfile: Dockerfile
     container_name: supervisor
     network_mode: "host"
+    environment:
+      - SUPERVISOR_MODE=${SUPERVISOR_MODE:-threshold}
+      - LLM_URL=${LLM_URL:-}
+      - ONOS_KARAF=${ONOS_KARAF:-docker exec -t c1 /root/onos/apache-karaf-4.2.9/bin/client -u karaf -p karaf}
     stdin_open: true
     tty: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  collector:
-    image: rein_collector
+  profiler:
+    image: profiler
     build:
-      context: ./collector
-      dockerfile: Dockerfile
-    container_name: collector
-    network_mode: "host"
-    stdin_open: true
-    tty: true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    container_name: otel-collector
-    network_mode: "host"
-    command: ["--config=/etc/otelcol/config.yaml"]
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    volumes:
-      - ./collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
-
-  gui:
-    image: rein_gui
-    build:
-      context: ./collector/GUI
-      dockerfile: Dockerfile
-    container_name: gui
+      context: ./profiler
+    container_name: profiler
     network_mode: "host"
     environment:
-      - CLICKHOUSE_URL=http://localhost:8123
-      - DEPLOYER_URL=http://localhost:5000
-      - GUI_PORT=8080
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.8.6
-    container_name: clickhouse
-    network_mode: "host"
+      - MODELS_CONFIG=/config/models.yaml
+      - PROFILER_DB=/state/profiler.sqlite
     volumes:
-      - clickhouse-data:/var/lib/clickhouse
-      - ./collector/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "-q", "SELECT 1"]
-      interval: 3s
-      timeout: 2s
-      retries: 10
+      - ./llm:/config:ro   # models.yaml and, when this machine has one, models.local.yaml
+      - profiler-state:/state
 
 volumes:
-  clickhouse-data:
+  profiler-state:

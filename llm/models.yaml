@@ -1,0 +1,27 @@
+# Brief: The models the profiler can translate with, largest first, all started by REIN on this machine
+# (llm/compose.yml). The application picks one by itself (profiler/app/llm.py): the first whose server
+# answers, else the first whose budget fits this machine's free VRAM, which `rein up` starts.
+# Below the smallest budget no model runs, and the chat takes the intent written in Nile.
+# budget_gb is the VRAM a model takes once loaded: weights plus vLLM and its cache.
+# A machine's own models go in models.local.yaml, next to this file and out of git
+# (models.local.example.yaml): they come first and replace those of the same id.
+# llm_status_url: the llm-status service (REIN/llm) of a separate GPU machine, when the models run
+# there; it then tells the GPU's memory and each model's state.
+llm_status_url: null
+
+models:
+  - id: llama
+    label: Llama 3.2 3B Instruct
+    model: casperhansen/llama-3.2-3b-instruct-awq
+    base_url: http://127.0.0.1:8001/v1
+    quantization: AWQ 4-bit
+    budget_gb: 4
+    local: true
+  # Ultra-lite, for a 4 GB card: 1.6 GB of weights
+  - id: lite
+    label: Qwen2.5 1.5B Instruct
+    model: Qwen/Qwen2.5-1.5B-Instruct-AWQ
+    base_url: http://127.0.0.1:8002/v1
+    quantization: AWQ 4-bit
+    budget_gb: 3
+    local: true

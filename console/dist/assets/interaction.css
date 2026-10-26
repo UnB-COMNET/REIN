@@ -1,0 +1,109 @@
+/* Shared control finish. Native form semantics and the approved layout stay intact. */
+:root { --motion-control:cubic-bezier(.22,.75,.18,1); --control-edge:rgba(36,62,94,.17); }
+.brand { position:relative; align-items:center; min-height:36px; border-radius:9px; transform-origin:left center; transition:transform .48s var(--motion-control),filter .35s; }
+.brand svg { width:82px; overflow:visible; }
+.brand-light { opacity:0; pointer-events:none; }
+.brand:hover,.brand:focus-visible { transform:scale(1.045); }
+.brand:active { transform:scale(.985); }
+.nav a { transition:color .22s; }
+/* Unified tactile response: controls move, content surfaces do not. */
+:is(.btn,.tool,.model-btn,.st-button,.st-icon-button,.st-text-button,.st-endpoint,.st-saved-plan,.menu button,.menu label,.seg button,.st-segment button,.st-state-options button) {
+  transition:background-color .2s,color .2s,box-shadow .3s var(--motion-control),transform .3s var(--motion-control),border-color .2s;
+}
+
+:is(.btn,.tool,.model-btn,.st-button,.st-icon-button,.st-text-button,.st-endpoint,.st-saved-plan,.seg button,.st-segment button,.st-state-options button):not(:disabled):active { transform:translateY(0) scale(.975); }
+:is(.st-segment,.seg) button:not(:disabled):hover { background:#ffffff55; color:#0068cb; }
+.st-segment button[aria-pressed="true"]:hover { background:#fff; color:#20242c; }
+.st-state-options button:not(:disabled):hover { background:#fff; box-shadow:0 3px 12px #28486b08; border-color:#b7c9dd; transform:translateX(2px); }
+.st-state-options button[aria-pressed="true"]:hover { background:#f4f9ff; border-color:#589ce1; }
+.st-endpoint:hover { color:#0066cc; }.st-endpoint:hover svg { opacity:1; }
+.st-export summary { border-radius:10px; transition:background-color .2s,color .2s; }
+.st-export summary:hover { background:#ffffff55; color:#34475b; }
+.st-export[open] .st-export-body { animation:control-reveal .3s var(--motion-control); }
+@keyframes control-reveal { from { opacity:0; transform:translateY(-5px); } }
+.st-run-name { transition:background-color .2s,box-shadow .25s,border-color .2s; }
+.st-run-name:focus-visible { outline:none!important; background:#fff; box-shadow:0 0 0 3px #0071e325; border-color:#86b5e7; }
+
+/* Form fields, including every native select in the app. */
+:is(.st-field,.field) :is(input:not([type="hidden"]),textarea), select.popup,
+:is(.st-field,.field) select {
+  border:1px solid #31587f23; border-radius:9px; color:#253448;
+  background-color:#ffffffdc; box-shadow:inset 0 1px 0 #fff,0 1px 2px #12345006;
+  transition:background-color .2s,border-color .2s,box-shadow .25s,transform .2s var(--motion-control);
+}
+:is(.st-field,.field) :is(input:not([type="hidden"]),textarea,select):not(:disabled):hover,select.popup:hover {
+  border-color:#718daa70; background-color:#fff; box-shadow:inset 0 1px 0 #fff,0 2px 5px #213f6210;
+}
+:is(.st-field,.field) :is(input:not([type="hidden"]),textarea,select):focus-visible,select.popup:focus-visible {
+  outline:none!important; border-color:#2b84dd; box-shadow:0 0 0 3px #0071e326,inset 0 1px 0 #fff;
+}
+:is(.st-field,.field) select,select.popup {
+  appearance:none; -webkit-appearance:none; cursor:pointer; padding:7px 31px 7px 11px;
+  min-height:38px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m5 6 3-3 3 3M5 10l3 3 3-3' fill='none' stroke='%236b7d91' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position:right 8px center; background-size:15px; background-repeat:no-repeat;
+}
+:is(.st-field,.field) select:disabled,select.popup:disabled { cursor:default; opacity:.55; }
+
+/* Customizable selects retain native keyboard, search, label and focus behavior.
+   Older engines keep the styled trigger and their OS option picker. */
+@supports(appearance:base-select) {
+  :is(.st-field,.field) select,select.popup,select::picker(select) { appearance:base-select; -webkit-appearance:base-select; }
+  :is(.st-field,.field) select,select.popup { background-image:none; display:flex; align-items:center; gap:12px; padding-right:10px; }
+  select::picker-icon { content:""; flex:none; margin-left:auto; width:16px; height:16px; background:#6c7b8e; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/16px no-repeat; transition:transform .35s var(--motion-control),background-color .2s; }
+  select:open::picker-icon { transform:rotate(180deg); background:#0071e3; }
+  :is(.st-field,.field) select:open,select.popup:open { border-color:#5b9ddd; background-color:#fff; box-shadow:0 0 0 3px #0071e31a; }
+  select::picker(select) {
+    margin:6px 0; padding:5px; border:1px solid #ffffffdc; border-radius:13px;
+    background:rgba(252,253,255,.96); color:#253448; backdrop-filter:blur(22px) saturate(1.15);
+    box-shadow:0 0 0 .5px #273f5a30,0 5px 12px -5px #1d395326,0 20px 45px -14px #203c5a40;
+    max-height:min(320px,60vh); overflow-y:auto; scrollbar-width:thin;
+    font:400 12px/1.45 var(--sans); opacity:0; transform:translateY(-4px) scale(.975); transform-origin:top center;
+    transition:opacity .18s ease,transform .24s var(--motion-control),display .24s allow-discrete,overlay .24s allow-discrete;
+  }
+  select::picker(select):popover-open { opacity:1; transform:translateY(0) scale(1); }
+  @starting-style { select::picker(select):popover-open { opacity:0; transform:translateY(-4px) scale(.975); } }
+  select option { display:flex; align-items:center; gap:10px; min-height:36px; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:#36465a; cursor:pointer; transition:background-color .13s,color .13s; }
+  select option:checked { background:#eaf3ff; color:#0067c9; font-weight:550; }
+  select option:hover,select option:focus { outline:none; background:#0071e3; color:#fff; }
+  select option:disabled { color:#9aa3af; background:transparent; cursor:default; }
+  select option::checkmark { order:2; margin-left:auto; font-size:12px; }
+}
+
+/* Compact numeric steppers are built from real buttons and a number input. */
+.st-number { position:relative; display:block; width:100%; }
+.st-field .st-number input { width:100%; padding-right:29px; appearance:textfield; -moz-appearance:textfield; font-variant-numeric:tabular-nums; }
+.st-number input::-webkit-inner-spin-button,.st-number input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.st-stepper { position:absolute; top:4px; bottom:4px; right:4px; width:23px; display:grid; grid-template-rows:1fr 1fr; padding:1px; border-radius:6px; background:#e8eef577; }
+.st-stepper button { display:grid; place-items:center; min-height:0; padding:0; border:0; border-radius:4px; color:#697c91; background:transparent; transition:color .15s,background-color .15s,transform .2s; }
+.st-stepper button:hover { background:#fff; color:#0071e3; box-shadow:0 1px 3px #2d46611a; }
+.st-stepper button:active { transform:scale(.88); background:#dcecff; }
+.st-stepper button svg { width:11px; height:11px; }.st-stepper button:first-child svg { transform:rotate(180deg); }
+.st-stepper button:disabled { opacity:.3; cursor:default; box-shadow:none; background:transparent; }
+.st-number:focus-within .st-stepper { background:#e7f1fd; }
+.toggle { transition:background-color .25s,box-shadow .25s,transform .25s var(--motion-control); }
+.toggle:not(:disabled):hover { box-shadow:0 0 0 3px #0071e315,inset 0 0 0 .5px #0000000f; }
+.toggle:focus-visible { outline:2px solid #428fdb; outline-offset:4px; }
+.toggle:not(:disabled):active { transform:scale(.96); }
+input[type="range"] { cursor:ew-resize; }
+input[type="range"]::-webkit-slider-thumb { transition:box-shadow .2s,transform .25s var(--motion-control); }
+input[type="range"]:hover::-webkit-slider-thumb { box-shadow:0 0 0 4px #0071e31a,0 2px 5px #1a3c6130; transform:scale(1.08); }
+input[type="range"]:active::-webkit-slider-thumb { transform:scale(1.15); }
+.st-search { transition:background-color .2s,box-shadow .25s; }.st-search:hover { background:#edf3fa; }.st-search:focus-within { background:#fff; box-shadow:0 0 0 2px #0071e340; }.st-search input:focus-visible { outline:none; }
+.st-field label,.st-field > span { transition:color .2s; }.st-field:focus-within > span { color:#0069cb; }
+.st-canvas h2 { margin-top:0; font-size:19px; }.st-canvas-head .st-caption { display:block; margin-top:5px; }
+@media(max-width:899px) {
+  .nav-refraction { gap:4px; padding:8px 6px 6px; font-size:10px; }
+  .nav-refraction svg { width:21px; height:21px; }
+}
+@media(max-width:600px) {
+  .brand svg { width:76px; }
+  :is(.st-field,.field) select,select.popup { min-height:44px; }
+  .st-stepper { width:29px; }.st-field .st-number input { min-height:48px; padding-right:36px; }
+  select option { min-height:44px; }
+}
+@media(prefers-reduced-transparency:reduce) { select::picker(select),.nav-lens { background:#fbfcff; backdrop-filter:none; } }
+@media(prefers-reduced-motion:reduce) {
+  .brand,.nav a,.nav a svg,.st-export-body { animation:none!important; transition:none!important; transform:none!important; }
+  select::picker(select),select::picker-icon { transition:none!important; transform:none!important; }
+  .brand-light { display:none; }
+}

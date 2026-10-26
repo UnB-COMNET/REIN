@@ -16,6 +16,22 @@ Lumi Chatbot Intent Deployer
     month = jul,
 }
 ```
+# What it executes
+`POST /deploy` takes one Nile intent. `nile.py` checks its syntax (400) and whether this deployer executes it
+(422 with the reason); `GET /capabilities` lists every operation and why it runs or not. All of them take
+`for endpoint('<client ip>')`:
+
+| Operation | Effect |
+|-----------|--------|
+| `add service('cdn-qoe')` | Picks the CDN server and the path (`services/cdn_qoe.py`), installs it and hands it to the supervisor |
+| `remove service('cdn-qoe')` | Removes the client's path and stops its supervision |
+| `set bandwidth('max', '<n>', '<unit>')` | A DROP meter on what reaches the client, at the client's switch (`edge.py`) |
+| `block protocol('<p>')` | Drops `tcp`, `udp`, `icmp`, `ssh`, `http` or `https` to and from the client, at its switch (`edge.py`) |
+| `unset bandwidth(...)`, `allow protocol(...)` | Remove the policy above |
+
+A client has one policy of each kind: a new limit replaces the previous one. `GET /intents` lists what is in
+place and `DELETE /delete_all` removes all of it.
+
 # Running
 cd into the deployer's directory.
 ### Create a .env file with the necessary credentials

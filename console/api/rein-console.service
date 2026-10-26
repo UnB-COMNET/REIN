@@ -1,0 +1,19 @@
+# REIN console and its API on 127.0.0.1:4180. `rein setup` installs it with this machine's user and
+# paths; `rein up` and `rein down` start and stop it
+[Unit]
+Description=REIN console (127.0.0.1:4180)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# Runs `sudo -n lft` and `sudo -n docker`: the user needs NOPASSWD for both. LFT_BIN is lft's path
+# (with LFT's dependencies.sh: <lft>/.venv/bin/lft)
+User=artdelpi
+WorkingDirectory=/home/artdelpi/REIN/console/api
+Environment=PORT=4180 PYTHONUNBUFFERED=1 LFT_BIN=/usr/local/bin/lft
+ExecStart=/usr/bin/python3 /home/artdelpi/REIN/console/api/app.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

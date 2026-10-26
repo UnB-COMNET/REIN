@@ -1,0 +1,16 @@
+root    ::= intent | ask
+ask     ::= "ASK: " [^\n]+
+intent  ::= "define intent " name ": " scope " " action window?
+name    ::= [A-Za-z_] [A-Za-z0-9_]*
+scope   ::= "from " target (" to " target)? | "for " target
+target  ::= ("endpoint" | "group" | "service" | "traffic") "(" str ")"
+action  ::= qosop " " qos (", " qos)* | aclop " " acl (", " acl)* | chainop " " chain (", " chain)*
+qosop   ::= "set" | "unset"
+qos     ::= ("bandwidth" | "quota") "(" str ", " str ", " str ")"
+aclop   ::= "allow" | "block"
+acl     ::= ("traffic" | "service" | "protocol") "(" str ")"
+chainop ::= "add" | "remove"
+chain   ::= ("middlebox" | "service") "(" str ")"
+window  ::= " start " time " end " time
+time    ::= ("hour" | "date" | "datetime" | "timestamp") "(" str ")"
+str     ::= "'" [^'\n]* "'"

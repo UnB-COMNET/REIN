@@ -36,7 +36,9 @@ def snapshot() -> dict:
         return dict(_state)
 
 
-def reset() -> None:
+def reset() -> dict:
     with _lock:
+        previous = dict(_state)
         for k in list(_state):
             _state[k] = 0 if k in _COUNTER_KEYS else None
+        return previous
